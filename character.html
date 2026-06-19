@@ -4,22 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LambdaOS - Character Sheet</title>
-    <!-- THE FIX: Added '/' so it always pulls from the root directory -->
     <link rel="stylesheet" href="/style.css">
     
     <script>
-        // Security Check
         let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
         if (!currentUser) window.location.replace("/");
     </script>
     <style>
-        /* Specific Character Sheet Styles */
+        /* FIX: Added padding-right to prevent overlapping with the System Settings button */
         #top-nav {
             display: flex;
             justify-content: space-between;
             margin-bottom: 20px;
             border-bottom: 1px solid var(--theme-color);
             padding-bottom: 10px;
+            padding-right: 200px; 
+            align-items: flex-end;
         }
         .nav-link { color: var(--theme-color); text-decoration: none; cursor: pointer; }
         .nav-link:hover { background: var(--theme-color); color: var(--bg-color); }
@@ -29,15 +29,11 @@
             grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
-
-        @media (max-width: 800px) {
-            .sheet-grid { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 800px) { .sheet-grid { grid-template-columns: 1fr; } }
 
         .section {
             border: 1px solid var(--theme-color);
             padding: 15px;
-            /* Using a smart background that adapts to Light/Dark mode */
             background: rgba(128, 128, 128, 0.1); 
         }
         .section h3 { margin-top: 0; border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px; }
@@ -47,22 +43,32 @@
             justify-content: space-between;
             margin-bottom: 8px;
             align-items: center;
+            border-bottom: 1px solid transparent;
+        }
+        .stat-row:hover { border-bottom: 1px solid rgba(255, 153, 0, 0.2); }
+
+        /* Die Structure Formatting */
+        .die-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }
 
-        /* The editable fields */
         .editable {
-            min-width: 20px;
             padding: 2px 5px;
             border-bottom: 1px dashed transparent;
             outline: none;
-            transition: border-color 0.2s;
+            transition: 0.2s;
+            text-align: center;
+            background: transparent;
         }
         .editable:hover, .editable:focus {
             border-bottom: 1px dashed var(--theme-color);
             background: rgba(128, 128, 128, 0.2);
         }
+        .die-input { width: 30px; font-weight: bold; }
+        .mod-input { width: 40px; }
 
-        /* Text areas for lists/history */
         .edit-area {
             width: 100%;
             min-height: 150px;
@@ -73,12 +79,9 @@
             font-size: 1em;
             resize: vertical;
         }
-        .edit-area:hover, .edit-area:focus {
-            border: 1px dashed var(--theme-color);
-            outline: none;
-        }
+        .edit-area:hover, .edit-area:focus { border: 1px dashed var(--theme-color); outline: none; }
 
-        /* Rollable Dice Buttons */
+        /* Buttons */
         .die-btn {
             background: transparent;
             color: var(--theme-color);
@@ -88,36 +91,43 @@
             font-family: inherit;
             font-size: 0.9em;
             transition: 0.2s;
+            outline: none;
         }
-        .die-btn:hover {
-            background: var(--theme-color);
-            color: var(--bg-color);
-            text-shadow: none;
-        }
+        .die-btn:hover { background: var(--theme-color); color: var(--bg-color); text-shadow: none; }
         .die-btn::before { content: "[ "; }
         .die-btn::after { content: " ]"; }
 
-        /* Roll Output Terminal */
+        .del-btn { border-color: #ff3333; color: #ff3333; margin-left: 5px; }
+        .del-btn:hover { background: #ff3333; color: var(--bg-color); }
+        .del-btn::before { content: ""; } .del-btn::after { content: ""; }
+
+        /* Roll Terminal */
+        .term-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px;}
         #roll-terminal {
-            margin-top: 20px;
             border: 1px solid var(--theme-color);
             padding: 10px;
-            height: 150px;
+            height: 200px;
             overflow-y: auto;
-            background: rgba(0,0,0,0.5); /* Keeps terminal dark even in light mode */
+            background: rgba(0,0,0,0.5); 
             color: var(--theme-color);
+            margin-top: 5px;
         }
 
-        /* Admin controls */
         #admin-controls { display: none; margin-bottom: 15px; }
-        .admin-input {
-            background: var(--bg-color);
-            color: var(--theme-color);
-            border: 1px solid var(--theme-color);
-            padding: 5px;
-            font-family: inherit;
-            width: 300px;
+        .admin-input { background: var(--bg-color); color: var(--theme-color); border: 1px solid var(--theme-color); padding: 5px; font-family: inherit; width: 300px; }
+        
+        #save-status { font-size: 0.8em; opacity: 0.8; margin-left: 15px; }
+
+        /* TN Modal */
+        #tn-modal {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px;
+            z-index: 200; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.9);
+            width: max-content; min-width: 300px;
         }
+        #tn-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
+        #tn-modal p { margin: 10px 0; }
+        .tn-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -126,10 +136,24 @@
 
     <div id="top-nav">
         <a href="/dashboard.html" class="nav-link">< RETURN TO DASHBOARD</a>
-        <span id="char-name-display">LOADING...</span>
+        <div>
+            <span id="char-name-display">LOADING...</span>
+            <span id="save-status"></span>
+        </div>
     </div>
 
-    <!-- Admin Tools (Visible only to Admin) -->
+    <!-- Target Number Modal -->
+    <div id="tn-modal">
+        <h3>INITIATING ROLL</h3>
+        <p>Enter Target Number (TN)</p>
+        <p style="font-size:0.8em; opacity:0.7;">Note: Only modify this if the GM instructs you to.</p>
+        <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center; font-size:1.2em;">
+        <div class="tn-buttons">
+            <button id="tn-btn-roll" class="die-btn">CONFIRM ROLL</button>
+            <button id="tn-btn-cancel" class="die-btn">CANCEL</button>
+        </div>
+    </div>
+
     <div id="admin-controls">
         <select id="admin-char-select" class="admin-input">
             <option value="katey-commons">View: Katey Commons</option>
@@ -137,11 +161,11 @@
             <option value="trombley-hicks">View: Trombley Hicks</option>
         </select>
         <input type="text" id="discord-webhook" class="admin-input" placeholder="Paste Discord Webhook URL here...">
-        <button id="save-webhook" class="die-btn" style="border:none;">SAVE URL</button>
+        <button id="save-webhook" class="die-btn" style="border:none;">SAVE URL GLOBALLY</button>
     </div>
 
     <div class="sheet-grid">
-        <!-- LEFT COLUMN: Stats & Skills -->
+        <!-- LEFT COLUMN -->
         <div>
             <div class="section" style="margin-bottom: 20px;">
                 <h3>ATTRIBUTES</h3>
@@ -155,7 +179,7 @@
             </div>
         </div>
 
-        <!-- RIGHT COLUMN: Derived, Gear, Notes -->
+        <!-- RIGHT COLUMN -->
         <div>
             <div class="section" style="margin-bottom: 20px;">
                 <h3>DERIVED STATS</h3>
@@ -177,108 +201,158 @@
     </div>
 
     <!-- Live Roll Output -->
+    <div class="term-header">
+        <span>> TERMINAL OUTPUT</span>
+        <button id="clear-term-btn" class="die-btn" style="border:none;">CLEAR LOG</button>
+    </div>
     <div id="roll-terminal">
         <div>> TERMINAL READY. WAITING FOR INPUT...</div>
     </div>
 
-    <!-- THE FIX: Added '/' to settings.js -->
     <script src="/settings.js"></script>
 
     <script>
         // ==========================================
-        // 1. DEFAULT DATABASE (SWADE Characters)
+        // 1. GLOBAL DATABASE CONFIGURATION
+        // ==========================================
+        // PASTE YOUR JSONBLOB URL HERE TO ENABLE GLOBAL SYNCING
+        const DB_URL = "https://jsonblob.com/019ee1fc-da5e-7943-9212-7535d45db7ce"; 
+
+        // ==========================================
+        // 2. DEFAULT SWADE DATA
         // ==========================================
         const defaultData = {
             "katey-commons": {
                 name: "Katey Commons",
-                attributes: { Agility: "d6", Smarts: "d8", Spirit: "d8", Strength: "d4", Vigor: "d8" },
-                skills: { Athletics: "d6", "Common Knowledge": "d6", Electronics: "d8", Fighting: "d6", Hacking: "d6", Healing: "d8", Notice: "d6", Persuasion: "d6", Repair: "d8", Shooting: "d4", Stealth: "d6" },
+                attributes: { Agility: {die:"6", mod:"+0"}, Smarts: {die:"8", mod:"+0"}, Spirit: {die:"8", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"8", mod:"+0"} },
+                skills: { Athletics: {die:"6", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Electronics: {die:"8", mod:"+0"}, Fighting: {die:"6", mod:"+0"}, Hacking: {die:"6", mod:"+0"}, Healing: {die:"8", mod:"+0"}, Notice: {die:"6", mod:"+0"}, Persuasion: {die:"6", mod:"+0"}, Repair: {die:"8", mod:"+0"}, Shooting: {die:"4", mod:"+0"}, Stealth: {die:"6", mod:"+0"} },
                 derived: { pace: "6", parry: "5", toughness: "5" },
                 edges: "Hindrances:\n- Ex-Drone (Major)\n- Heroic (Major)\n- Pacifist (Minor)\n- Vulnerability (Minor -- electrosensitivity)\n\nEdges:\n- Cyborg (Ex-Drone)\n- Healer\n- Mr. Fix It",
                 gear: "Cyberware [$20000/20000, Strain 6/8]:\n- Data Jack [$5000, 1]\n- Enhanced Hearing [$5000, 1]\n- Extra Limbs x2 [$10000, 4]\n\nAdvance History:\n1. Mr. Fix It\n2. Spirit d8\n3. Healer\n4. Vigor d8"
             },
             "vesa-novik": {
                 name: "Vesa Novik",
-                attributes: { Agility: "d12", Smarts: "d6", Spirit: "d4", Strength: "d4", Vigor: "d6" },
-                skills: { Athletics: "d6", "Common Knowledge": "d6", Stealth: "d8", Notice: "d8", Persuasion: "d4", Healing: "d6", Driving: "d8", Shooting: "d10", Survival: "d6" },
+                attributes: { Agility: {die:"12", mod:"+0"}, Smarts: {die:"6", mod:"+0"}, Spirit: {die:"4", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"6", mod:"+0"} },
+                skills: { Athletics: {die:"6", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Stealth: {die:"8", mod:"+0"}, Notice: {die:"8", mod:"+0"}, Persuasion: {die:"4", mod:"+0"}, Healing: {die:"6", mod:"+0"}, Driving: {die:"8", mod:"+0"}, Shooting: {die:"10", mod:"+0"}, Survival: {die:"6", mod:"+0"} },
                 derived: { pace: "8", parry: "2", toughness: "5" },
                 edges: "Hindrances:\n- Yellow (Major)\n- Hesitant (Minor)\n- Cautious (Minor)\n\nEdges:\n- Double-Tap\n- Fleet-Footed\n- Free-Runner",
                 gear: "Advance History:\n1. Agility +1 [To 4]\n2. Skill increase: Shooting [3 to 4], Driving [2 to 3]\n3. Edge: Fleet-Footed\n4. Edge: Free-Runner"
             },
             "trombley-hicks": {
                 name: "Trombley Hicks",
-                attributes: { Agility: "d10", Smarts: "d6", Spirit: "d6", Strength: "d4", Vigor: "d8" },
-                skills: { Athletics: "d10", "Common Knowledge": "d6", Fighting: "d8", Notice: "d6", Persuasion: "d4", Research: "d4", Stealth: "d10", Survival: "d6", Thievery: "d8" },
+                attributes: { Agility: {die:"10", mod:"+0"}, Smarts: {die:"6", mod:"+0"}, Spirit: {die:"6", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"8", mod:"+0"} },
+                skills: { Athletics: {die:"10", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Fighting: {die:"8", mod:"+0"}, Notice: {die:"6", mod:"+0"}, Persuasion: {die:"4", mod:"+0"}, Research: {die:"4", mod:"+0"}, Stealth: {die:"10", mod:"+0"}, Survival: {die:"6", mod:"+0"}, Thievery: {die:"8", mod:"+0"} },
                 derived: { pace: "6", parry: "6", toughness: "6" },
                 edges: "Hindrances:\n- Mute (Major)\n- Can't Swim (Minor)\n- Mild Mannered (Minor)\n- Quirk (Minor - tooth rattle)\n\nEdges:\n- Dodge\n- Extraction\n- Thief",
                 gear: "Special Notes:\n- Mute: Cannot speak.\n- Thief: +1 Athletics climb urban, +1 Stealth urban, +1 Thievery.\n- Extraction: One opponent doesn't get free attack on move.\n- Dodge: Ranged attacks suffer -2."
             }
         };
 
-        // ==========================================
-        // 2. ROUTING & DATA LOADING
-        // ==========================================
         let activeCharId = currentUser === "Administrator" ? "katey-commons" : currentUser.toLowerCase().replace(' ', '-');
         let charData = {};
+        let globalState = { characters: {}, webhook: "" };
+        let pendingRoll = null;
 
+        // ==========================================
+        // 3. DATABASE SYNC LOGIC
+        // ==========================================
+        async function fetchState() {
+            if (!DB_URL) return JSON.parse(localStorage.getItem('lambdaDB')) || { characters: {}, webhook: "" };
+            try {
+                let res = await fetch(DB_URL);
+                if (res.ok) return await res.json();
+            } catch(e) { console.warn("DB Fetch failed."); }
+            return { characters: {}, webhook: "" };
+        }
+
+        async function pushState(newState) {
+            if (!DB_URL) { localStorage.setItem('lambdaDB', JSON.stringify(newState)); return; }
+            try {
+                await fetch(DB_URL, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newState)
+                });
+            } catch(e) { console.warn("DB Save failed."); }
+        }
+
+        async function init() {
+            document.getElementById('char-name-display').innerText = "CONNECTING TO NODE...";
+            globalState = await fetchState();
+            
+            // Sync Webhook to interface if Admin
+            if (currentUser === "Administrator" && globalState.webhook) {
+                document.getElementById('discord-webhook').value = globalState.webhook;
+            }
+
+            loadCharacter();
+        }
+
+        function loadCharacter() {
+            if (globalState.characters[activeCharId]) {
+                charData = globalState.characters[activeCharId];
+            } else {
+                // If character not in DB yet, load default
+                charData = JSON.parse(JSON.stringify(defaultData[activeCharId]));
+            }
+            document.getElementById('char-name-display').innerText = `SUBJECT: ${charData.name.toUpperCase()}`;
+            renderSheet();
+        }
+
+        async function saveCharacter() {
+            document.getElementById('save-status').innerText = "[ SAVING... ]";
+            globalState = await fetchState(); // Always fetch latest to avoid overwriting others
+            globalState.characters[activeCharId] = charData;
+            await pushState(globalState);
+            document.getElementById('save-status').innerText = "[ SYNCED ]";
+            setTimeout(() => { document.getElementById('save-status').innerText = ""; }, 2000);
+        }
+
+        // Admin Tools
         if (currentUser === "Administrator") {
             document.getElementById('admin-controls').style.display = 'block';
             document.getElementById('admin-char-select').addEventListener('change', (e) => {
                 activeCharId = e.target.value;
                 loadCharacter();
             });
-
-            const webhookInput = document.getElementById('discord-webhook');
-            webhookInput.value = localStorage.getItem('lambdaWebhook') || "";
-            document.getElementById('save-webhook').addEventListener('click', () => {
-                localStorage.setItem('lambdaWebhook', webhookInput.value);
-                logToTerminal("> WEBHOOK URL SAVED LOCALLY.");
+            document.getElementById('save-webhook').addEventListener('click', async () => {
+                let url = document.getElementById('discord-webhook').value;
+                globalState = await fetchState();
+                globalState.webhook = url;
+                await pushState(globalState);
+                logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
             });
         }
 
-        function loadCharacter() {
-            const savedStr = localStorage.getItem('charData_' + activeCharId);
-            if (savedStr) {
-                charData = JSON.parse(savedStr);
-            } else {
-                charData = JSON.parse(JSON.stringify(defaultData[activeCharId])); 
-            }
-            document.getElementById('char-name-display').innerText = `SUBJECT: ${charData.name.toUpperCase()}`;
-            renderSheet();
-        }
-
-        function saveCharacter() {
-            localStorage.setItem('charData_' + activeCharId, JSON.stringify(charData));
-        }
-
         // ==========================================
-        // 3. RENDERING UI
+        // 4. RENDERING & EDITING UI
         // ==========================================
         function renderSheet() {
             const attrContainer = document.getElementById('attributes-container');
             const skillContainer = document.getElementById('skills-container');
-            
-            attrContainer.innerHTML = '';
-            skillContainer.innerHTML = '';
+            attrContainer.innerHTML = ''; skillContainer.innerHTML = '';
 
-            for (let [attr, die] of Object.entries(charData.attributes)) {
+            for (let [attr, data] of Object.entries(charData.attributes)) {
                 attrContainer.innerHTML += `
                     <div class="stat-row">
                         <span>${attr}:</span>
-                        <div>
-                            <span class="editable attr-edit" data-stat="${attr}" contenteditable="true">${die}</span>
-                            <button class="die-btn" onclick="rollTrait('${attr}', '${die}')">ROLL</button>
+                        <div class="die-container">
+                            d<span class="editable die-input" data-cat="attributes" data-key="${attr}" contenteditable="true">${data.die}</span>
+                            <span class="editable mod-input" data-cat="attributes" data-key="${attr}" contenteditable="true">${data.mod}</span>
+                            <button class="die-btn" onclick="prepareRoll('${attr}', 'attributes')">ROLL</button>
                         </div>
                     </div>`;
             }
 
-            for (let [skill, die] of Object.entries(charData.skills)) {
+            for (let [skill, data] of Object.entries(charData.skills)) {
                 skillContainer.innerHTML += `
                     <div class="stat-row">
-                        <span class="editable skill-name-edit" data-oldname="${skill}" contenteditable="true">${skill}</span>:
-                        <div>
-                            <span class="editable skill-val-edit" data-skill="${skill}" contenteditable="true">${die}</span>
-                            <button class="die-btn" onclick="rollTrait('${skill}', '${die}')">ROLL</button>
+                        <span class="editable skill-name-edit" data-oldname="${skill}" contenteditable="true">${skill}</span>
+                        <div class="die-container">
+                            d<span class="editable die-input" data-cat="skills" data-key="${skill}" contenteditable="true">${data.die}</span>
+                            <span class="editable mod-input" data-cat="skills" data-key="${skill}" contenteditable="true">${data.mod}</span>
+                            <button class="die-btn" onclick="prepareRoll('${skill}', 'skills')">ROLL</button>
+                            <button class="die-btn del-btn" onclick="deleteSkill('${skill}')">X</button>
                         </div>
                     </div>`;
             }
@@ -293,127 +367,139 @@
         }
 
         function attachEditListeners() {
+            // Derived & Text
             ['pace', 'parry', 'toughness'].forEach(stat => {
-                document.getElementById(`der-${stat}`).addEventListener('blur', (e) => {
-                    charData.derived[stat] = e.target.innerText;
-                    saveCharacter();
-                });
+                document.getElementById(`der-${stat}`).addEventListener('blur', (e) => { charData.derived[stat] = e.target.innerText; saveCharacter(); });
             });
-
             document.getElementById('notes-edges').addEventListener('input', (e) => { charData.edges = e.target.value; saveCharacter(); });
             document.getElementById('notes-gear').addEventListener('input', (e) => { charData.gear = e.target.value; saveCharacter(); });
 
-            document.querySelectorAll('.attr-edit').forEach(el => {
+            // Dice & Mods
+            document.querySelectorAll('.die-input, .mod-input').forEach(el => {
                 el.addEventListener('blur', (e) => {
-                    charData.attributes[e.target.dataset.stat] = e.target.innerText;
+                    let cat = e.target.dataset.cat;
+                    let key = e.target.dataset.key;
+                    let isMod = e.target.classList.contains('mod-input');
+                    
+                    if (isMod) {
+                        charData[cat][key].mod = e.target.innerText;
+                    } else {
+                        charData[cat][key].die = e.target.innerText;
+                    }
                     saveCharacter();
-                    renderSheet(); 
                 });
             });
 
-            document.querySelectorAll('.skill-val-edit').forEach(el => {
-                el.addEventListener('blur', (e) => {
-                    charData.skills[e.target.dataset.skill] = e.target.innerText;
-                    saveCharacter();
-                    renderSheet();
-                });
-            });
-
+            // Skill Rename
             document.querySelectorAll('.skill-name-edit').forEach(el => {
                 el.addEventListener('blur', (e) => {
                     let oldName = e.target.dataset.oldname;
                     let newName = e.target.innerText.trim();
-                    if (newName === "") {
-                        delete charData.skills[oldName]; 
-                    } else if (newName !== oldName) {
+                    if (newName !== oldName && newName !== "") {
                         charData.skills[newName] = charData.skills[oldName];
                         delete charData.skills[oldName];
+                        saveCharacter();
+                        renderSheet();
                     }
-                    saveCharacter();
-                    renderSheet();
                 });
             });
         }
 
         document.getElementById('add-skill-btn').addEventListener('click', () => {
-            charData.skills["New Skill"] = "d4";
-            saveCharacter();
-            renderSheet();
+            charData.skills["New Skill"] = { die: "4", mod: "+0" };
+            saveCharacter(); renderSheet();
+        });
+
+        function deleteSkill(skillName) {
+            if(confirm(`WARNING: Initialize deletion of ${skillName}?`)) {
+                delete charData.skills[skillName];
+                saveCharacter(); renderSheet();
+            }
+        }
+
+        document.getElementById('clear-term-btn').addEventListener('click', () => {
+            document.getElementById('roll-terminal').innerHTML = '<div>> TERMINAL LOG CLEARED...</div>';
         });
 
         // ==========================================
-        // 4. SWADE DICE ROLLING LOGIC
+        // 5. ROLL LOGIC & TARGET NUMBER MODAL
         // ==========================================
-        function parseDie(dieStr) {
-            let match = dieStr.match(/d(\d+)/);
-            return match ? parseInt(match[1]) : 4;
+        function prepareRoll(name, cat) {
+            pendingRoll = { name, cat };
+            document.getElementById('tn-input').value = "4"; // Reset to default
+            document.getElementById('tn-modal').style.display = 'block';
         }
 
+        document.getElementById('tn-btn-cancel').addEventListener('click', () => {
+            document.getElementById('tn-modal').style.display = 'none';
+            pendingRoll = null;
+        });
+
+        document.getElementById('tn-btn-roll').addEventListener('click', () => {
+            let tn = parseInt(document.getElementById('tn-input').value) || 4;
+            document.getElementById('tn-modal').style.display = 'none';
+            executeRoll(pendingRoll.name, pendingRoll.cat, tn);
+        });
+
         function rollExploding(sides) {
-            let total = 0;
-            let currentRoll;
-            let history = [];
+            let total = 0; let currentRoll; let history = [];
             do {
                 currentRoll = Math.floor(Math.random() * sides) + 1;
                 total += currentRoll;
                 history.push(currentRoll);
-            } while (currentRoll === sides); 
+            } while (currentRoll === sides && sides > 1); 
             return { total, history };
         }
 
-        async function rollTrait(traitName, dieStr) {
-            let sides = parseDie(dieStr);
+        async function executeRoll(name, cat, targetNumber) {
+            let data = charData[cat][name];
+            let sides = parseInt(data.die) || 4;
+            let modifier = parseInt(data.mod) || 0;
             
             let traitRoll = rollExploding(sides);
-            let wildRoll = rollExploding(6);
+            let wildRoll = rollExploding(6); // SWADE Wild Die is always d6
 
-            let bestTotal = Math.max(traitRoll.total, wildRoll.total);
+            // Apply modifiers to the highest die
+            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + modifier;
             let isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
             
-            let outcomeText = "";
-            let color = 0xff9900; 
+            let outcomeText = ""; let color = 0xff9900; 
             
             if (isCritFail) {
-                outcomeText = "CRITICAL FAILURE!";
-                color = 0xff0000; 
-            } else if (bestTotal < 4) {
-                outcomeText = "FAILURE.";
-                color = 0xff0000;
+                outcomeText = "CRITICAL FAILURE!"; color = 0xff0000; 
+            } else if (bestTotal < targetNumber) {
+                outcomeText = "FAILURE."; color = 0xff0000;
             } else {
-                let raises = Math.floor((bestTotal - 4) / 4);
+                let raises = Math.floor((bestTotal - targetNumber) / 4);
                 outcomeText = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
                 color = 0x00ff00; 
             }
 
-            let termLog = `> ${charData.name} rolled ${traitName.toUpperCase()} [${dieStr}]<br>`;
-            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} = ${traitRoll.total}<br>`;
-            termLog += `&nbsp;&nbsp;Wild:  ${wildRoll.history.join(' + ')} = ${wildRoll.total}<br>`;
-            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> ${outcomeText}`;
+            let modStrDisplay = modifier !== 0 ? ` (${data.mod})` : "";
+            let termLog = `> ${charData.name} rolled ${name.toUpperCase()} [d${sides}${data.mod}] vs TN ${targetNumber}<br>`;
+            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')}<br>`;
+            termLog += `&nbsp;&nbsp;Wild:  ${wildRoll.history.join(' + ')}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> ${modStrDisplay} -> ${outcomeText}`;
             logToTerminal(termLog);
 
-            const webhookUrl = localStorage.getItem('lambdaWebhook');
-            if (webhookUrl) {
+            // Fetch latest global state just in case webhook changed
+            globalState = await fetchState();
+            
+            if (globalState.webhook) {
                 const embed = {
-                    title: `${charData.name} rolled ${traitName} [${dieStr}]`,
-                    description: `**Final Result: ${bestTotal}**\n${outcomeText}`,
+                    title: `${charData.name} rolled ${name}`,
+                    description: `**Final Result: ${bestTotal}** (TN: ${targetNumber})\n${outcomeText}`,
                     color: color,
                     fields: [
-                        { name: "Trait Die", value: `${traitRoll.history.join(' + ')} = **${traitRoll.total}**`, inline: true },
-                        { name: "Wild Die", value: `${wildRoll.history.join(' + ')} = **${wildRoll.total}**`, inline: true }
+                        { name: `Trait (d${sides})`, value: `${traitRoll.history.join(' + ')}`, inline: true },
+                        { name: "Wild (d6)", value: `${wildRoll.history.join(' + ')}`, inline: true }
                     ]
                 };
+                if (modifier !== 0) embed.fields.push({ name: "Modifier", value: `${data.mod}`, inline: true });
 
                 try {
-                    await fetch(webhookUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ embeds: [embed] })
-                    });
-                } catch (e) {
-                    logToTerminal("> ERROR: Discord Webhook connection failed.");
-                }
-            } else {
-                logToTerminal("> NOTE: Local roll only. Discord Webhook URL not configured by Administrator.");
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
         }
 
@@ -426,8 +512,7 @@
             term.scrollTop = term.scrollHeight;
         }
 
-        loadCharacter();
-
+        init();
     </script>
 </body>
 </html>
