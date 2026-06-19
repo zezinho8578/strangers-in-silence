@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="overwatch">
+<head>
+    <meta charset="UTF-8">
+    <!-- Crucial for mobile compatibility: ensures proper scaling on phones -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>Strangers in Silence // Terminal</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Loaded as a backup, but we will use system fonts for accessibility -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- CRT Scanline Overlay (Toggleable via Accessibility) -->
+    <div class="scanlines"></div>
+
+    <!-- Settings / Configuration Gear (Top Right) -->
+    <button id="settingsBtn" class="settings-btn" aria-label="Open Settings">⚙</button>
+    
+    <!-- Settings Dropdown Panel -->
+    <div id="settingsPanel" class="settings-panel hidden">
+        <h3>// TERMINAL CONFIG</h3>
+        
+        <div class="setting-group">
+            <label for="themeSelect">Visual Theme:</label>
+            <select id="themeSelect">
+                <option value="overwatch">Combine Overwatch (Default)</option>
+                <option value="resistance">Resistance Amber</option>
+                <option value="high-contrast">High Contrast (A11y)</option>
+            </select>
+        </div>
+
+        <div class="setting-group">
+            <label for="fontToggle">Dyslexia-Friendly Font:</label>
+            <input type="checkbox" id="fontToggle" aria-label="Toggle readable font">
+        </div>
+
+        <div class="setting-group">
+            <label for="effectToggle">Disable CRT/Scanlines:</label>
+            <input type="checkbox" id="effectToggle" aria-label="Toggle visual effects">
+        </div>
+
+        <div class="setting-group">
+            <label for="textSize">Text Size:</label>
+            <button id="textSmaller" aria-label="Decrease text size">A-</button>
+            <button id="textLarger" aria-label="Increase text size">A+</button>
+        </div>
+    </div>
+
+    <div class="terminal-container">
+        <header>
+            <h1 class="glitch" data-text="STRANGERS IN SILENCE">STRANGERS IN SILENCE</h1>
+            <div class="status-bar">
+                <span>SYS_STATUS: <span class="text-green">ONLINE</span></span>
+                <span>OVERWATCH: <span class="text-red">BREACHED</span></span>
+                <span>UPLINK: <span class="text-amber">STABLE</span></span>
+            </div>
+        </header>
+
+        <main>
+            <div class="login-box">
+                <h2>// SECURE ACCESS REQUIRED //</h2>
+                <p class="flavor-text">Unauthorized access will result in immediate pacification. Identify yourself, Citizen.</p>
+                
+                <form id="loginForm" onsubmit="attemptLogin(event)">
+                    <div class="input-group">
+                        <label for="citizenId">CITIZEN ID:</label>
+                        <input type="text" id="citizenId" required placeholder="Enter ID...">
+                    </div>
+                    <div class="input-group">
+                        <label for="accessCode">ACCESS CODE:</label>
+                        <input type="password" id="accessCode" required placeholder="Enter Code...">
+                    </div>
+                    <button type="submit" class="btn-connect">JACK INTO NETWORK</button>
+                </form>
+                <div id="loginError" class="error-msg"></div>
+            </div>
+        </main>
+
+        <footer>
+            <p>SAVAGE WILDS CORE RULES // HALF-LIFE 2 FAN CAMPAIGN // PROTOTYPE v1.0</p>
+            <p>DISCORD WEBHOOK: <span id="webhookStatus" class="text-amber">CHECKING...</span></p>
+        </footer>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
