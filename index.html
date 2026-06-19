@@ -4,20 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LambdaOS - Node Terminal</title>
+    <!-- Retro terminal font -->
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <style>
         body {
-            background-color: #050505; 
+            background-color: #050505;
             color: #ff9900; 
             font-family: 'VT323', monospace;
             font-size: 22px; /* Made text a bit smaller */
             margin: 0;
-            padding: 15px; /* Brought closer to top left */
+            padding: 15px; /* Moved closer to the top left */
             overflow-x: hidden;
+            overflow-y: auto; /* Allows scrolling */
+            scroll-behavior: smooth; /* Smooth scrolling effect */
             text-shadow: 0 0 5px rgba(255, 153, 0, 0.6);
         }
 
-        /* Subtle CRT scanline overlay */
+        /* Hide the ugly scrollbar but keep scroll functionality */
+        ::-webkit-scrollbar { display: none; }
+        * { scrollbar-width: none; }
+
+        /* CRT scanline overlay - set to fixed so it doesn't break when scrolling */
         body::after {
             content: " ";
             display: block;
@@ -36,15 +43,45 @@
             left: 50%;
             transform: translate(-50%, -50%);
             width: 600px;
-            opacity: 0.08; 
+            opacity: 0.08;
             z-index: -1;
             pointer-events: none;
         }
 
+        /* Initial Click Screen */
+        #start-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+            z-index: 10;
+            cursor: pointer;
+            animation: pulse 2s infinite;
+            font-size: 26px;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
         #terminal {
+            display: none;
             white-space: pre-wrap;
             line-height: 1.2;
-            word-wrap: break-word;
+        }
+
+        /* The container for finalized text */
+        #output-history {
+            margin-bottom: 0;
+        }
+
+        /* The line currently being typed/interacted with */
+        #input-line {
+            display: inline;
         }
 
         .highlight {
@@ -68,11 +105,17 @@
 </head>
 <body>
 
-    <!-- Faded Lambda Background -->
     <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
 
-    <!-- The terminal is now split into finalized history and the active input line -->
-    <div id="terminal"><span id="history"></span><span id="active-line"></span><span class="cursor" id="cursor"></span></div>
+    <div id="start-screen">
+        [ CLICK TO INITIALIZE TERMINAL ]
+    </div>
+
+    <!-- Terminal Structure -->
+    <div id="terminal">
+        <div id="output-history"></div>
+        <div><span id="input-line"></span><span class="cursor" id="cursor"></span></div>
+    </div>
 
     <!-- Audio Elements -->
     <audio id="audio-boot" src="boot.mp3"></audio>
@@ -81,7 +124,6 @@
     <script>
         // --- GAME DATA ---
         const accounts = ["Katey Commons", "Trombley Hicks", "Vesa Novik", "Administrator"];
-        
         const passwords = {
             "Katey Commons": "katey123",
             "Trombley Hicks": "hicks123",
@@ -95,80 +137,99 @@
         let typedPassword = "";
         
         // DOM Elements
-        const historyEl = document.getElementById('history');
-        const activeLineEl = document.getElementById('active-line');
+        const startScreen = document.getElementById('start-screen');
+        const terminal = document.getElementById('terminal');
+        const outputHistory = document.getElementById('output-history');
+        const inputLine = document.getElementById('input-line');
         const audioBoot = document.getElementById('audio-boot');
         const audioError = document.getElementById('audio-error');
 
+        // Boot Sequence Lines
         const bootText = [
             "LambdaOS v.2.1.4 (Build 8472)",
             "Checking memory... OK (640K Base / 15360K Extended)",
             "Mounting file systems... OK",
             "Initializing Overwatch Bypass Protocol... SUCCESS",
             "Establishing connection to Resistance Node...",
-            "DONE.\n"
+            "DONE.",
+            "" // Empty string creates a blank line space before the account select
         ];
 
-        // --- AUTO START ---
-        window.onload = () => {
-            // Attempt to play audio (may be blocked by browser until user presses a key)
-            audioBoot.volume = 0.5;
-            audioBoot.play().catch(e => console.log("Autoplay blocked pending user interaction."));
-            runBootSequence();
-        };
-
-        // Smooth scrolling function
+        // --- AUTO SCROLL FUNCTION ---
         function scrollToBottom() {
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
         }
+
+        // --- INITIALIZATION ---
+        startScreen.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            terminal.style.display = 'block';
+            
+            audioBoot.volume = 0.5;
+            audioBoot.play().catch(e => console.log("Boot audio not found."));
+
+            runBootSequence();
+        });
 
         // --- BOOT ANIMATION ---
         async function runBootSequence() {
             currentMode = "booting";
             
             for (let line of bootText) {
-                await typeLine("> " + line);
-                await sleep(300); // Pause between lines
+                if (line === "") {
+                    // Handle blank spacer line
+                    inputLine.innerHTML = "";
+                    finalizeInput();
+                } else {
+                    await typeLine("> " + line);
+                    finalizeInput(); // Locks the line in history
+                    await sleep(300); // Pause between lines
+                }
             }
-            
             renderAccountSelection();
         }
 
+        // Types out text on the active line
         function typeLine(text) {
             return new Promise(resolve => {
                 let i = 0;
-                // Add a newline if history isn't empty
-                if (historyEl.innerHTML !== "") historyEl.innerHTML += "\n";
-                
+                inputLine.innerHTML = "";
                 let interval = setInterval(() => {
-                    historyEl.innerHTML += text.charAt(i);
+                    inputLine.textContent += text.charAt(i);
                     scrollToBottom();
                     i++;
                     if (i >= text.length) {
                         clearInterval(interval);
                         resolve();
                     }
-                }, 15); // Typing speed
+                }, 20); // Typing speed
             });
+        }
+
+        // Moves the active line to the history block and clears the active line
+        function finalizeInput() {
+            const div = document.createElement('div');
+            div.innerHTML = inputLine.innerHTML || "<br>"; // <br> ensures empty lines take up space
+            outputHistory.appendChild(div);
+            inputLine.innerHTML = "";
+            scrollToBottom();
+        }
+
+        // Directly posts a full line to history (used for fast system responses)
+        function finalizeRawText(text) {
+            const div = document.createElement('div');
+            div.innerHTML = text;
+            outputHistory.appendChild(div);
+            scrollToBottom();
         }
 
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
-        // --- COMMIT ACTIVE LINE TO HISTORY ---
-        // Moves the current active line text into the permanent history above it
-        function commitActiveLine() {
-            if (historyEl.innerHTML !== "") historyEl.innerHTML += "\n";
-            historyEl.innerHTML += activeLineEl.innerHTML;
-            activeLineEl.innerHTML = "";
-            scrollToBottom();
-        }
-
         // --- ACCOUNT SELECTION UI ---
         function renderAccountSelection() {
             currentMode = "selecting";
-            
             let selectionString = "> SELECT ACCOUNT: ";
             
             accounts.forEach((acc, index) => {
@@ -177,33 +238,29 @@
                 } else {
                     selectionString += acc;
                 }
-                
-                if (index < accounts.length - 1) {
-                    selectionString += " / ";
-                }
+                if (index < accounts.length - 1) selectionString += " / ";
             });
 
-            // Update in place (does not create a new line)
-            activeLineEl.innerHTML = selectionString;
+            // Replaces the content in place (no spamming new lines)
+            inputLine.innerHTML = selectionString; 
             scrollToBottom();
         }
 
         // --- PASSWORD UI ---
         function renderPasswordPrompt() {
-            // Mask password with asterisks
             let maskedStr = "*".repeat(typedPassword.length);
-            activeLineEl.innerHTML = "> PASSWORD: " + maskedStr;
+            inputLine.innerHTML = `> PASSWORD: ${maskedStr}`;
             scrollToBottom();
         }
 
         // --- KEYBOARD CONTROLS ---
-        document.addEventListener('keydown', async (e) => {
-            // Wake up audio context on first keypress if it was blocked
-            if (audioBoot.paused && currentMode === "booting") {
-                audioBoot.play().catch(()=>{});
-            }
-
+        document.addEventListener('keydown', (e) => {
             if (currentMode === "selecting") {
+                // Prevent arrow keys from natively scrolling the window
+                if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+                    e.preventDefault(); 
+                }
+
                 if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
                     selectedIndex = (selectedIndex > 0) ? selectedIndex - 1 : accounts.length - 1;
                     renderAccountSelection();
@@ -213,10 +270,10 @@
                     renderAccountSelection();
                 }
                 else if (e.key === "Enter") {
-                    commitActiveLine(); // Lock in the choice
+                    finalizeInput(); // Locks in the chosen account line
                     currentMode = "password";
-                    typedPassword = "";
-                    renderPasswordPrompt();
+                    typedPassword = ""; 
+                    renderPasswordPrompt(); // Starts password prompt on the NEXT line
                 }
             } 
             else if (currentMode === "password") {
@@ -224,11 +281,12 @@
                     let selectedAccount = accounts[selectedIndex];
                     let correctPassword = passwords[selectedAccount];
 
+                    finalizeInput(); // Locks in the typed password line
+
                     if (typedPassword === correctPassword) {
-                        commitActiveLine();
                         currentMode = "loading";
-                        await typeLine("> ACCESS GRANTED. WELCOME.");
-                        await typeLine("> INITIALIZING DASHBOARD...");
+                        finalizeRawText("> ACCESS GRANTED. WELCOME.");
+                        finalizeRawText("> INITIALIZING DASHBOARD...");
                         
                         setTimeout(() => {
                             window.location.href = "dashboard.html"; 
@@ -239,11 +297,8 @@
                         audioError.currentTime = 0;
                         audioError.play().catch(e => console.log("Error audio not found."));
                         
-                        commitActiveLine();
-                        await typeLine("> ACCESS DENIED. TRY AGAIN.");
-                        
-                        // Restart password prompt
-                        typedPassword = "";
+                        finalizeRawText("> ACCESS DENIED. TRY AGAIN.");
+                        typedPassword = ""; // reset
                         renderPasswordPrompt();
                     }
                 } 
@@ -251,8 +306,8 @@
                     typedPassword = typedPassword.slice(0, -1);
                     renderPasswordPrompt();
                 }
-                else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { 
-                    // Normal character typing
+                // Only register standard typing characters (ignore Shift, Ctrl, etc.)
+                else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) { 
                     typedPassword += e.key;
                     renderPasswordPrompt();
                 }
