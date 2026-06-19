@@ -285,6 +285,7 @@
 
                     if (typedPassword === correctPassword) {
                         currentMode = "loading";
+                        sessionStorage.setItem('currentUser', selectedAccount); // <-- ADD THIS LINE
                         finalizeRawText("> ACCESS GRANTED. WELCOME.");
                         finalizeRawText("> INITIALIZING DASHBOARD...");
                         
