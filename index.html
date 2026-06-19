@@ -1,89 +1,279 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="overwatch">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Crucial for mobile compatibility: ensures proper scaling on phones -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-    <title>Strangers in Silence // Terminal</title>
-    <link rel="stylesheet" href="css/style.css">
-    <!-- Loaded as a backup, but we will use system fonts for accessibility -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LambdaOS - Node Terminal</title>
+    <!-- Using a classic retro terminal font -->
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #050505; /* Deep off-black */
+            color: #ff9900; /* Iconic HL2 Orange */
+            font-family: 'VT323', monospace;
+            font-size: 26px;
+            margin: 0;
+            padding: 30px;
+            overflow: hidden;
+            /* Glowing CRT text effect */
+            text-shadow: 0 0 5px rgba(255, 153, 0, 0.6);
+        }
+
+        /* Subtle CRT scanline overlay */
+        body::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 2;
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+        }
+
+        /* Faded Orange Lambda Background */
+        #bg-lambda {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            opacity: 0.08; /* Very faded */
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Initial Click Screen to allow audio playback */
+        #start-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+            z-index: 10;
+            cursor: pointer;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        #terminal {
+            display: none; /* Hidden until boot */
+            white-space: pre-wrap;
+            line-height: 1.2;
+        }
+
+        .highlight {
+            background-color: #ff9900;
+            color: #000;
+            text-shadow: none;
+            padding: 0 6px;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 12px;
+            height: 24px;
+            background-color: #ff9900;
+            animation: blink 1s step-end infinite;
+            vertical-align: bottom;
+        }
+
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
 </head>
 <body>
 
-    <!-- CRT Scanline Overlay (Toggleable via Accessibility) -->
-    <div class="scanlines"></div>
+    <!-- Faded Lambda Background -->
+    <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
 
-    <!-- Settings / Configuration Gear (Top Right) -->
-    <button id="settingsBtn" class="settings-btn" aria-label="Open Settings">⚙</button>
-    
-    <!-- Settings Dropdown Panel -->
-    <div id="settingsPanel" class="settings-panel hidden">
-        <h3>// TERMINAL CONFIG</h3>
+    <!-- Anti-autoplay blocker screen -->
+    <div id="start-screen">
+        [ CLICK TO INITIALIZE TERMINAL ]
+    </div>
+
+    <!-- The actual terminal interface -->
+    <div id="terminal"></div><span class="cursor" id="cursor" style="display:none;"></span>
+
+    <!-- Audio Elements (Replace src with your downloaded MP3s) -->
+    <audio id="audio-boot" src="boot.mp3"></audio>
+    <audio id="audio-error" src="error.mp3"></audio>
+
+    <script>
+        // --- GAME DATA ---
+        const accounts = ["Katey Commons", "Trombley Hicks", "Vesa Novik", "Administrator"];
         
-        <div class="setting-group">
-            <label for="themeSelect">Visual Theme:</label>
-            <select id="themeSelect">
-                <option value="overwatch">Combine Overwatch (Default)</option>
-                <option value="resistance">Resistance Amber</option>
-                <option value="high-contrast">High Contrast (A11y)</option>
-            </select>
-        </div>
+        // Dummy passwords (we will move this to a backend/database later)
+        const passwords = {
+            "Katey Commons": "katey123",
+            "Trombley Hicks": "hicks123",
+            "Vesa Novik": "vesa123",
+            "Administrator": "admin"
+        };
 
-        <div class="setting-group">
-            <label for="fontToggle">Dyslexia-Friendly Font:</label>
-            <input type="checkbox" id="fontToggle" aria-label="Toggle readable font">
-        </div>
+        // --- TERMINAL STATE ---
+        let currentMode = "uninitialized"; // uninitialized -> booting -> selecting -> password -> loading
+        let selectedIndex = 0;
+        let typedPassword = "";
+        
+        // DOM Elements
+        const startScreen = document.getElementById('start-screen');
+        const terminal = document.getElementById('terminal');
+        const cursor = document.getElementById('cursor');
+        const audioBoot = document.getElementById('audio-boot');
+        const audioError = document.getElementById('audio-error');
 
-        <div class="setting-group">
-            <label for="effectToggle">Disable CRT/Scanlines:</label>
-            <input type="checkbox" id="effectToggle" aria-label="Toggle visual effects">
-        </div>
+        // Boot Sequence Lines
+        const bootText = [
+            "LambdaOS v.2.1.4 (Build 8472)",
+            "Checking memory... OK (640K Base / 15360K Extended)",
+            "Mounting file systems... OK",
+            "Initializing Overwatch Bypass Protocol... SUCCESS",
+            "Establishing connection to Resistance Node...",
+            "DONE.\n"
+        ];
 
-        <div class="setting-group">
-            <label for="textSize">Text Size:</label>
-            <button id="textSmaller" aria-label="Decrease text size">A-</button>
-            <button id="textLarger" aria-label="Increase text size">A+</button>
-        </div>
-    </div>
+        // --- INITIALIZATION ---
+        startScreen.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            terminal.style.display = 'inline';
+            cursor.style.display = 'inline-block';
+            
+            // Try to play audio (catch error if file is missing so code doesn't break)
+            audioBoot.volume = 0.5;
+            audioBoot.play().catch(e => console.log("Boot audio not found or blocked."));
 
-    <div class="terminal-container">
-        <header>
-            <h1 class="glitch" data-text="STRANGERS IN SILENCE">STRANGERS IN SILENCE</h1>
-            <div class="status-bar">
-                <span>SYS_STATUS: <span class="text-green">ONLINE</span></span>
-                <span>OVERWATCH: <span class="text-red">BREACHED</span></span>
-                <span>UPLINK: <span class="text-amber">STABLE</span></span>
-            </div>
-        </header>
+            runBootSequence();
+        });
 
-        <main>
-            <div class="login-box">
-                <h2>// SECURE ACCESS REQUIRED //</h2>
-                <p class="flavor-text">Unauthorized access will result in immediate pacification. Identify yourself, Citizen.</p>
+        // --- BOOT ANIMATION ---
+        async function runBootSequence() {
+            currentMode = "booting";
+            
+            for (let line of bootText) {
+                await typeLine("> " + line);
+                await sleep(400); // Pause between lines
+            }
+            
+            renderAccountSelection();
+        }
+
+        function typeLine(text) {
+            return new Promise(resolve => {
+                let i = 0;
+                terminal.innerHTML += "\n";
+                let interval = setInterval(() => {
+                    terminal.innerHTML += text.charAt(i);
+                    i++;
+                    if (i >= text.length) {
+                        clearInterval(interval);
+                        resolve();
+                    }
+                }, 20); // Typing speed
+            });
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // --- ACCOUNT SELECTION UI ---
+        function renderAccountSelection() {
+            currentMode = "selecting";
+            
+            // Clear previous selection lines if redrawing
+            let content = terminal.innerHTML.split("\n> SELECT ACCOUNT:")[0]; 
+            
+            let selectionString = "\n> SELECT ACCOUNT: ";
+            
+            accounts.forEach((acc, index) => {
+                if (index === selectedIndex) {
+                    selectionString += `<span class="highlight">${acc}</span>`;
+                } else {
+                    selectionString += acc;
+                }
                 
-                <form id="loginForm" onsubmit="attemptLogin(event)">
-                    <div class="input-group">
-                        <label for="citizenId">CITIZEN ID:</label>
-                        <input type="text" id="citizenId" required placeholder="Enter ID...">
-                    </div>
-                    <div class="input-group">
-                        <label for="accessCode">ACCESS CODE:</label>
-                        <input type="password" id="accessCode" required placeholder="Enter Code...">
-                    </div>
-                    <button type="submit" class="btn-connect">JACK INTO NETWORK</button>
-                </form>
-                <div id="loginError" class="error-msg"></div>
-            </div>
-        </main>
+                if (index < accounts.length - 1) {
+                    selectionString += " / ";
+                }
+            });
 
-        <footer>
-            <p>SAVAGE WILDS CORE RULES // HALF-LIFE 2 FAN CAMPAIGN // PROTOTYPE v1.0</p>
-            <p>DISCORD WEBHOOK: <span id="webhookStatus" class="text-amber">CHECKING...</span></p>
-        </footer>
-    </div>
+            terminal.innerHTML = content + selectionString;
+        }
 
-    <script src="js/app.js"></script>
+        // --- PASSWORD UI ---
+        function renderPasswordPrompt(error = false) {
+            let content = terminal.innerHTML.split("\n> PASSWORD:")[0];
+            
+            let promptString = "\n> PASSWORD: ";
+            // Mask password with asterisks
+            let maskedStr = "*".repeat(typedPassword.length);
+            
+            if (error) {
+                promptString += "\n> ACCESS DENIED. TRY AGAIN.";
+                typedPassword = ""; // reset
+                setTimeout(() => renderPasswordPrompt(false), 1500); // Clear error after 1.5s
+            } else {
+                promptString += maskedStr;
+            }
+
+            terminal.innerHTML = content + promptString;
+        }
+
+        // --- KEYBOARD CONTROLS ---
+        document.addEventListener('keydown', (e) => {
+            if (currentMode === "selecting") {
+                if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
+                    selectedIndex = (selectedIndex > 0) ? selectedIndex - 1 : accounts.length - 1;
+                    renderAccountSelection();
+                } 
+                else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
+                    selectedIndex = (selectedIndex < accounts.length - 1) ? selectedIndex + 1 : 0;
+                    renderAccountSelection();
+                }
+                else if (e.key === "Enter") {
+                    currentMode = "password";
+                    typedPassword = ""; // Clear any stray keys
+                    renderPasswordPrompt();
+                }
+            } 
+            else if (currentMode === "password") {
+                if (e.key === "Enter") {
+                    let selectedAccount = accounts[selectedIndex];
+                    let correctPassword = passwords[selectedAccount];
+
+                    if (typedPassword === correctPassword) {
+                        currentMode = "loading";
+                        terminal.innerHTML += "\n> ACCESS GRANTED. WELCOME.\n> INITIALIZING DASHBOARD...";
+                        
+                        // Redirect to the real homepage after a short delay
+                        setTimeout(() => {
+                            // Replace 'dashboard.html' with the actual next page file later
+                            window.location.href = "dashboard.html"; 
+                        }, 2000);
+
+                    } else {
+                        // Wrong Password
+                        audioError.currentTime = 0;
+                        audioError.play().catch(e => console.log("Error audio not found."));
+                        renderPasswordPrompt(true);
+                    }
+                } 
+                else if (e.key === "Backspace") {
+                    typedPassword = typedPassword.slice(0, -1);
+                    renderPasswordPrompt();
+                }
+                else if (e.key.length === 1) { // Normal character typing
+                    typedPassword += e.key;
+                    renderPasswordPrompt();
+                }
+            }
+        });
+    </script>
 </body>
 </html>
