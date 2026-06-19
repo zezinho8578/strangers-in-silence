@@ -12,7 +12,7 @@
         if (!currentUser) window.location.replace("/");
     </script>
     <style>
-        /* FIX: Replaced padding-right with margin-right to guarantee the nav bar never overlaps the fixed settings button */
+        /* Forces the nav bar to stop before the settings button on any viewport size */
         #top-nav {
             display: flex;
             justify-content: space-between;
@@ -168,6 +168,16 @@
     <div class="sheet-grid">
         <!-- LEFT COLUMN -->
         <div>
+            <!-- Syncable Benny Counter -->
+            <div class="section" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; border: none; padding: 0;">BENNIES</h3>
+                <div class="die-container" style="font-size: 1.2em;">
+                    <button class="die-btn" onclick="adjustBennies(-1)">-</button>
+                    <span id="benny-count" style="font-weight: bold; width: 30px; text-align: center;">3</span>
+                    <button class="die-btn" onclick="adjustBennies(1)">+</button>
+                </div>
+            </div>
+
             <div class="section" style="margin-bottom: 20px;">
                 <h3>ATTRIBUTES</h3>
                 <div id="attributes-container"></div>
@@ -176,7 +186,11 @@
             <div class="section">
                 <h3>SKILLS (Wildcards)</h3>
                 <div id="skills-container"></div>
-                <button class="die-btn" id="add-skill-btn" style="margin-top: 10px; border:none;">+ ADD SKILL</button>
+                <div style="display: flex; justify-content: space-between; margin-top: 10px; gap: 10px;">
+                    <button class="die-btn" id="add-skill-btn" style="border:none; flex-grow: 1;">+ ADD SKILL</button>
+                    <!-- Unskilled Attempt Button -->
+                    <button class="die-btn" onclick="prepareRoll('Unskilled Attempt', null)" style="border:none; flex-grow: 1;">UNSKILLED ATTEMPT</button>
+                </div>
             </div>
         </div>
 
@@ -215,7 +229,7 @@
     <!-- Firebase Realtime WebSockets Integration -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         // ==========================================
         // 1. CONFIGURATION (PASTE YOUR FIREBASE CONFIG HERE)
@@ -230,7 +244,6 @@
             appId: "1:62557473299:web:e2ebf2ee2520a9189e8de6"
         };
 
-        // Fallback check in case Firebase is not yet pasted
         const isFirebaseConfigured = firebaseConfig.databaseURL && !firebaseConfig.databaseURL.includes("YOUR_PROJECT_ID");
 
         // ==========================================
@@ -239,6 +252,7 @@
         const defaultData = {
             "katey-commons": {
                 name: "Katey Commons",
+                bennies: 3,
                 attributes: { Agility: {die:"6", mod:"+0"}, Smarts: {die:"8", mod:"+0"}, Spirit: {die:"8", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"8", mod:"+0"} },
                 skills: { Athletics: {die:"6", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Electronics: {die:"8", mod:"+0"}, Fighting: {die:"6", mod:"+0"}, Hacking: {die:"6", mod:"+0"}, Healing: {die:"8", mod:"+0"}, Notice: {die:"6", mod:"+0"}, Persuasion: {die:"6", mod:"+0"}, Repair: {die:"8", mod:"+0"}, Shooting: {die:"4", mod:"+0"}, Stealth: {die:"6", mod:"+0"} },
                 derived: { pace: "6", parry: "5", toughness: "5" },
@@ -247,6 +261,7 @@
             },
             "vesa-novik": {
                 name: "Vesa Novik",
+                bennies: 3,
                 attributes: { Agility: {die:"12", mod:"+0"}, Smarts: {die:"6", mod:"+0"}, Spirit: {die:"4", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"6", mod:"+0"} },
                 skills: { Athletics: {die:"6", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Stealth: {die:"8", mod:"+0"}, Notice: {die:"8", mod:"+0"}, Persuasion: {die:"4", mod:"+0"}, Healing: {die:"6", mod:"+0"}, Driving: {die:"8", mod:"+0"}, Shooting: {die:"10", mod:"+0"}, Survival: {die:"6", mod:"+0"} },
                 derived: { pace: "8", parry: "2", toughness: "5" },
@@ -255,6 +270,7 @@
             },
             "trombley-hicks": {
                 name: "Trombley Hicks",
+                bennies: 3,
                 attributes: { Agility: {die:"10", mod:"+0"}, Smarts: {die:"6", mod:"+0"}, Spirit: {die:"6", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"8", mod:"+0"} },
                 skills: { Athletics: {die:"10", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Fighting: {die:"8", mod:"+0"}, Notice: {die:"6", mod:"+0"}, Persuasion: {die:"4", mod:"+0"}, Research: {die:"4", mod:"+0"}, Stealth: {die:"10", mod:"+0"}, Survival: {die:"6", mod:"+0"}, Thievery: {die:"8", mod:"+0"} },
                 derived: { pace: "6", parry: "6", toughness: "6" },
@@ -267,7 +283,7 @@
         let charData = {};
         let globalState = { characters: {}, webhook: "" };
         let pendingRoll = null;
-        let isEditing = false; // Tracks if local user is active to prevent cursor jumps during sync
+        let isEditing = false; 
 
         let db;
         if (isFirebaseConfigured) {
@@ -285,7 +301,6 @@
             document.getElementById('char-name-display').innerText = "CONNECTING TO COGNITIVE ARRAY...";
             
             if (isFirebaseConfigured) {
-                // Real-time listener: fires instantly when anyone updates anything in DB
                 onValue(ref(db, 'campaignState'), (snapshot) => {
                     const data = snapshot.val();
                     if (data) {
@@ -294,7 +309,6 @@
                             loadCharacter();
                         }
                     } else {
-                        // DB is clean/empty, upload defaults
                         globalState = { characters: defaultData, webhook: "" };
                         set(ref(db, 'campaignState'), globalState);
                         loadCharacter();
@@ -312,6 +326,12 @@
             } else {
                 charData = JSON.parse(JSON.stringify(defaultData[activeCharId]));
             }
+            
+            // Normalize older database versions if bennies is undefined
+            if (charData.bennies === undefined) {
+                charData.bennies = 3;
+            }
+
             document.getElementById('char-name-display').innerText = `SUBJECT: ${charData.name.toUpperCase()}`;
             if (currentUser === "Administrator" && globalState.webhook) {
                 document.getElementById('discord-webhook').value = globalState.webhook;
@@ -360,6 +380,16 @@
             isEditing = false;
         });
 
+        // Syncable Benny adjustments
+        async function adjustBennies(amount) {
+            if (charData.bennies === undefined) charData.bennies = 3;
+            let val = charData.bennies + amount;
+            if (val < 0) val = 0; // Bennies cannot be negative
+            charData.bennies = val;
+            document.getElementById('benny-count').innerText = val;
+            await saveCharacter();
+        }
+
         // ==========================================
         // 4. SHEET RENDERING & DYNAMIC EDITS
         // ==========================================
@@ -367,6 +397,8 @@
             const attrContainer = document.getElementById('attributes-container');
             const skillContainer = document.getElementById('skills-container');
             attrContainer.innerHTML = ''; skillContainer.innerHTML = '';
+
+            document.getElementById('benny-count').innerText = charData.bennies !== undefined ? charData.bennies : 3;
 
             for (let [attr, data] of Object.entries(charData.attributes)) {
                 attrContainer.innerHTML += `
@@ -456,7 +488,7 @@
         });
 
         // ==========================================
-        // 5. SWADE DICE ROLLING (WITH TARGET OPTION)
+        // 5. ROLL LOGIC & TARGET NUMBER MODAL
         // ==========================================
         function prepareRoll(name, cat) {
             pendingRoll = { name, cat };
@@ -486,9 +518,17 @@
         }
 
         async function executeRoll(name, cat, targetNumber) {
-            let data = charData[cat][name];
-            let sides = parseInt(data.die) || 4;
-            let modifier = parseInt(data.mod) || 0;
+            let sides, modifier;
+            
+            if (cat === null) {
+                // SWADE Unskilled attempt overrides: rolls a d4 and subtracts 2
+                sides = 4;
+                modifier = -2;
+            } else {
+                let data = charData[cat][name];
+                sides = parseInt(data.die) || 4;
+                modifier = parseInt(data.mod) || 0;
+            }
             
             let traitRoll = rollExploding(sides);
             let wildRoll = rollExploding(6); 
@@ -508,8 +548,10 @@
                 color = 0x00ff00; 
             }
 
-            let modStrDisplay = modifier !== 0 ? ` (${data.mod})` : "";
-            let termLog = `> ${charData.name} rolled ${name.toUpperCase()} [d${sides}${data.mod}] vs TN ${targetNumber}<br>`;
+            let displayMod = modifier !== 0 ? (modifier > 0 ? `+${modifier}` : `${modifier}`) : "";
+            let modStrDisplay = modifier !== 0 ? ` (${displayMod})` : "";
+            
+            let termLog = `> ${charData.name} rolled ${name.toUpperCase()} [d${sides}${displayMod}] vs TN ${targetNumber}<br>`;
             termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')}<br>`;
             termLog += `&nbsp;&nbsp;Wild:  ${wildRoll.history.join(' + ')}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> ${modStrDisplay} -> ${outcomeText}`;
@@ -526,7 +568,7 @@
                         { name: "Wild (d6)", value: `${wildRoll.history.join(' + ')}`, inline: true }
                     ]
                 };
-                if (modifier !== 0) embed.fields.push({ name: "Modifier", value: `${data.mod}`, inline: true });
+                if (modifier !== 0) embed.fields.push({ name: "Modifier", value: `${displayMod}`, inline: true });
 
                 try {
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
@@ -546,6 +588,7 @@
         // Expose modules to inline HTML onclick handles
         window.prepareRoll = prepareRoll;
         window.deleteSkill = deleteSkill;
+        window.adjustBennies = adjustBennies;
 
         init();
     </script>
