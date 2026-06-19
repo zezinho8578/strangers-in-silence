@@ -5,22 +5,26 @@
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
 :root {
-    --theme-color: #ff9900; /* Default Orange */
-    --font-size: 22px;      /* Default Size */
-    --scanline-display: block; /* CRT Effect On */
+    --theme-color: #ff9900; 
+    --bg-color: #050505;
+    --font-size: 22px;      
+    --scanline-display: block; 
+    --font-family: 'VT323', monospace;
+    --text-shadow-glow: 0 0 5px var(--theme-color);
 }
 
 body {
-    background-color: #050505;
+    background-color: var(--bg-color);
     color: var(--theme-color); 
-    font-family: 'VT323', monospace;
+    font-family: var(--font-family);
     font-size: var(--font-size);
     margin: 0;
     padding: 15px;
     overflow-x: hidden;
     overflow-y: auto;
     scroll-behavior: smooth;
-    text-shadow: 0 0 5px var(--theme-color);
+    text-shadow: var(--text-shadow-glow);
+    transition: background-color 0.3s, color 0.3s;
 }
 
 ::-webkit-scrollbar { display: none; }
@@ -48,6 +52,7 @@ body::after {
     opacity: 0.08;
     z-index: -1;
     pointer-events: none;
+    transition: opacity 0.3s;
 }
 
 /* Settings Button */
@@ -59,14 +64,12 @@ body::after {
     z-index: 10;
     transition: opacity 0.2s;
 }
-#settings-btn:hover {
-    opacity: 0.7;
-}
+#settings-btn:hover { opacity: 0.7; }
 
 /* Terminal Elements */
 .highlight {
     background-color: var(--theme-color);
-    color: #000;
+    color: var(--bg-color);
     text-shadow: none;
     padding: 0 6px;
 }
@@ -114,9 +117,9 @@ body::after {
 
 .panel:hover:not(.locked) {
     background-color: var(--theme-color);
-    color: #000;
+    color: var(--bg-color);
     text-shadow: none;
-    box-shadow: 0 0 15px var(--theme-color);
+    box-shadow: var(--text-shadow-glow);
     cursor: pointer;
 }
 
@@ -130,24 +133,57 @@ body::after {
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
     border: 2px solid var(--theme-color);
-    background-color: #050505;
-    padding: 20px;
+    background-color: var(--bg-color);
+    padding: 25px;
     z-index: 100;
-    width: 400px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    
+    /* Fixed the modal width issue */
+    width: max-content;
+    min-width: 400px;
+    max-width: 95vw;
+    box-shadow: 0 0 20px rgba(0,0,0,0.9);
 }
-#settings-modal h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid var(--theme-color); padding-bottom: 5px; }
-.setting-row { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; }
-.setting-row select, .setting-row button {
-    background: #000;
+
+#settings-modal h2 { 
+    margin-top: 0; 
+    font-size: 1.2em; 
+    border-bottom: 1px solid var(--theme-color); 
+    padding-bottom: 5px; 
+}
+
+.setting-row { 
+    display: flex; 
+    justify-content: space-between; 
+    margin-bottom: 15px; 
+    align-items: center; 
+    gap: 20px; 
+}
+
+/* Styled Inputs & Buttons to match aesthetic */
+.setting-row select, #settings-modal button {
+    background: transparent;
     color: var(--theme-color);
     border: 1px solid var(--theme-color);
-    font-family: 'VT323', monospace;
+    font-family: inherit; /* Uses whatever font the user selected */
     font-size: 1em;
-    padding: 5px;
+    padding: 8px;
     cursor: pointer;
+    outline: none;
+    transition: 0.2s;
 }
-.setting-row button:hover { background: var(--theme-color); color: #000; }
-#close-settings { width: 100%; margin-top: 10px; }
-.danger-btn { border-color: red !important; color: red !important; }
-.danger-btn:hover { background: red !important; color: #000 !important; }
+
+/* Dropdown options background (so they don't go transparent and unreadable) */
+.setting-row select option { background: var(--bg-color); }
+
+/* Hover effects for buttons/selects */
+.setting-row select:hover, #settings-modal button:hover {
+    background: var(--theme-color);
+    color: var(--bg-color);
+    text-shadow: none;
+}
+
+#logout-btn { width: 100%; margin-bottom: 10px; margin-top: 10px; }
+#close-settings { width: 100%; }
+
+.danger-btn { border-color: #ff3333 !important; color: #ff3333 !important; }
+.danger-btn:hover { background: #ff3333 !important; color: #000 !important; }
