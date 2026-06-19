@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LambdaOS - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
+
+    <div id="settings-btn">[ SYSTEM SETTINGS ]</div>
+
+    <!-- Terminal Prompt Area -->
+    <div id="terminal-prompt">
+        <div id="output-history"></div>
+        <div><span id="input-line"></span><span class="cursor" id="cursor"></span></div>
+    </div>
+
+    <!-- The actual interactive dashboard -->
+    <div id="dashboard-ui">
+        <div class="system-header">
+            <span>RESISTANCE NODE_04</span>
+            <span id="display-username">USER: UNKNOWN</span>
+        </div>
+        
+        <div class="panel-grid">
+            <a href="#" id="link-character" class="panel">MY CHARACTER SHEET</a>
+            <a href="https://strangers-in-silence.vercel.app/tracker/combatview" class="panel">COMBAT TRACKER</a>
+            <div class="panel locked">SETTLEMENT LEDGER</div>
+        </div>
+    </div>
+
+    <script>
+        // --- AUTHENTICATION CHECK ---
+        // Check both session and local storage to see if user is logged in
+        let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+        let hasPrompted = sessionStorage.getItem('promptedStatus') || localStorage.getItem('promptedStatus');
+
+        // Security Kick: If no user found, boot them back to index
+        if (!currentUser) {
+            window.location.href = "index.html";
+        }
+
+        // --- DOM Elements ---
+        const terminalPrompt = document.getElementById('terminal-prompt');
+        const inputLine = document.getElementById('input-line');
+        const outputHistory = document.getElementById('output-history');
+        const dashboardUI = document.getElementById('dashboard-ui');
+        const linkCharacter = document.getElementById('link-character');
+        const displayUsername = document.getElementById('display-username');
+        const cursor = document.getElementById('cursor');
+
+        // Set the UI username
+        displayUsername.innerText = `USER: ${currentUser.toUpperCase()}`;
+
+        // Format the URL based on the user
+        function getCharacterUrl(name) {
+            if (name === "Administrator") {
+                return "https://strangers-in-silence.vercel.app/character/adminview";
+            }
+            // Converts "Katey Commons" to "katey-commons"
+            let formattedName = name.toLowerCase().replace(' ', '-');
+            return `https://strangers-in-silence.vercel.app/character/${formattedName}`;
+        }
+
+        // Set the correct character link and text based on role
+        linkCharacter.href = getCharacterUrl(currentUser);
+        if (currentUser === "Administrator") {
+            linkCharacter.innerHTML = "VIEW PLAYER SHEETS";
+        }
+
+        // --- TERMINAL LOGIC ---
+        let awaitingInput = false;
+
+        function finalizeRawText(text) {
+            const div = document.createElement('div');
+            div.innerHTML = text;
+            outputHistory.appendChild(div);
+        }
+
+        function showDashboard() {
+            terminalPrompt.style.display = "none";
+            dashboardUI.style.display = "block";
+        }
+
+        function runStayLoggedInPrompt() {
+            finalizeRawText("> SESSION ESTABLISHED.");
+            finalizeRawText("> ENABLE PERSISTENT LOGIN TOKEN?");
+            inputLine.innerHTML = "> (Y/N): ";
+            awaitingInput = true;
+        }
+
+        // Check if we need to ask the Y/N question
+        if (!hasPrompted) {
+            runStayLoggedInPrompt();
+        } else {
+            // User already answered this before, skip straight to dashboard
+            showDashboard();
+        }
+
+        // --- KEYBOARD LISTENERS FOR Y/N PROMPT ---
+        document.addEventListener('keydown', (e) => {
+            if (awaitingInput) {
+                let key = e.key.toUpperCase();
+                
+                if (key === 'Y') {
+                    // Save to local storage (persists across closed tabs/browser restarts)
+                    localStorage.setItem('currentUser', currentUser);
+                    localStorage.setItem('promptedStatus', 'true');
+                    sessionStorage.removeItem('currentUser'); // Clean up session
+                    
+                    inputLine.innerHTML += "Y";
+                    finalizeRawText("> TOKEN SAVED. BYPASSING FUTURE LOGIN PROTOCOLS...");
+                    awaitingInput = false;
+                    cursor.style.display = 'none';
+                    
+                    setTimeout(showDashboard, 1500);
+                } 
+                else if (key === 'N') {
+                    // Save to session storage (will require login next time tab closes)
+                    sessionStorage.setItem('promptedStatus', 'true');
+                    
+                    inputLine.innerHTML += "N";
+                    finalizeRawText("> TOKEN REJECTED. SESSION TEMPORARY.");
+                    awaitingInput = false;
+                    cursor.style.display = 'none';
+                    
+                    setTimeout(showDashboard, 1500);
+                }
+            }
+        });
+
+        // Settings Button Placeholder Logic
+        document.getElementById('settings-btn').addEventListener('click', () => {
+            alert("SYSTEM SETTINGS: Interface configuration module not yet loaded.");
+        });
+
+    </script>
+</body>
+</html>
