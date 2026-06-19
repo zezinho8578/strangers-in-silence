@@ -7,18 +7,19 @@
     <link rel="stylesheet" href="/style.css">
     
     <script>
+        // Security Check
         let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
         if (!currentUser) window.location.replace("/");
     </script>
     <style>
-        /* FIX: Added padding-right to prevent overlapping with the System Settings button */
+        /* FIX: Replaced padding-right with margin-right to guarantee the nav bar never overlaps the fixed settings button */
         #top-nav {
             display: flex;
             justify-content: space-between;
             margin-bottom: 20px;
             border-bottom: 1px solid var(--theme-color);
             padding-bottom: 10px;
-            padding-right: 200px; 
+            margin-right: 180px; 
             align-items: flex-end;
         }
         .nav-link { color: var(--theme-color); text-decoration: none; cursor: pointer; }
@@ -211,15 +212,29 @@
 
     <script src="/settings.js"></script>
 
-    <script>
-        // ==========================================
-        // 1. GLOBAL DATABASE CONFIGURATION
-        // ==========================================
-        // PASTE YOUR JSONBLOB URL HERE TO ENABLE GLOBAL SYNCING
-        const DB_URL = "https://jsonblob.com/019ee1fc-da5e-7943-9212-7535d45db7ce"; 
+    <!-- Firebase Realtime WebSockets Integration -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         // ==========================================
-        // 2. DEFAULT SWADE DATA
+        // 1. CONFIGURATION (PASTE YOUR FIREBASE CONFIG HERE)
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBt1ymfsEvbO1X9eYDVf2ctotRcbFFOO44",
+            authDomain: "strangers-in-silence.firebaseapp.com",
+            databaseURL: "https://strangers-in-silence-default-rtdb.firebaseio.com",
+            projectId: "strangers-in-silence",
+            storageBucket: "strangers-in-silence.firebasestorage.app",
+            messagingSenderId: "62557473299",
+            appId: "1:62557473299:web:e2ebf2ee2520a9189e8de6"
+        };
+
+        // Fallback check in case Firebase is not yet pasted
+        const isFirebaseConfigured = firebaseConfig.databaseURL && !firebaseConfig.databaseURL.includes("YOUR_PROJECT_ID");
+
+        // ==========================================
+        // 2. DEFAULT CHARACTER DATA
         // ==========================================
         const defaultData = {
             "katey-commons": {
@@ -252,63 +267,71 @@
         let charData = {};
         let globalState = { characters: {}, webhook: "" };
         let pendingRoll = null;
+        let isEditing = false; // Tracks if local user is active to prevent cursor jumps during sync
 
-        // ==========================================
-        // 3. DATABASE SYNC LOGIC
-        // ==========================================
-        async function fetchState() {
-            if (!DB_URL) return JSON.parse(localStorage.getItem('lambdaDB')) || { characters: {}, webhook: "" };
-            try {
-                let res = await fetch(DB_URL);
-                if (res.ok) return await res.json();
-            } catch(e) { console.warn("DB Fetch failed."); }
-            return { characters: {}, webhook: "" };
+        let db;
+        if (isFirebaseConfigured) {
+            const app = initializeApp(firebaseConfig);
+            db = getDatabase(app);
+        } else {
+            console.warn("Firebase not configured. Falling back to local storage.");
+            logToTerminal("<span style='color:red;'>[ WARNING: FIREBASE CONFIGURATION MISSING. EDIT CODES TO SYNC. ]</span>");
         }
 
-        async function pushState(newState) {
-            if (!DB_URL) { localStorage.setItem('lambdaDB', JSON.stringify(newState)); return; }
-            try {
-                await fetch(DB_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newState)
-                });
-            } catch(e) { console.warn("DB Save failed."); }
-        }
-
-        async function init() {
-            document.getElementById('char-name-display').innerText = "CONNECTING TO NODE...";
-            globalState = await fetchState();
+        // ==========================================
+        // 3. EVENT DRIVEN REAL-TIME SYNCHRONIZATION
+        // ==========================================
+        function init() {
+            document.getElementById('char-name-display').innerText = "CONNECTING TO COGNITIVE ARRAY...";
             
-            // Sync Webhook to interface if Admin
-            if (currentUser === "Administrator" && globalState.webhook) {
-                document.getElementById('discord-webhook').value = globalState.webhook;
+            if (isFirebaseConfigured) {
+                // Real-time listener: fires instantly when anyone updates anything in DB
+                onValue(ref(db, 'campaignState'), (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        globalState = data;
+                        if (!isEditing) {
+                            loadCharacter();
+                        }
+                    } else {
+                        // DB is clean/empty, upload defaults
+                        globalState = { characters: defaultData, webhook: "" };
+                        set(ref(db, 'campaignState'), globalState);
+                        loadCharacter();
+                    }
+                });
+            } else {
+                globalState = JSON.parse(localStorage.getItem('localFallbackDB')) || { characters: defaultData, webhook: "" };
+                loadCharacter();
             }
-
-            loadCharacter();
         }
 
         function loadCharacter() {
-            if (globalState.characters[activeCharId]) {
+            if (globalState.characters && globalState.characters[activeCharId]) {
                 charData = globalState.characters[activeCharId];
             } else {
-                // If character not in DB yet, load default
                 charData = JSON.parse(JSON.stringify(defaultData[activeCharId]));
             }
             document.getElementById('char-name-display').innerText = `SUBJECT: ${charData.name.toUpperCase()}`;
+            if (currentUser === "Administrator" && globalState.webhook) {
+                document.getElementById('discord-webhook').value = globalState.webhook;
+            }
             renderSheet();
         }
 
         async function saveCharacter() {
             document.getElementById('save-status').innerText = "[ SAVING... ]";
-            globalState = await fetchState(); // Always fetch latest to avoid overwriting others
-            globalState.characters[activeCharId] = charData;
-            await pushState(globalState);
+            if (isFirebaseConfigured) {
+                await set(ref(db, `campaignState/characters/${activeCharId}`), charData);
+            } else {
+                globalState.characters[activeCharId] = charData;
+                localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+            }
             document.getElementById('save-status').innerText = "[ SYNCED ]";
-            setTimeout(() => { document.getElementById('save-status').innerText = ""; }, 2000);
+            setTimeout(() => { document.getElementById('save-status').innerText = ""; }, 1500);
         }
 
-        // Admin Tools
+        // Admin controls
         if (currentUser === "Administrator") {
             document.getElementById('admin-controls').style.display = 'block';
             document.getElementById('admin-char-select').addEventListener('change', (e) => {
@@ -317,15 +340,28 @@
             });
             document.getElementById('save-webhook').addEventListener('click', async () => {
                 let url = document.getElementById('discord-webhook').value;
-                globalState = await fetchState();
-                globalState.webhook = url;
-                await pushState(globalState);
+                if (isFirebaseConfigured) {
+                    await set(ref(db, 'campaignState/webhook'), url);
+                } else {
+                    globalState.webhook = url;
+                    localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+                }
                 logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
             });
         }
 
+        // Focus trackers to prevent incoming writes from overwriting current keystrokes
+        document.addEventListener('focusin', (e) => {
+            if (e.target.classList.contains('editable') || e.target.classList.contains('edit-area')) {
+                isEditing = true;
+            }
+        });
+        document.addEventListener('focusout', (e) => {
+            isEditing = false;
+        });
+
         // ==========================================
-        // 4. RENDERING & EDITING UI
+        // 4. SHEET RENDERING & DYNAMIC EDITS
         // ==========================================
         function renderSheet() {
             const attrContainer = document.getElementById('attributes-container');
@@ -367,14 +403,12 @@
         }
 
         function attachEditListeners() {
-            // Derived & Text
             ['pace', 'parry', 'toughness'].forEach(stat => {
                 document.getElementById(`der-${stat}`).addEventListener('blur', (e) => { charData.derived[stat] = e.target.innerText; saveCharacter(); });
             });
-            document.getElementById('notes-edges').addEventListener('input', (e) => { charData.edges = e.target.value; saveCharacter(); });
-            document.getElementById('notes-gear').addEventListener('input', (e) => { charData.gear = e.target.value; saveCharacter(); });
+            document.getElementById('notes-edges').addEventListener('blur', (e) => { charData.edges = e.target.value; saveCharacter(); });
+            document.getElementById('notes-gear').addEventListener('blur', (e) => { charData.gear = e.target.value; saveCharacter(); });
 
-            // Dice & Mods
             document.querySelectorAll('.die-input, .mod-input').forEach(el => {
                 el.addEventListener('blur', (e) => {
                     let cat = e.target.dataset.cat;
@@ -390,7 +424,6 @@
                 });
             });
 
-            // Skill Rename
             document.querySelectorAll('.skill-name-edit').forEach(el => {
                 el.addEventListener('blur', (e) => {
                     let oldName = e.target.dataset.oldname;
@@ -405,10 +438,11 @@
             });
         }
 
-        document.getElementById('add-skill-btn').addEventListener('click', () => {
+        function addSkill() {
             charData.skills["New Skill"] = { die: "4", mod: "+0" };
             saveCharacter(); renderSheet();
-        });
+        }
+        document.getElementById('add-skill-btn').addEventListener('click', addSkill);
 
         function deleteSkill(skillName) {
             if(confirm(`WARNING: Initialize deletion of ${skillName}?`)) {
@@ -422,11 +456,11 @@
         });
 
         // ==========================================
-        // 5. ROLL LOGIC & TARGET NUMBER MODAL
+        // 5. SWADE DICE ROLLING (WITH TARGET OPTION)
         // ==========================================
         function prepareRoll(name, cat) {
             pendingRoll = { name, cat };
-            document.getElementById('tn-input').value = "4"; // Reset to default
+            document.getElementById('tn-input').value = "4"; 
             document.getElementById('tn-modal').style.display = 'block';
         }
 
@@ -457,9 +491,8 @@
             let modifier = parseInt(data.mod) || 0;
             
             let traitRoll = rollExploding(sides);
-            let wildRoll = rollExploding(6); // SWADE Wild Die is always d6
+            let wildRoll = rollExploding(6); 
 
-            // Apply modifiers to the highest die
             let bestTotal = Math.max(traitRoll.total, wildRoll.total) + modifier;
             let isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
             
@@ -482,10 +515,8 @@
             termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> ${modStrDisplay} -> ${outcomeText}`;
             logToTerminal(termLog);
 
-            // Fetch latest global state just in case webhook changed
-            globalState = await fetchState();
-            
-            if (globalState.webhook) {
+            // Fetch the webhook live directly from our local globalState cache
+            if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name} rolled ${name}`,
                     description: `**Final Result: ${bestTotal}** (TN: ${targetNumber})\n${outcomeText}`,
@@ -511,6 +542,10 @@
             term.appendChild(div);
             term.scrollTop = term.scrollHeight;
         }
+
+        // Expose modules to inline HTML onclick handles
+        window.prepareRoll = prepareRoll;
+        window.deleteSkill = deleteSkill;
 
         init();
     </script>
