@@ -4,18 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LambdaOS - Node Terminal</title>
-    <!-- Using a classic retro terminal font -->
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <style>
         body {
-            background-color: #050505; /* Deep off-black */
-            color: #ff9900; /* Iconic HL2 Orange */
+            background-color: #050505; 
+            color: #ff9900; 
             font-family: 'VT323', monospace;
-            font-size: 26px;
+            font-size: 22px; /* Made text a bit smaller */
             margin: 0;
-            padding: 30px;
-            overflow: hidden;
-            /* Glowing CRT text effect */
+            padding: 15px; /* Brought closer to top left */
+            overflow-x: hidden;
             text-shadow: 0 0 5px rgba(255, 153, 0, 0.6);
         }
 
@@ -23,7 +21,7 @@
         body::after {
             content: " ";
             display: block;
-            position: absolute;
+            position: fixed;
             top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
             z-index: 2;
@@ -38,34 +36,15 @@
             left: 50%;
             transform: translate(-50%, -50%);
             width: 600px;
-            opacity: 0.08; /* Very faded */
+            opacity: 0.08; 
             z-index: -1;
             pointer-events: none;
         }
 
-        /* Initial Click Screen to allow audio playback */
-        #start-screen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: #000;
-            z-index: 10;
-            cursor: pointer;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-
         #terminal {
-            display: none; /* Hidden until boot */
             white-space: pre-wrap;
             line-height: 1.2;
+            word-wrap: break-word;
         }
 
         .highlight {
@@ -77,8 +56,8 @@
 
         .cursor {
             display: inline-block;
-            width: 12px;
-            height: 24px;
+            width: 10px;
+            height: 20px;
             background-color: #ff9900;
             animation: blink 1s step-end infinite;
             vertical-align: bottom;
@@ -92,15 +71,10 @@
     <!-- Faded Lambda Background -->
     <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
 
-    <!-- Anti-autoplay blocker screen -->
-    <div id="start-screen">
-        [ CLICK TO INITIALIZE TERMINAL ]
-    </div>
+    <!-- The terminal is now split into finalized history and the active input line -->
+    <div id="terminal"><span id="history"></span><span id="active-line"></span><span class="cursor" id="cursor"></span></div>
 
-    <!-- The actual terminal interface -->
-    <div id="terminal"></div><span class="cursor" id="cursor" style="display:none;"></span>
-
-    <!-- Audio Elements (Replace src with your downloaded MP3s) -->
+    <!-- Audio Elements -->
     <audio id="audio-boot" src="boot.mp3"></audio>
     <audio id="audio-error" src="error.mp3"></audio>
 
@@ -108,7 +82,6 @@
         // --- GAME DATA ---
         const accounts = ["Katey Commons", "Trombley Hicks", "Vesa Novik", "Administrator"];
         
-        // Dummy passwords (we will move this to a backend/database later)
         const passwords = {
             "Katey Commons": "katey123",
             "Trombley Hicks": "hicks123",
@@ -117,18 +90,16 @@
         };
 
         // --- TERMINAL STATE ---
-        let currentMode = "uninitialized"; // uninitialized -> booting -> selecting -> password -> loading
+        let currentMode = "uninitialized"; 
         let selectedIndex = 0;
         let typedPassword = "";
         
         // DOM Elements
-        const startScreen = document.getElementById('start-screen');
-        const terminal = document.getElementById('terminal');
-        const cursor = document.getElementById('cursor');
+        const historyEl = document.getElementById('history');
+        const activeLineEl = document.getElementById('active-line');
         const audioBoot = document.getElementById('audio-boot');
         const audioError = document.getElementById('audio-error');
 
-        // Boot Sequence Lines
         const bootText = [
             "LambdaOS v.2.1.4 (Build 8472)",
             "Checking memory... OK (640K Base / 15360K Extended)",
@@ -138,18 +109,18 @@
             "DONE.\n"
         ];
 
-        // --- INITIALIZATION ---
-        startScreen.addEventListener('click', () => {
-            startScreen.style.display = 'none';
-            terminal.style.display = 'inline';
-            cursor.style.display = 'inline-block';
-            
-            // Try to play audio (catch error if file is missing so code doesn't break)
+        // --- AUTO START ---
+        window.onload = () => {
+            // Attempt to play audio (may be blocked by browser until user presses a key)
             audioBoot.volume = 0.5;
-            audioBoot.play().catch(e => console.log("Boot audio not found or blocked."));
-
+            audioBoot.play().catch(e => console.log("Autoplay blocked pending user interaction."));
             runBootSequence();
-        });
+        };
+
+        // Smooth scrolling function
+        function scrollToBottom() {
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
 
         // --- BOOT ANIMATION ---
         async function runBootSequence() {
@@ -157,7 +128,7 @@
             
             for (let line of bootText) {
                 await typeLine("> " + line);
-                await sleep(400); // Pause between lines
+                await sleep(300); // Pause between lines
             }
             
             renderAccountSelection();
@@ -166,15 +137,18 @@
         function typeLine(text) {
             return new Promise(resolve => {
                 let i = 0;
-                terminal.innerHTML += "\n";
+                // Add a newline if history isn't empty
+                if (historyEl.innerHTML !== "") historyEl.innerHTML += "\n";
+                
                 let interval = setInterval(() => {
-                    terminal.innerHTML += text.charAt(i);
+                    historyEl.innerHTML += text.charAt(i);
+                    scrollToBottom();
                     i++;
                     if (i >= text.length) {
                         clearInterval(interval);
                         resolve();
                     }
-                }, 20); // Typing speed
+                }, 15); // Typing speed
             });
         }
 
@@ -182,14 +156,20 @@
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
+        // --- COMMIT ACTIVE LINE TO HISTORY ---
+        // Moves the current active line text into the permanent history above it
+        function commitActiveLine() {
+            if (historyEl.innerHTML !== "") historyEl.innerHTML += "\n";
+            historyEl.innerHTML += activeLineEl.innerHTML;
+            activeLineEl.innerHTML = "";
+            scrollToBottom();
+        }
+
         // --- ACCOUNT SELECTION UI ---
         function renderAccountSelection() {
             currentMode = "selecting";
             
-            // Clear previous selection lines if redrawing
-            let content = terminal.innerHTML.split("\n> SELECT ACCOUNT:")[0]; 
-            
-            let selectionString = "\n> SELECT ACCOUNT: ";
+            let selectionString = "> SELECT ACCOUNT: ";
             
             accounts.forEach((acc, index) => {
                 if (index === selectedIndex) {
@@ -203,30 +183,26 @@
                 }
             });
 
-            terminal.innerHTML = content + selectionString;
+            // Update in place (does not create a new line)
+            activeLineEl.innerHTML = selectionString;
+            scrollToBottom();
         }
 
         // --- PASSWORD UI ---
-        function renderPasswordPrompt(error = false) {
-            let content = terminal.innerHTML.split("\n> PASSWORD:")[0];
-            
-            let promptString = "\n> PASSWORD: ";
+        function renderPasswordPrompt() {
             // Mask password with asterisks
             let maskedStr = "*".repeat(typedPassword.length);
-            
-            if (error) {
-                promptString += "\n> ACCESS DENIED. TRY AGAIN.";
-                typedPassword = ""; // reset
-                setTimeout(() => renderPasswordPrompt(false), 1500); // Clear error after 1.5s
-            } else {
-                promptString += maskedStr;
-            }
-
-            terminal.innerHTML = content + promptString;
+            activeLineEl.innerHTML = "> PASSWORD: " + maskedStr;
+            scrollToBottom();
         }
 
         // --- KEYBOARD CONTROLS ---
-        document.addEventListener('keydown', (e) => {
+        document.addEventListener('keydown', async (e) => {
+            // Wake up audio context on first keypress if it was blocked
+            if (audioBoot.paused && currentMode === "booting") {
+                audioBoot.play().catch(()=>{});
+            }
+
             if (currentMode === "selecting") {
                 if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
                     selectedIndex = (selectedIndex > 0) ? selectedIndex - 1 : accounts.length - 1;
@@ -237,8 +213,9 @@
                     renderAccountSelection();
                 }
                 else if (e.key === "Enter") {
+                    commitActiveLine(); // Lock in the choice
                     currentMode = "password";
-                    typedPassword = ""; // Clear any stray keys
+                    typedPassword = "";
                     renderPasswordPrompt();
                 }
             } 
@@ -248,12 +225,12 @@
                     let correctPassword = passwords[selectedAccount];
 
                     if (typedPassword === correctPassword) {
+                        commitActiveLine();
                         currentMode = "loading";
-                        terminal.innerHTML += "\n> ACCESS GRANTED. WELCOME.\n> INITIALIZING DASHBOARD...";
+                        await typeLine("> ACCESS GRANTED. WELCOME.");
+                        await typeLine("> INITIALIZING DASHBOARD...");
                         
-                        // Redirect to the real homepage after a short delay
                         setTimeout(() => {
-                            // Replace 'dashboard.html' with the actual next page file later
                             window.location.href = "dashboard.html"; 
                         }, 2000);
 
@@ -261,14 +238,21 @@
                         // Wrong Password
                         audioError.currentTime = 0;
                         audioError.play().catch(e => console.log("Error audio not found."));
-                        renderPasswordPrompt(true);
+                        
+                        commitActiveLine();
+                        await typeLine("> ACCESS DENIED. TRY AGAIN.");
+                        
+                        // Restart password prompt
+                        typedPassword = "";
+                        renderPasswordPrompt();
                     }
                 } 
                 else if (e.key === "Backspace") {
                     typedPassword = typedPassword.slice(0, -1);
                     renderPasswordPrompt();
                 }
-                else if (e.key.length === 1) { // Normal character typing
+                else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { 
+                    // Normal character typing
                     typedPassword += e.key;
                     renderPasswordPrompt();
                 }
