@@ -4,17 +4,23 @@
 
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
+:root {
+    --theme-color: #ff9900; /* Default Orange */
+    --font-size: 22px;      /* Default Size */
+    --scanline-display: block; /* CRT Effect On */
+}
+
 body {
     background-color: #050505;
-    color: #ff9900; 
+    color: var(--theme-color); 
     font-family: 'VT323', monospace;
-    font-size: 22px;
+    font-size: var(--font-size);
     margin: 0;
     padding: 15px;
     overflow-x: hidden;
     overflow-y: auto;
     scroll-behavior: smooth;
-    text-shadow: 0 0 5px rgba(255, 153, 0, 0.6);
+    text-shadow: 0 0 5px var(--theme-color);
 }
 
 ::-webkit-scrollbar { display: none; }
@@ -23,7 +29,7 @@ body {
 /* CRT Scanlines */
 body::after {
     content: " ";
-    display: block;
+    display: var(--scanline-display);
     position: fixed;
     top: 0; left: 0; bottom: 0; right: 0;
     background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
@@ -51,16 +57,15 @@ body::after {
     right: 15px;
     cursor: pointer;
     z-index: 10;
-    transition: color 0.2s, text-shadow 0.2s;
+    transition: opacity 0.2s;
 }
 #settings-btn:hover {
-    color: #fff;
-    text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+    opacity: 0.7;
 }
 
 /* Terminal Elements */
 .highlight {
-    background-color: #ff9900;
+    background-color: var(--theme-color);
     color: #000;
     text-shadow: none;
     padding: 0 6px;
@@ -69,7 +74,7 @@ body::after {
     display: inline-block;
     width: 10px;
     height: 20px;
-    background-color: #ff9900;
+    background-color: var(--theme-color);
     animation: blink 1s step-end infinite;
     vertical-align: bottom;
 }
@@ -77,14 +82,14 @@ body::after {
 
 /* Dashboard Specifics */
 #dashboard-ui {
-    display: none; /* Hidden until terminal sequence finishes */
+    display: none; 
     margin-top: 40px;
     max-width: 800px;
 }
 
 .system-header {
-    font-size: 28px;
-    border-bottom: 2px solid #ff9900;
+    font-size: 1.2em;
+    border-bottom: 2px solid var(--theme-color);
     margin-bottom: 20px;
     padding-bottom: 5px;
     display: flex;
@@ -92,44 +97,57 @@ body::after {
 }
 
 /* Clickable Panels */
-.panel-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
+.panel-grid { display: flex; flex-direction: column; gap: 15px; }
 .panel {
-    border: 1px solid #ff9900;
+    border: 1px solid var(--theme-color);
     padding: 15px 20px;
     text-decoration: none;
-    color: #ff9900;
-    font-size: 24px;
-    background: rgba(255, 153, 0, 0.05);
+    color: var(--theme-color);
+    font-size: 1.1em;
+    background: transparent;
     transition: all 0.2s ease-in-out;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
-
-.panel::before {
-    content: "> ";
-}
+.panel::before { content: "> "; }
 
 .panel:hover:not(.locked) {
-    background-color: #ff9900;
+    background-color: var(--theme-color);
     color: #000;
     text-shadow: none;
-    box-shadow: 0 0 15px rgba(255, 153, 0, 0.4);
+    box-shadow: 0 0 15px var(--theme-color);
     cursor: pointer;
 }
 
-.panel.locked {
-    opacity: 0.4;
-    border-style: dashed;
-    cursor: not-allowed;
-    background: transparent;
+.panel.locked { opacity: 0.4; border-style: dashed; cursor: not-allowed; }
+.panel.locked::after { content: "[ ENCRYPTED ]"; font-size: 0.8em; }
+
+/* Settings Modal Elements */
+#settings-modal {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid var(--theme-color);
+    background-color: #050505;
+    padding: 20px;
+    z-index: 100;
+    width: 400px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.8);
 }
-.panel.locked::after {
-    content: "[ ENCRYPTED ]";
-    font-size: 18px;
+#settings-modal h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid var(--theme-color); padding-bottom: 5px; }
+.setting-row { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; }
+.setting-row select, .setting-row button {
+    background: #000;
+    color: var(--theme-color);
+    border: 1px solid var(--theme-color);
+    font-family: 'VT323', monospace;
+    font-size: 1em;
+    padding: 5px;
+    cursor: pointer;
 }
+.setting-row button:hover { background: var(--theme-color); color: #000; }
+#close-settings { width: 100%; margin-top: 10px; }
+.danger-btn { border-color: red !important; color: red !important; }
+.danger-btn:hover { background: red !important; color: #000 !important; }
