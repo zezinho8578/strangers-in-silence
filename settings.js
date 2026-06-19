@@ -1,21 +1,45 @@
 // --- settings.js ---
+
+// Theme configurations
+const themeData = {
+    'lambda': { color: '#ff9900', bg: '#050505', shadow: '0 0 5px var(--theme-color)', showLogo: 'block' },
+    'combine': { color: '#00ccff', bg: '#050505', shadow: '0 0 5px var(--theme-color)', showLogo: 'none' },
+    'terminal': { color: '#33ff33', bg: '#050505', shadow: '0 0 5px var(--theme-color)', showLogo: 'none' },
+    'high-contrast': { color: '#ffffff', bg: '#000000', shadow: 'none', showLogo: 'none' },
+    'light': { color: '#222222', bg: '#e0e0e0', shadow: 'none', showLogo: 'none' }
+};
+
 // Run immediately to prevent style flickering on load
 (function initializeSettings() {
-    // Load settings from local storage or set defaults
-    const savedColor = localStorage.getItem('lambdaColor') || '#ff9900';
+    // Load saved data
+    const savedThemeId = localStorage.getItem('lambdaTheme') || 'lambda';
     const savedSize = localStorage.getItem('lambdaSize') || '22px';
     const savedScanlines = localStorage.getItem('lambdaScanlines') || 'block';
+    const savedFont = localStorage.getItem('lambdaFont') || "'VT323', monospace";
 
-    // Apply to CSS variables
-    document.documentElement.style.setProperty('--theme-color', savedColor);
+    // Apply basic CSS variables immediately
+    const theme = themeData[savedThemeId];
+    document.documentElement.style.setProperty('--theme-color', theme.color);
+    document.documentElement.style.setProperty('--bg-color', theme.bg);
+    document.documentElement.style.setProperty('--text-shadow-glow', theme.shadow);
+    
     document.documentElement.style.setProperty('--font-size', savedSize);
     document.documentElement.style.setProperty('--scanline-display', savedScanlines);
+    document.documentElement.style.setProperty('--font-family', savedFont);
 
-    // Wait for DOM to finish loading to inject the modal
+    // Wait for DOM to finish loading to inject modal and update the logo image
     document.addEventListener('DOMContentLoaded', () => {
+        updateLogoVisibility(theme.showLogo);
         injectSettingsModal();
     });
 })();
+
+function updateLogoVisibility(displayState) {
+    const logo = document.getElementById('bg-lambda');
+    if (logo) {
+        logo.style.display = displayState;
+    }
+}
 
 function injectSettingsModal() {
     // Inject the Settings Button if it doesn't exist
@@ -34,10 +58,20 @@ function injectSettingsModal() {
             <div class="setting-row">
                 <span>UI THEME:</span>
                 <select id="set-theme">
-                    <option value="#ff9900">Lambda Orange</option>
-                    <option value="#00ccff">Combine Blue</option>
-                    <option value="#33ff33">Terminal Green</option>
-                    <option value="#ffffff">High Contrast White</option>
+                    <option value="lambda">Lambda Orange</option>
+                    <option value="combine">Combine Blue</option>
+                    <option value="terminal">Terminal Green</option>
+                    <option value="high-contrast">High Contrast Dark</option>
+                    <option value="light">Light Mode</option>
+                </select>
+            </div>
+
+            <div class="setting-row">
+                <span>FONT STYLE:</span>
+                <select id="set-font">
+                    <option value="'VT323', monospace">Retro (VT323)</option>
+                    <option value="monospace">System Monospace</option>
+                    <option value="sans-serif">System Sans-Serif</option>
                 </select>
             </div>
 
@@ -54,7 +88,7 @@ function injectSettingsModal() {
                 <span>CRT SCANLINES:</span>
                 <select id="set-scanlines">
                     <option value="block">Enabled</option>
-                    <option value="none">Disabled (Accessibility)</option>
+                    <option value="none">Disabled</option>
                 </select>
             </div>
 
@@ -66,7 +100,7 @@ function injectSettingsModal() {
                 </select>
             </div>
 
-            <button id="logout-btn" class="danger-btn" style="width: 100%; margin-bottom: 10px;">[ TERMINATE SESSION ]</button>
+            <button id="logout-btn" class="danger-btn">[ TERMINATE SESSION ]</button>
             <button id="close-settings">[ CLOSE ]</button>
         </div>
     `;
@@ -83,7 +117,8 @@ function injectSettingsModal() {
     const btnLogout = document.getElementById('logout-btn');
     
     // Set UI dropdowns to match current saved settings
-    document.getElementById('set-theme').value = localStorage.getItem('lambdaColor') || '#ff9900';
+    document.getElementById('set-theme').value = localStorage.getItem('lambdaTheme') || 'lambda';
+    document.getElementById('set-font').value = localStorage.getItem('lambdaFont') || "'VT323', monospace";
     document.getElementById('set-size').value = localStorage.getItem('lambdaSize') || '22px';
     document.getElementById('set-scanlines').value = localStorage.getItem('lambdaScanlines') || 'block';
     document.getElementById('set-audio').value = localStorage.getItem('lambdaAudio') || 'on';
@@ -94,8 +129,19 @@ function injectSettingsModal() {
 
     // Event Listeners for Changes
     document.getElementById('set-theme').addEventListener('change', (e) => {
-        document.documentElement.style.setProperty('--theme-color', e.target.value);
-        localStorage.setItem('lambdaColor', e.target.value);
+        const selectedTheme = themeData[e.target.value];
+        
+        document.documentElement.style.setProperty('--theme-color', selectedTheme.color);
+        document.documentElement.style.setProperty('--bg-color', selectedTheme.bg);
+        document.documentElement.style.setProperty('--text-shadow-glow', selectedTheme.shadow);
+        
+        updateLogoVisibility(selectedTheme.showLogo);
+        localStorage.setItem('lambdaTheme', e.target.value);
+    });
+
+    document.getElementById('set-font').addEventListener('change', (e) => {
+        document.documentElement.style.setProperty('--font-family', e.target.value);
+        localStorage.setItem('lambdaFont', e.target.value);
     });
 
     document.getElementById('set-size').addEventListener('change', (e) => {
@@ -118,6 +164,6 @@ function injectSettingsModal() {
         localStorage.removeItem('promptedStatus');
         sessionStorage.removeItem('currentUser');
         sessionStorage.removeItem('promptedStatus');
-        window.location.href = 'index.html'; // Kick back to login
+        window.location.href = 'index.html'; 
     });
 }
