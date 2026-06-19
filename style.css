@@ -1,0 +1,135 @@
+/* =========================================
+   LAMBDA OS - UNIVERSAL STYLES
+   ========================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+body {
+    background-color: #050505;
+    color: #ff9900; 
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    margin: 0;
+    padding: 15px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    text-shadow: 0 0 5px rgba(255, 153, 0, 0.6);
+}
+
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; box-sizing: border-box; }
+
+/* CRT Scanlines */
+body::after {
+    content: " ";
+    display: block;
+    position: fixed;
+    top: 0; left: 0; bottom: 0; right: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    z-index: 2;
+    background-size: 100% 4px, 3px 100%;
+    pointer-events: none;
+}
+
+/* Faded Background Logo */
+#bg-lambda {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    opacity: 0.08;
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* Settings Button */
+#settings-btn {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    cursor: pointer;
+    z-index: 10;
+    transition: color 0.2s, text-shadow 0.2s;
+}
+#settings-btn:hover {
+    color: #fff;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+}
+
+/* Terminal Elements */
+.highlight {
+    background-color: #ff9900;
+    color: #000;
+    text-shadow: none;
+    padding: 0 6px;
+}
+.cursor {
+    display: inline-block;
+    width: 10px;
+    height: 20px;
+    background-color: #ff9900;
+    animation: blink 1s step-end infinite;
+    vertical-align: bottom;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Dashboard Specifics */
+#dashboard-ui {
+    display: none; /* Hidden until terminal sequence finishes */
+    margin-top: 40px;
+    max-width: 800px;
+}
+
+.system-header {
+    font-size: 28px;
+    border-bottom: 2px solid #ff9900;
+    margin-bottom: 20px;
+    padding-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Clickable Panels */
+.panel-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.panel {
+    border: 1px solid #ff9900;
+    padding: 15px 20px;
+    text-decoration: none;
+    color: #ff9900;
+    font-size: 24px;
+    background: rgba(255, 153, 0, 0.05);
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.panel::before {
+    content: "> ";
+}
+
+.panel:hover:not(.locked) {
+    background-color: #ff9900;
+    color: #000;
+    text-shadow: none;
+    box-shadow: 0 0 15px rgba(255, 153, 0, 0.4);
+    cursor: pointer;
+}
+
+.panel.locked {
+    opacity: 0.4;
+    border-style: dashed;
+    cursor: not-allowed;
+    background: transparent;
+}
+.panel.locked::after {
+    content: "[ ENCRYPTED ]";
+    font-size: 18px;
+}
