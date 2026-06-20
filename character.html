@@ -12,7 +12,6 @@
         if (!currentUser) window.location.replace("/");
     </script>
     <style>
-        /* FIX: Prevents overlap with the fixed settings button across all resolutions */
         #top-nav {
             display: flex;
             justify-content: space-between;
@@ -136,6 +135,22 @@
             min-width: 120px;
         }
 
+        /* Slowly Flashing Red Min Strength Warning */
+        @keyframes slow-flash {
+            0% { opacity: 0.3; }
+            50% { opacity: 1; }
+            100% { opacity: 0.3; }
+        }
+        .min-str-alert {
+            animation: slow-flash 2.5s infinite ease-in-out;
+            color: #ff3333;
+            font-weight: bold;
+            font-size: 0.8em;
+            text-shadow: 0 0 5px rgba(255, 51, 51, 0.8);
+            margin-left: 10px;
+            display: inline-block;
+        }
+
         .die-btn {
             background: transparent;
             color: var(--theme-color);
@@ -155,7 +170,7 @@
         .del-btn:hover { background: #ff3333; color: var(--bg-color); }
         .del-btn::before { content: ""; } .del-btn::after { content: ""; }
 
-        /* FIX: Styled priority layout to keep terminal layers strictly above standard tab pages */
+        /* CRT Terminal Logs and Stacking contexts */
         .term-header, #roll-terminal {
             position: relative !important;
             z-index: 999998 !important; 
@@ -190,26 +205,25 @@
             text-align: left;
         }
 
-        /* FIX: Modals Stacking Context & Pointer Overrides */
+        /* Modals (Fixed stacking index priority and pointer overlays) */
         #tn-modal, #weapon-add-modal {
-            display: none; 
-            position: fixed !important; 
-            top: 50% !important; 
-            left: 50% !important; 
-            transform: translate(-50%, -50%) !important;
-            border: 2px solid var(--theme-color) !important; 
-            background: var(--bg-color) !important; 
-            padding: 25px !important;
-            z-index: 999999 !important; /* Highest layer index priority */
-            text-align: center !important; 
-            box-shadow: 0 0 20px rgba(0,0,0,0.9) !important;
-            width: max-content !important; 
-            min-width: 350px !important;
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px;
+            z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.9);
+            width: max-content; min-width: 350px;
             pointer-events: auto !important;
         }
         #tn-modal h3, #weapon-add-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
         #tn-modal p, #weapon-add-modal p { margin: 10px 0; }
         .tn-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 20px;
+        }
     </style>
 </head>
 <body>
@@ -228,29 +242,6 @@
     <div class="tab-bar">
         <button id="tab-stats" class="tab-btn active-tab" onclick="switchTab('stats')">DIAGNOSTICS & STATUS</button>
         <button id="tab-armory" class="tab-btn" onclick="switchTab('armory')">TACTICAL ARMORY</button>
-    </div>
-
-    <!-- Target Number Modal (Interactive fixes applied) -->
-    <div id="tn-modal" style="pointer-events: auto !important;">
-        <h3>INITIATING ROLL</h3>
-        <p>Enter Target Number (TN)</p>
-        <p style="font-size:0.8em; opacity:0.7;">Note: Only modify this if the GM instructs you to.</p>
-        <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center; font-size:1.2em; pointer-events: auto !important;">
-        <div class="tn-buttons">
-            <button class="die-btn" onclick="confirmRoll()" style="pointer-events: auto !important;">CONFIRM ROLL</button>
-            <button class="die-btn" onclick="cancelRoll()" style="pointer-events: auto !important;">CANCEL</button>
-        </div>
-    </div>
-
-    <!-- Equip Weapon Selection Modal (Interactive fixes applied) -->
-    <div id="weapon-add-modal" style="pointer-events: auto !important;">
-        <h3>EQUIP ARMAMENT</h3>
-        <p>Select weapon from master presets:</p>
-        <select id="equip-weapon-select" class="admin-input" style="width:100%; margin-bottom: 15px; pointer-events: auto !important;"></select>
-        <div class="tn-buttons">
-            <button class="die-btn" onclick="confirmEquip()" style="pointer-events: auto !important;">EQUIP WEAPON</button>
-            <button class="die-btn" onclick="cancelEquip()" style="pointer-events: auto !important;">CANCEL</button>
-        </div>
     </div>
 
     <!-- GM Controls -->
@@ -361,6 +352,68 @@
         <div>> TERMINAL READY. WAITING FOR INPUT...</div>
     </div>
 
+    <!-- Target Number Modal (Positioned to bottom of DOM tree with updated ranged & multi-attack selectors) -->
+    <div id="tn-modal" style="pointer-events: auto !important;">
+        <h3>TACTICAL ENGAGEMENT MONITOR</h3>
+        
+        <div class="setting-row">
+            <span>Target Number (TN):</span>
+            <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center; pointer-events: auto !important;">
+        </div>
+
+        <!-- Ranged Options Panel -->
+        <div id="ranged-options-container" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <div class="setting-row">
+                <span>Range Bracket:</span>
+                <select id="range-select" class="admin-input" style="width:180px; pointer-events: auto !important;" onchange="updateRangePenalty()">
+                    <option value="0">Short Range (+0)</option>
+                    <option value="-2">Medium Range (-2)</option>
+                    <option value="-4">Long Range (-4)</option>
+                    <option value="-8">Extreme Range (-8)</option>
+                </select>
+            </div>
+            <div class="setting-row" id="scope-row" style="display:none;">
+                <span>Scoped Sight Mounted?</span>
+                <input type="checkbox" id="scope-checkbox" onchange="updateRangePenalty()" style="width: 20px; height: 20px; pointer-events: auto !important;">
+            </div>
+        </div>
+
+        <!-- Rate of Fire Panel -->
+        <div id="rof-options-container" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <div class="setting-row">
+                <span>Shots Fired (RoF):</span>
+                <select id="rof-select" class="admin-input" style="width:180px; pointer-events: auto !important;" onchange="updateRecoilPenalty()">
+                    <option value="1">Single Shot (1 Die)</option>
+                </select>
+            </div>
+            <div id="recoil-warning" style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">
+                * Firing at RoF > 1 incurs a -2 Recoil penalty.
+            </div>
+        </div>
+
+        <!-- Combined Penalty Override (Editable) -->
+        <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Modifier Adjust:</span>
+            <input type="number" id="mod-override-input" value="0" class="admin-input" style="width:80px; text-align:center; pointer-events: auto !important;">
+        </div>
+
+        <div class="tn-buttons">
+            <button class="die-btn" onclick="confirmRoll()" style="pointer-events: auto !important;">CONFIRM ROLL</button>
+            <button class="die-btn" onclick="cancelRoll()" style="pointer-events: auto !important;">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- Equip Weapon Selection Modal -->
+    <div id="weapon-add-modal" style="pointer-events: auto !important;">
+        <h3>EQUIP ARMAMENT</h3>
+        <p>Select weapon from master presets:</p>
+        <select id="equip-weapon-select" class="admin-input" style="width:100%; margin-bottom: 15px; pointer-events: auto !important;"></select>
+        <div class="tn-buttons">
+            <button class="die-btn" onclick="confirmEquip()" style="pointer-events: auto !important;">EQUIP WEAPON</button>
+            <button class="die-btn" onclick="cancelEquip()" style="pointer-events: auto !important;">CANCEL</button>
+        </div>
+    </div>
+
     <script src="/settings.js"></script>
 
     <!-- Firebase Realtime WebSockets Integration -->
@@ -445,6 +498,7 @@
         let charData = {};
         let globalState = { characters: {}, webhook: "", presets: defaultPresets };
         let pendingRoll = null;
+        let activeWeaponContext = null; // Stores weapon specs currently chosen for attack
         let isEditing = false; 
 
         let db;
@@ -541,6 +595,23 @@
             charData.bennies = val;
             document.getElementById('benny-count').innerText = val;
             await saveCharacter();
+        }
+
+        // SWADE Helper: Determine if character Strength die is lower than weapon requirements
+        function evaluateMinStr(weaponMinStr) {
+            if (!weaponMinStr || weaponMinStr === "—" || weaponMinStr === "-") return false;
+            
+            // Get character's base strength die
+            let currentStrStr = charData.attributes.Strength ? charData.attributes.Strength.die : "4";
+            let currentStrVal = parseInt(currentStrStr) || 4;
+            
+            // Get weapon requirement
+            let reqStrMatch = weaponMinStr.match(/d(\d+)/i);
+            if (!reqStrMatch) return false;
+            let reqStrVal = parseInt(reqStrMatch[1]);
+            
+            // Compare die sizes (d4=4, d6=6, d8=8, etc.)
+            return currentStrVal < reqStrVal;
         }
 
         // ==========================================
@@ -648,11 +719,14 @@
             }
 
             charData.weapons.forEach((w, index) => {
+                // Determine if Strength requirement is satisfied
+                let minStrAlert = evaluateMinStr(w.minStr) ? `<span class="min-str-alert">[!] MIN STR REQ NOT MET</span>` : '';
+
                 container.innerHTML += `
                     <div class="weapon-card">
                         <img class="weapon-icon" src="${w.icon || 'https://i.imgur.com/niLzrfW.png'}" alt="${w.name}">
                         <div class="weapon-details">
-                            <div><b>${w.name.toUpperCase()}</b></div>
+                            <div><b>${w.name.toUpperCase()}</b>${minStrAlert}</div>
                             <div>Range: <i>${w.range}</i></div>
                             <div>Damage: <b>${w.damage}</b></div>
                             <div>AP: <i>${w.ap}</i></div>
@@ -743,20 +817,22 @@
         // 7. WEAPON ATTACK & EXPLODING DAMAGE ROLLS
         // ==========================================
         function rollWeaponAttack(weaponName, rangeStr) {
-            // Determine rolling stat: Melee -> Fighting, Ranged -> Shooting
             let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
-            let skillNeeded = isMelee ? "Fighting" : "Shooting";
+            let isThrown = rangeStr.toLowerCase().includes("throw") || weaponName.toLowerCase().includes("grenade");
+            
+            // SWADE: Melee uses Fighting, Thrown uses Athletics, Gunfire/Bows use Shooting
+            let skillNeeded = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
+            let weaponObj = charData.weapons.find(w => w.name === weaponName);
 
             if (charData.skills[skillNeeded]) {
-                prepareRoll(skillNeeded, "skills");
+                prepareRoll(skillNeeded, "skills", weaponObj);
             } else {
-                // System forces standard SWADE Unskilled attempt
                 logToTerminal(`> SKILL [${skillNeeded.toUpperCase()}] UNAVAILABLE. CONVERTING TO UNSKILLED ACTION...`);
-                prepareRoll("Unskilled Attempt", null);
+                prepareRoll("Unskilled Attempt", null, weaponObj);
             }
         }
 
-        // Parser supporting nested standard SWADE math configurations
+        // Parser supporting standard SWADE math calculations
         function parseDamage(damageStr) {
             let cleaned = damageStr.replace(/\s+/g, '').toLowerCase();
             let match = cleaned.match(/(\d+)d(\d+)(?:\+(\d+))?/);
@@ -774,10 +850,8 @@
             let parsed = parseDamage(damageStr);
             let total = 0;
             let rolls = [];
-            let displayString = "";
 
             if (!parsed) {
-                // If special damage formula is detected, allow prompt input
                 let customQuery = prompt(`Enter custom roll calculation for ${weaponName}:`, "2d8");
                 if (!customQuery) return;
                 parsed = parseDamage(customQuery);
@@ -795,11 +869,21 @@
             }
             total += parsed.modifier;
 
+            // Roll Raise Bonus Damage (+1d6) if marked from previous attack hit
+            let hasRaiseBonus = localStorage.getItem(`raise_bonus_${weaponName}`) === "true";
+            let bonusRolls = [];
+            if (hasRaiseBonus) {
+                let bRoll = rollExploding(6);
+                total += bRoll.total;
+                bonusRolls = bRoll.history;
+                localStorage.removeItem(`raise_bonus_${weaponName}`); // Consume raise bonus
+            }
+
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : "";
-            displayString = `${rolls.join(' + ')}${modStr} = **${total}**`;
+            let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
 
             let termLog = `> ${charData.name} dealt damage with ${weaponName.toUpperCase()}<br>`;
-            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}<br>`;
+            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}${bonusStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
             logToTerminal(termLog);
 
@@ -814,6 +898,20 @@
                     ]
                 };
                 if (parsed.modifier !== 0) embed.fields.push({ name: "Modifier", value: `${parsed.modifier > 0 ? '+' : ''}${parsed.modifier}`, inline: true });
+                if (hasRaiseBonus) {
+                    embed.fields.push({ name: "Raise Bonus (+1d6)", value: `${bonusRolls.join(' + ')}`, inline: true });
+                    embed.description += `\n*(Includes +1d6 Raise Bonus from previous hit)*`;
+                }
+
+                // Add Weapon specs and Image
+                let weapon = charData.weapons.find(w => w.name === weaponName);
+                if (weapon) {
+                    embed.thumbnail = { url: weapon.icon };
+                    embed.fields.push({
+                        name: "Weapon Specifications",
+                        value: `Range: ${weapon.range}\nDamage: ${weapon.damage}\nAP: ${weapon.ap}\nRoF: ${weapon.rof}\nShots: ${weapon.shots}\nMin Str: ${weapon.minStr}`
+                    });
+                }
 
                 try {
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
@@ -844,55 +942,181 @@
         }
 
         async function executeRoll(name, cat, targetNumber) {
-            let sides, modifier;
+            let sides, traitModifier;
             
             if (cat === null) {
                 sides = 4;
-                modifier = -2;
+                traitModifier = -2;
             } else {
                 let data = charData[cat][name];
                 sides = parseInt(data.die) || 4;
-                modifier = parseInt(data.mod) || 0;
+                traitModifier = parseInt(data.mod) || 0;
             }
-            
-            let traitRoll = rollExploding(sides);
-            let wildRoll = rollExploding(6); 
 
-            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + modifier;
-            let isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
-            
-            let outcomeText = ""; let color = 0xff9900; 
-            
-            if (isCritFail) {
-                outcomeText = "CRITICAL FAILURE!"; color = 0xff0000; 
-            } else if (bestTotal < targetNumber) {
-                outcomeText = "FAILURE."; color = 0xff0000;
+            // Read computed ranged or RoF modifiers + custom manual adjustments
+            let customModifier = parseInt(document.getElementById('mod-override-input').value) || 0;
+            let totalModifier = traitModifier + customModifier;
+
+            let shotsFired = 1;
+            if (activeWeaponContext && parseInt(activeWeaponContext.rof) > 1 && document.getElementById('rof-options-container').style.display !== 'none') {
+                shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
+            }
+
+            let results = [];
+            let isCritFail = false;
+
+            if (shotsFired > 1) {
+                // SWADE Rate of Fire: Roll shotsFired Trait Dice and 1 Wild Die
+                let traitRolls = [];
+                for (let i = 0; i < shotsFired; i++) {
+                    traitRolls.push(rollExploding(sides));
+                }
+                let wildRoll = rollExploding(6);
+
+                // SWADE RoF Critical Failure: if more than half of all rolled dice (including Wild) are natural 1s
+                let onesCount = 0;
+                traitRolls.forEach(r => { if (r.history[0] === 1) onesCount++; });
+                if (wildRoll.history[0] === 1) onesCount++;
+
+                let totalDice = shotsFired + 1;
+                isCritFail = (onesCount > totalDice / 2);
+
+                // SWADE: Match Wild Die to replace the lowest rolling Trait Die if higher
+                let traitTotals = traitRolls.map(r => r.total);
+                let minVal = Math.min(...traitTotals);
+                let minIdx = traitTotals.indexOf(minVal);
+
+                if (wildRoll.total > minVal) {
+                    traitRolls[minIdx] = wildRoll;
+                }
+
+                // Apply modifiers and determine raise outcome per shot
+                traitRolls.forEach((r, idx) => {
+                    let score = r.total + totalModifier;
+                    let outcome = "";
+                    let hasRaise = false;
+
+                    if (isCritFail) {
+                        outcome = "CRITICAL FAILURE!";
+                    } else if (score < targetNumber) {
+                        outcome = "FAILURE.";
+                    } else {
+                        let raises = Math.floor((score - targetNumber) / 4);
+                        outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                        if (raises > 0) hasRaise = true;
+                    }
+
+                    results.push({
+                        shotIndex: idx + 1,
+                        total: score,
+                        history: r.history,
+                        outcome: outcome,
+                        hasRaise: hasRaise
+                    });
+                });
             } else {
-                let raises = Math.floor((bestTotal - targetNumber) / 4);
-                outcomeText = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
-                color = 0x00ff00; 
+                // Standard Single Die Roll
+                let traitRoll = rollExploding(sides);
+                let wildRoll = rollExploding(6);
+
+                let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalModifier;
+                isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
+
+                let outcome = "";
+                let hasRaise = false;
+
+                if (isCritFail) {
+                    outcome = "CRITICAL FAILURE!";
+                } else if (bestTotal < targetNumber) {
+                    outcome = "FAILURE.";
+                } else {
+                    let raises = Math.floor((bestTotal - targetNumber) / 4);
+                    outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                    if (raises > 0) hasRaise = true;
+                }
+
+                results.push({
+                    shotIndex: 1,
+                    total: bestTotal,
+                    history: traitRoll.total > wildRoll.total ? traitRoll.history : wildRoll.history,
+                    outcome: outcome,
+                    hasRaise: hasRaise,
+                    isSingle: true,
+                    traitHistory: traitRoll.history,
+                    wildHistory: wildRoll.history
+                });
             }
 
-            let displayMod = modifier !== 0 ? (modifier > 0 ? `+${modifier}` : `${modifier}`) : "";
-            let modStrDisplay = modifier !== 0 ? ` (${displayMod})` : "";
-            
-            let termLog = `> ${charData.name} rolled ${name.toUpperCase()} [d${sides}${displayMod}] vs TN ${targetNumber}<br>`;
-            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')}<br>`;
-            termLog += `&nbsp;&nbsp;Wild:  ${wildRoll.history.join(' + ')}<br>`;
-            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> ${modStrDisplay} -> ${outcomeText}`;
+            // If any shot hit with a raise, flag the weapon for bonus damage on next damage click
+            let hitWithRaise = results.some(r => r.hasRaise);
+            if (activeWeaponContext && hitWithRaise) {
+                localStorage.setItem(`raise_bonus_${activeWeaponContext.name}`, "true");
+                logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${activeWeaponContext.name} will include +1d6 raise bonus.`);
+            } else if (activeWeaponContext) {
+                localStorage.removeItem(`raise_bonus_${activeWeaponContext.name}`);
+            }
+
+            renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail);
+        }
+
+        async function renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail) {
+            let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
+            let displayMod = totalModifier !== 0 ? (totalModifier > 0 ? `+${totalModifier}` : `${totalModifier}`) : "";
+            let modStrDisplay = totalModifier !== 0 ? ` (${displayMod})` : "";
+
+            let termLog = `> ${charData.name} rolled ${name.toUpperCase()} vs TN ${targetNumber}${modStrDisplay}<br>`;
+
+            results.forEach(r => {
+                if (r.isSingle) {
+                    termLog += `&nbsp;&nbsp;Trait: ${r.traitHistory.join(' + ')}<br>`;
+                    termLog += `&nbsp;&nbsp;Wild:  ${r.wildHistory.join(' + ')}<br>`;
+                    termLog += `&nbsp;&nbsp;Result: <b>${r.total}</b> -> ${r.outcome}<br>`;
+                } else {
+                    termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
+                }
+            });
+
             logToTerminal(termLog);
 
+            // Fetch live state for Webhook output
             if (globalState && globalState.webhook) {
+                let desc = "";
+                results.forEach(r => {
+                    if (r.isSingle) {
+                        desc += `**Result: ${r.total}**\n${r.outcome}`;
+                    } else {
+                        desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
+                    }
+                });
+
                 const embed = {
                     title: `${charData.name} rolled ${name}`,
-                    description: `**Final Result: ${bestTotal}** (TN: ${targetNumber})\n${outcomeText}`,
+                    description: desc,
                     color: color,
-                    fields: [
-                        { name: `Trait (d${sides})`, value: `${traitRoll.history.join(' + ')}`, inline: true },
-                        { name: "Wild (d6)", value: `${wildRoll.history.join(' + ')}`, inline: true }
-                    ]
+                    fields: []
                 };
-                if (modifier !== 0) embed.fields.push({ name: "Modifier", value: `${displayMod}`, inline: true });
+
+                if (results[0].isSingle) {
+                    embed.fields.push({ name: `Trait (d${sides})`, value: `${results[0].traitHistory.join(' + ')}`, inline: true });
+                    embed.fields.push({ name: "Wild (d6)", value: `${results[0].wildHistory.join(' + ')}`, inline: true });
+                } else {
+                    results.forEach(r => {
+                        embed.fields.push({ name: `Shot #${r.shotIndex} History`, value: `${r.history.join(' + ')}`, inline: true });
+                    });
+                }
+
+                if (totalModifier !== 0) {
+                    embed.fields.push({ name: "Modifier", value: `${displayMod}`, inline: true });
+                }
+
+                // Add formatted weapon specifications and thumbnail inside embed
+                if (activeWeaponContext) {
+                    embed.thumbnail = { url: activeWeaponContext.icon };
+                    embed.fields.push({
+                        name: "Weapon Specifications",
+                        value: `Range: ${activeWeaponContext.range}\nDamage: ${activeWeaponContext.damage}\nAP: ${activeWeaponContext.ap}\nRoF: ${activeWeaponContext.rof}\nShots: ${activeWeaponContext.shots}\nMin Str: ${activeWeaponContext.minStr}`
+                    });
+                }
 
                 try {
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
@@ -909,10 +1133,86 @@
             term.scrollTop = term.scrollHeight;
         }
 
-        function prepareRoll(name, cat) {
+        function prepareRoll(name, cat, weaponObj = null) {
             pendingRoll = { name, cat };
+            activeWeaponContext = weaponObj;
+
             document.getElementById('tn-input').value = "4"; 
+            document.getElementById('mod-override-input').value = "0";
+
+            const rangedOpts = document.getElementById('ranged-options-container');
+            const rofOpts = document.getElementById('rof-options-container');
+            const scopeRow = document.getElementById('scope-row');
+            
+            // Reset options
+            document.getElementById('range-select').value = "0";
+            document.getElementById('scope-checkbox').checked = false;
+
+            if (weaponObj) {
+                let isMelee = weaponObj.range.toLowerCase().includes("melee") || weaponObj.range.toLowerCase().includes("contact");
+                if (!isMelee) {
+                    // Show range calculation options
+                    rangedOpts.style.display = "block";
+                    scopeRow.style.display = "flex";
+
+                    let rofVal = parseInt(weaponObj.rof) || 1;
+                    if (rofVal > 1) {
+                        rofOpts.style.display = "block";
+                        const rofSelect = document.getElementById('rof-select');
+                        rofSelect.innerHTML = `<option value="1">Single Shot (1 Die)</option>`;
+                        for (let r = 2; r <= rofVal; r++) {
+                            rofSelect.innerHTML += `<option value="${r}">Burst - ${r} Shots (${r} Dice)</option>`;
+                        }
+                    } else {
+                        rofOpts.style.display = "none";
+                    }
+                } else {
+                    rangedOpts.style.display = "none";
+                    rofOpts.style.display = "none";
+                }
+            } else {
+                rangedOpts.style.display = "none";
+                rofOpts.style.display = "none";
+            }
+
             document.getElementById('tn-modal').style.display = 'block';
+        }
+
+        // --- DYNAMIC PENALTY RECALCULATIONS ---
+        function updateRangePenalty() {
+            if (!activeWeaponContext) return;
+            let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
+            let isScoped = document.getElementById('scope-checkbox').checked;
+
+            // Extreme Range is -8, but is reduced to -6 with scope
+            if (rangePenalty === -8 && isScoped) {
+                rangePenalty = -6;
+            }
+
+            applyComputedModifiers(rangePenalty);
+        }
+
+        function updateRecoilPenalty() {
+            if (!activeWeaponContext) return;
+            let shots = parseInt(document.getElementById('rof-select').value) || 1;
+            let recoilPenalty = (shots > 1) ? -2 : 0;
+
+            let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
+            let isScoped = document.getElementById('scope-checkbox').checked;
+            if (rangePenalty === -8 && isScoped) rangePenalty = -6;
+
+            const warning = document.getElementById('recoil-warning');
+            if (recoilPenalty !== 0) {
+                warning.style.display = 'block';
+            } else {
+                warning.style.display = 'none';
+            }
+
+            applyComputedModifiers(rangePenalty + recoilPenalty);
+        }
+
+        function applyComputedModifiers(computedVal) {
+            document.getElementById('mod-override-input').value = computedVal;
         }
 
         function scrollToBottom() { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
@@ -979,6 +1279,27 @@
         window.cancelEquip = cancelEquip;
         window.clearLog = clearLog;
         window.saveWebhook = saveWebhook;
+        window.updateRangePenalty = updateRangePenalty;
+        window.updateRecoilPenalty = updateRecoilPenalty;
+
+        // Admin controls
+        if (isAdmin) {
+            document.getElementById('admin-controls').style.display = 'block';
+            document.getElementById('admin-char-select').addEventListener('change', (e) => {
+                activeCharId = e.target.value;
+                loadCharacter();
+            });
+            document.getElementById('save-webhook').addEventListener('click', async () => {
+                let url = document.getElementById('discord-webhook').value;
+                if (isFirebaseConfigured) {
+                    await set(ref(db, 'campaignState/webhook'), url);
+                } else {
+                    globalState.webhook = url;
+                    localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+                }
+                logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
+            });
+        }
 
         init();
     </script>
