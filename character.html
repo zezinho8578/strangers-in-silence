@@ -12,6 +12,7 @@
         if (!currentUser) window.location.replace("/");
     </script>
     <style>
+        /* Forces the nav bar to stop before the settings button on any viewport size */
         #top-nav {
             display: flex;
             justify-content: space-between;
@@ -72,6 +73,7 @@
         }
         .stat-row:hover { border-bottom: 1px solid rgba(255, 153, 0, 0.2); }
 
+        /* Die Structure Formatting */
         .die-container {
             display: inline-flex;
             align-items: center;
@@ -119,7 +121,6 @@
             width: 90px;
             height: 45px;
             object-fit: contain;
-            /* Filter applies color profile to line-art depending on active theme color */
             filter: drop-shadow(0px 0px 1px var(--theme-color)); 
         }
         .weapon-details {
@@ -185,16 +186,24 @@
             text-align: left;
         }
 
-        /* Modals */
-        #tn-modal, #weapon-add-modal {
+        /* Modals (Fixed z-index and forced pointer events to ensure clickability) */
+        #tn-modal, #weapon-add-modal, #dmg-modal {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px;
-            z-index: 200; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.9);
-            width: max-content; min-width: 350px;
+            z-index: 99999 !important; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.95);
+            width: max-content; min-width: 350px; pointer-events: auto !important;
         }
-        #tn-modal h3, #weapon-add-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
-        #tn-modal p, #weapon-add-modal p { margin: 10px 0; }
+        #tn-modal h3, #weapon-add-modal h3, #dmg-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
+        #tn-modal p, #weapon-add-modal p, #dmg-modal p { margin: 10px 0; }
         .tn-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 20px;
+        }
     </style>
 </head>
 <body>
@@ -215,15 +224,87 @@
         <button id="tab-armory" class="tab-btn" onclick="switchTab('armory')">TACTICAL ARMORY</button>
     </div>
 
-    <!-- Target Number Modal -->
+    <!-- New Standard & Combat Roll Target Number Modal -->
     <div id="tn-modal">
-        <h3>INITIATING ROLL</h3>
-        <p>Enter Target Number (TN)</p>
-        <p style="font-size:0.8em; opacity:0.7;">Note: Only modify this if the GM instructs you to.</p>
-        <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center; font-size:1.2em;">
+        <h3 id="roll-title">INITIATING ATTACK</h3>
+        <p id="roll-subtitle" style="font-size: 0.9em; opacity: 0.85;"></p>
+        
+        <!-- Interactive SWADE Melee Parry Calculations -->
+        <div id="melee-controls" style="display: none; margin-bottom: 15px; text-align: left;">
+            <div class="setting-row">
+                <span>SELECT TARGET:</span>
+                <select id="target-parry-select" class="admin-input" style="width: 180px;">
+                    <option value="custom">Custom TN (Manual Input)</option>
+                    <option value="katey-commons">Katey Commons (Parry)</option>
+                    <option value="vesa-novik">Vesa Novik (Parry)</option>
+                    <option value="trombley-hicks">Trombley Hicks (Parry)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Ranged Distance Penalties & Scopes -->
+        <div id="ranged-controls" style="display: none; margin-bottom: 15px; text-align: left;">
+            <div class="setting-row">
+                <span>RANGE PENALTY:</span>
+                <select id="range-bracket-select" class="admin-input" style="width: 180px;">
+                    <option value="0">Short Range (No Penalty)</option>
+                    <option value="-2">Medium Range (-2)</option>
+                    <option value="-4">Long Range (-4)</option>
+                    <option value="-8">Extreme Range (-8)</option>
+                </select>
+            </div>
+            <div class="setting-row" id="scope-check-row" style="display: none;">
+                <span>SCOPE EQUIPED?</span>
+                <input type="checkbox" id="scope-check" style="transform: scale(1.3); cursor: pointer;">
+            </div>
+        </div>
+
+        <!-- Rate of Fire selector -->
+        <div id="rof-controls" style="display: none; margin-bottom: 15px; text-align: left;">
+            <div class="setting-row">
+                <span>RATE OF FIRE (RoF):</span>
+                <select id="rof-select" class="admin-input" style="width: 180px;"></select>
+            </div>
+            <div id="recoil-warning" style="color: #ff3333; font-size: 0.8em; margin-top: 5px; text-align: center; display: none;">
+                [ RECOIL PENALTY (-2) WILL APPLY ]
+            </div>
+        </div>
+
+        <div class="setting-row" style="text-align: left;">
+            <span>ADDITIONAL MODIFIER:</span>
+            <input type="number" id="roll-extra-modifier" value="0" class="admin-input" style="width:80px; text-align:center;">
+        </div>
+
+        <div class="setting-row" style="text-align: left;">
+            <span>TARGET NUMBER (TN):</span>
+            <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center; font-size:1.2em;">
+        </div>
+
         <div class="tn-buttons">
             <button id="tn-btn-roll" class="die-btn">CONFIRM ROLL</button>
             <button id="tn-btn-cancel" class="die-btn">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- Thematic Damage Roll Modal -->
+    <div id="dmg-modal">
+        <h3>DAMAGE PROTOCOL</h3>
+        <p id="dmg-subtitle" style="font-size: 0.9em; opacity: 0.85;"></p>
+        <div class="setting-row" style="text-align: left;">
+            <span>BASE WEAPON DAMAGE:</span>
+            <span id="dmg-base-formula" style="font-weight: bold;"></span>
+        </div>
+        <div class="setting-row" style="text-align: left;">
+            <span>ADD +1d6 RAISE BONUS:</span>
+            <input type="checkbox" id="dmg-raise-check" style="transform: scale(1.3); cursor: pointer;">
+        </div>
+        <div class="setting-row" style="text-align: left;">
+            <span>DAMAGE MODIFIER:</span>
+            <input type="number" id="dmg-extra-modifier" value="0" class="admin-input" style="width:80px; text-align:center;">
+        </div>
+        <div class="tn-buttons">
+            <button id="dmg-btn-roll" class="die-btn">CONFIRM DAMAGE</button>
+            <button id="dmg-btn-cancel" class="die-btn">CANCEL</button>
         </div>
     </div>
 
@@ -383,7 +464,7 @@
             { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", shots: "1", minStr: "d6", icon: "https://i.imgur.com/4lFt2CC.png" },
             { id: "crossbow", name: "Crossbow", range: "24/48/96", damage: "3d10", ap: "4", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/2oHfVXb.png" },
             { id: "rpg", name: "RPG Launcher", range: "36/72/144", damage: "6d10", ap: "6", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/yyVsqkD.png" },
-            { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "—", shots: "1", minStr: "d6", icon: "https://i.imgur.com/9a4Uprg.png" },
+            { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "—", shots: "1", minStr: "d6", icon: "https://i.imgur.com/9a4Ug9a.png" },
             { id: "mine", name: "SLAM Mine", range: "Contact", damage: "5d6", ap: "3", rof: "—", shots: "1", minStr: "d4", icon: "https://i.imgur.com/38WpCXz.png" },
             { id: "grav-punt", name: "Gravity Gun (Punt)", range: "6/12/24", damage: "Varies", ap: "Varies", rof: "1", shots: "—", minStr: "d6", icon: "https://i.imgur.com/fAMbiF1.png" },
             { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "2", shots: "Unlimited", minStr: "d6", icon: "https://i.imgur.com/vhkAPmf.png" },
@@ -427,12 +508,18 @@
         let isEditing = false; 
 
         let db;
-        if (isFirebaseConfigured) {
-            const app = initializeApp(firebaseConfig);
-            db = getDatabase(app);
-        } else {
-            console.warn("Firebase not configured. Falling back to local storage.");
-            logToTerminal("<span style='color:red;'>[ WARNING: FIREBASE CONFIGURATION MISSING. EDIT CODES TO SYNC. ]</span>");
+        
+        // Wrap Firebase initialization to prevent complete execution halt if configuration fails
+        try {
+            if (isFirebaseConfigured) {
+                const app = initializeApp(firebaseConfig);
+                db = getDatabase(app);
+            } else {
+                console.warn("Firebase not configured. Falling back to local storage.");
+            }
+        } catch (e) {
+            console.error("Firebase startup failure:", e);
+            isFirebaseConfigured = false;
         }
 
         // ==========================================
@@ -441,7 +528,7 @@
         function init() {
             document.getElementById('char-name-display').innerText = "CONNECTING TO COGNITIVE ARRAY...";
             
-            if (isFirebaseConfigured) {
+            if (isFirebaseConfigured && db) {
                 onValue(ref(db, 'campaignState'), (snapshot) => {
                     const data = snapshot.val();
                     if (data) {
@@ -486,7 +573,7 @@
 
         async function saveCharacter() {
             document.getElementById('save-status').innerText = "[ SAVING... ]";
-            if (isFirebaseConfigured) {
+            if (isFirebaseConfigured && db) {
                 await set(ref(db, `campaignState/characters/${activeCharId}`), charData);
             } else {
                 globalState.characters[activeCharId] = charData;
@@ -497,7 +584,7 @@
         }
 
         async function saveGlobalPresets() {
-            if (isFirebaseConfigured) {
+            if (isFirebaseConfigured && db) {
                 await set(ref(db, 'campaignState/presets'), globalState.presets);
             } else {
                 localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
@@ -917,13 +1004,6 @@
         window.prepareRoll = prepareRoll;
         window.deleteSkill = deleteSkill;
         window.adjustBennies = adjustBennies;
-        window.switchTab = switchTab;
-        window.openEquipModal = openEquipModal;
-        window.removeWeaponFromCharacter = removeWeaponFromCharacter;
-        window.deletePreset = deletePreset;
-        window.addCustomPreset = addCustomPreset;
-        window.rollWeaponAttack = rollWeaponAttack;
-        window.rollWeaponDamage = rollWeaponDamage;
 
         init();
     </script>
