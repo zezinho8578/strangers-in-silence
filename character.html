@@ -12,7 +12,6 @@
         if (!currentUser) window.location.replace("/");
     </script>
     <style>
-        /* Forces the nav bar to stop before the settings button on any viewport size */
         #top-nav {
             display: flex;
             justify-content: space-between;
@@ -24,6 +23,31 @@
         }
         .nav-link { color: var(--theme-color); text-decoration: none; cursor: pointer; }
         .nav-link:hover { background: var(--theme-color); color: var(--bg-color); }
+
+        /* Navigation Tabs */
+        .tab-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--theme-color);
+            padding-bottom: 10px;
+        }
+        .tab-btn {
+            background: transparent;
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            padding: 8px 16px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 1.1em;
+            transition: 0.2s;
+        }
+        .tab-btn:hover { background: rgba(128, 128, 128, 0.2); }
+        .tab-btn.active-tab {
+            background: var(--theme-color) !important;
+            color: var(--bg-color) !important;
+            text-shadow: none !important;
+        }
 
         .sheet-grid {
             display: grid;
@@ -48,7 +72,6 @@
         }
         .stat-row:hover { border-bottom: 1px solid rgba(255, 153, 0, 0.2); }
 
-        /* Die Structure Formatting */
         .die-container {
             display: inline-flex;
             align-items: center;
@@ -82,12 +105,42 @@
         }
         .edit-area:hover, .edit-area:focus { border: 1px dashed var(--theme-color); outline: none; }
 
-        /* Buttons */
+        /* Styled Weapon Cards */
+        .weapon-card {
+            border: 1px solid var(--theme-color);
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: rgba(128, 128, 128, 0.05);
+        }
+        .weapon-icon {
+            width: 90px;
+            height: 45px;
+            object-fit: contain;
+            /* Filter applies color profile to line-art depending on active theme color */
+            filter: drop-shadow(0px 0px 1px var(--theme-color)); 
+        }
+        .weapon-details {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        .weapon-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 120px;
+        }
+
         .die-btn {
             background: transparent;
             color: var(--theme-color);
             border: 1px solid var(--theme-color);
-            padding: 2px 8px;
+            padding: 4px 10px;
             cursor: pointer;
             font-family: inherit;
             font-size: 0.9em;
@@ -102,7 +155,7 @@
         .del-btn:hover { background: #ff3333; color: var(--bg-color); }
         .del-btn::before { content: ""; } .del-btn::after { content: ""; }
 
-        /* Roll Terminal */
+        /* CRT Terminal Logs */
         .term-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px;}
         #roll-terminal {
             border: 1px solid var(--theme-color);
@@ -119,15 +172,28 @@
         
         #save-status { font-size: 0.8em; opacity: 0.8; margin-left: 15px; }
 
-        /* TN Modal */
-        #tn-modal {
+        /* Preset DB Config Table */
+        .preset-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8em;
+            margin-top: 15px;
+        }
+        .preset-table th, .preset-table td {
+            border: 1px solid var(--theme-color);
+            padding: 6px;
+            text-align: left;
+        }
+
+        /* Modals */
+        #tn-modal, #weapon-add-modal {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px;
             z-index: 200; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.9);
-            width: max-content; min-width: 300px;
+            width: max-content; min-width: 350px;
         }
-        #tn-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
-        #tn-modal p { margin: 10px 0; }
+        #tn-modal h3, #weapon-add-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
+        #tn-modal p, #weapon-add-modal p { margin: 10px 0; }
         .tn-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
     </style>
 </head>
@@ -143,6 +209,12 @@
         </div>
     </div>
 
+    <!-- Tab Navigation Bar -->
+    <div class="tab-bar">
+        <button id="tab-stats" class="tab-btn active-tab" onclick="switchTab('stats')">DIAGNOSTICS & STATUS</button>
+        <button id="tab-armory" class="tab-btn" onclick="switchTab('armory')">TACTICAL ARMORY</button>
+    </div>
+
     <!-- Target Number Modal -->
     <div id="tn-modal">
         <h3>INITIATING ROLL</h3>
@@ -155,6 +227,18 @@
         </div>
     </div>
 
+    <!-- Equip Weapon Selection Modal -->
+    <div id="weapon-add-modal">
+        <h3>EQUIP ARMAMENT</h3>
+        <p>Select weapon from master presets:</p>
+        <select id="equip-weapon-select" class="admin-input" style="width:100%; margin-bottom: 15px;"></select>
+        <div class="tn-buttons">
+            <button id="equip-confirm-btn" class="die-btn">EQUIP WEAPON</button>
+            <button id="equip-cancel-btn" class="die-btn">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- GM Controls -->
     <div id="admin-controls">
         <select id="admin-char-select" class="admin-input">
             <option value="katey-commons">View: Katey Commons</option>
@@ -165,53 +249,91 @@
         <button id="save-webhook" class="die-btn" style="border:none;">SAVE URL GLOBALLY</button>
     </div>
 
-    <div class="sheet-grid">
-        <!-- LEFT COLUMN -->
-        <div>
-            <!-- Syncable Benny Counter -->
-            <div class="section" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin: 0; border: none; padding: 0;">BENNIES</h3>
-                <div class="die-container" style="font-size: 1.2em;">
-                    <button class="die-btn" onclick="adjustBennies(-1)">-</button>
-                    <span id="benny-count" style="font-weight: bold; width: 30px; text-align: center;">3</span>
-                    <button class="die-btn" onclick="adjustBennies(1)">+</button>
+    <!-- Tab Section 1: DIAGNOSTICS & STATUS -->
+    <div id="section-stats" class="tab-content">
+        <div class="sheet-grid">
+            <!-- LEFT COLUMN -->
+            <div>
+                <div class="section" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; border: none; padding: 0;">BENNIES</h3>
+                    <div class="die-container" style="font-size: 1.2em;">
+                        <button class="die-btn" onclick="adjustBennies(-1)">-</button>
+                        <span id="benny-count" style="font-weight: bold; width: 30px; text-align: center;">3</span>
+                        <button class="die-btn" onclick="adjustBennies(1)">+</button>
+                    </div>
+                </div>
+
+                <div class="section" style="margin-bottom: 20px;">
+                    <h3>ATTRIBUTES</h3>
+                    <div id="attributes-container"></div>
+                </div>
+
+                <div class="section">
+                    <h3>SKILLS (Wildcards)</h3>
+                    <div id="skills-container"></div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 10px; gap: 10px;">
+                        <button class="die-btn" id="add-skill-btn" style="border:none; flex-grow: 1;">+ ADD SKILL</button>
+                        <button class="die-btn" onclick="prepareRoll('Unskilled Attempt', null)" style="border:none; flex-grow: 1;">UNSKILLED ATTEMPT</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="section" style="margin-bottom: 20px;">
-                <h3>ATTRIBUTES</h3>
-                <div id="attributes-container"></div>
-            </div>
+            <!-- RIGHT COLUMN -->
+            <div>
+                <div class="section" style="margin-bottom: 20px;">
+                    <h3>DERIVED STATS</h3>
+                    <div class="stat-row"><span>Pace:</span> <span class="editable" id="der-pace" contenteditable="true"></span></div>
+                    <div class="stat-row"><span>Parry:</span> <span class="editable" id="der-parry" contenteditable="true"></span></div>
+                    <div class="stat-row"><span>Toughness:</span> <span class="editable" id="der-toughness" contenteditable="true"></span></div>
+                </div>
 
-            <div class="section">
-                <h3>SKILLS (Wildcards)</h3>
-                <div id="skills-container"></div>
-                <div style="display: flex; justify-content: space-between; margin-top: 10px; gap: 10px;">
-                    <button class="die-btn" id="add-skill-btn" style="border:none; flex-grow: 1;">+ ADD SKILL</button>
-                    <!-- Unskilled Attempt Button -->
-                    <button class="die-btn" onclick="prepareRoll('Unskilled Attempt', null)" style="border:none; flex-grow: 1;">UNSKILLED ATTEMPT</button>
+                <div class="section" style="margin-bottom: 20px;">
+                    <h3>HINDRANCES & EDGES</h3>
+                    <textarea class="edit-area" id="notes-edges"></textarea>
+                </div>
+
+                <div class="section">
+                    <h3>GEAR, SPECIAL, & HISTORY</h3>
+                    <textarea class="edit-area" id="notes-gear"></textarea>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- RIGHT COLUMN -->
-        <div>
-            <div class="section" style="margin-bottom: 20px;">
-                <h3>DERIVED STATS</h3>
-                <div class="stat-row"><span>Pace:</span> <span class="editable" id="der-pace" contenteditable="true"></span></div>
-                <div class="stat-row"><span>Parry:</span> <span class="editable" id="der-parry" contenteditable="true"></span></div>
-                <div class="stat-row"><span>Toughness:</span> <span class="editable" id="der-toughness" contenteditable="true"></span></div>
+    <!-- Tab Section 2: TACTICAL ARMORY -->
+    <div id="section-armory" class="tab-content" style="display: none;">
+        <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px;">
+                <h3 style="margin: 0; border: none; padding: 0;">EQUIPPED WEAPONRY</h3>
+                <button class="die-btn" onclick="openEquipModal()" style="border: none;">+ EQUIP WEAPON</button>
             </div>
+            <div id="weapons-list-container"></div>
+        </div>
 
-            <div class="section" style="margin-bottom: 20px;">
-                <h3>HINDRANCES & EDGES</h3>
-                <textarea class="edit-area" id="notes-edges"></textarea>
+        <!-- Master Presets Database Configuration Panel (Admin Only) -->
+        <div id="master-presets-panel" class="section" style="margin-top: 25px; display: none;">
+            <h3>OVERWATCH ARMORY CONFIG (MASTER PRESETS)</h3>
+            <p style="font-size: 0.85em; opacity: 0.85; margin-bottom: 10px;">GM Mode: Changes made below update the presets database globally in real-time. Click values directly inside the database table below to live-edit weapon profiles.</p>
+            <div style="overflow-x: auto;">
+                <table class="preset-table">
+                    <thead>
+                        <tr>
+                            <th>Icon Preview</th>
+                            <th>Weapon Name</th>
+                            <th>Range</th>
+                            <th>Damage</th>
+                            <th>AP</th>
+                            <th>RoF</th>
+                            <th>Shots</th>
+                            <th>Min Str</th>
+                            <th>Icon Image Link</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="master-presets-body"></tbody>
+                </table>
             </div>
-
-            <div class="section">
-                <h3>GEAR, SPECIAL, & HISTORY</h3>
-                <textarea class="edit-area" id="notes-gear"></textarea>
-            </div>
+            <button class="die-btn" onclick="addCustomPreset()" style="margin-top: 15px; border: none;">+ CREATE CUSTOM WEAPON PRESET</button>
         </div>
     </div>
 
@@ -247,12 +369,33 @@
         const isFirebaseConfigured = firebaseConfig.databaseURL && !firebaseConfig.databaseURL.includes("YOUR_PROJECT_ID");
 
         // ==========================================
-        // 2. DEFAULT CHARACTER DATA
+        // 2. DEFAULT WEAPON PRESETS DATABASE
+        // ==========================================
+        const defaultPresets = [
+            { id: "crowbar", name: "Crowbar", range: "Melee", damage: "2d6", ap: "0", rof: "1", shots: "—", minStr: "d4", icon: "https://i.imgur.com/niLzrfW.png" },
+            { id: "stunstick", name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", shots: "Charge 20", minStr: "d4", icon: "https://i.imgur.com/pMPZprv.png" },
+            { id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", shots: "18", minStr: "d4", icon: "https://i.imgur.com/sAz8rBR.png" },
+            { id: "magnum-357", name: "357 Magnum", range: "15/30/60", damage: "2d10", ap: "2", rof: "1", shots: "6", minStr: "d6", icon: "https://i.imgur.com/cLsJTiP.png" },
+            { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", shots: "30", minStr: "d6", icon: "https://i.imgur.com/oAbqfGW.png" },
+            { id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", shots: "6", minStr: "d8", icon: "https://i.imgur.com/8ewEl7D.png" },
+            { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", shots: "2", minStr: "d8", icon: "https://i.imgur.com/8ewEl7D.png" },
+            { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", shots: "30", minStr: "d6", icon: "https://i.imgur.com/3rgRKGo.png" },
+            { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", shots: "1", minStr: "d6", icon: "https://i.imgur.com/4lFt2CC.png" },
+            { id: "crossbow", name: "Crossbow", range: "24/48/96", damage: "3d10", ap: "4", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/2oHfVXb.png" },
+            { id: "rpg", name: "RPG Launcher", range: "36/72/144", damage: "6d10", ap: "6", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/yyVsqkD.png" },
+            { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "—", shots: "1", minStr: "d6", icon: "https://i.imgur.com/9a4Uprg.png" },
+            { id: "mine", name: "SLAM Mine", range: "Contact", damage: "5d6", ap: "3", rof: "—", shots: "1", minStr: "d4", icon: "https://i.imgur.com/38WpCXz.png" },
+            { id: "grav-punt", name: "Gravity Gun (Punt)", range: "6/12/24", damage: "Varies", ap: "Varies", rof: "1", shots: "—", minStr: "d6", icon: "https://i.imgur.com/fAMbiF1.png" },
+            { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "2", shots: "Unlimited", minStr: "d6", icon: "https://i.imgur.com/vhkAPmf.png" },
+            { id: "bugbait", name: "Bugbait", range: "12/24/48", damage: "Special", ap: "—", rof: "1", shots: "1", minStr: "d4", icon: "https://i.imgur.com/gwitRFd.png" }
+        ];
+
+        // ==========================================
+        // 3. DEFAULT CHARACTER DATA
         // ==========================================
         const defaultData = {
             "katey-commons": {
-                name: "Katey Commons",
-                bennies: 3,
+                name: "Katey Commons", bennies: 3, weapons: [],
                 attributes: { Agility: {die:"6", mod:"+0"}, Smarts: {die:"8", mod:"+0"}, Spirit: {die:"8", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"8", mod:"+0"} },
                 skills: { Athletics: {die:"6", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Electronics: {die:"8", mod:"+0"}, Fighting: {die:"6", mod:"+0"}, Hacking: {die:"6", mod:"+0"}, Healing: {die:"8", mod:"+0"}, Notice: {die:"6", mod:"+0"}, Persuasion: {die:"6", mod:"+0"}, Repair: {die:"8", mod:"+0"}, Shooting: {die:"4", mod:"+0"}, Stealth: {die:"6", mod:"+0"} },
                 derived: { pace: "6", parry: "5", toughness: "5" },
@@ -260,8 +403,7 @@
                 gear: "Cyberware [$20000/20000, Strain 6/8]:\n- Data Jack [$5000, 1]\n- Enhanced Hearing [$5000, 1]\n- Extra Limbs x2 [$10000, 4]\n\nAdvance History:\n1. Mr. Fix It\n2. Spirit d8\n3. Healer\n4. Vigor d8"
             },
             "vesa-novik": {
-                name: "Vesa Novik",
-                bennies: 3,
+                name: "Vesa Novik", bennies: 3, weapons: [],
                 attributes: { Agility: {die:"12", mod:"+0"}, Smarts: {die:"6", mod:"+0"}, Spirit: {die:"4", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"6", mod:"+0"} },
                 skills: { Athletics: {die:"6", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Stealth: {die:"8", mod:"+0"}, Notice: {die:"8", mod:"+0"}, Persuasion: {die:"4", mod:"+0"}, Healing: {die:"6", mod:"+0"}, Driving: {die:"8", mod:"+0"}, Shooting: {die:"10", mod:"+0"}, Survival: {die:"6", mod:"+0"} },
                 derived: { pace: "8", parry: "2", toughness: "5" },
@@ -269,8 +411,7 @@
                 gear: "Advance History:\n1. Agility +1 [To 4]\n2. Skill increase: Shooting [3 to 4], Driving [2 to 3]\n3. Edge: Fleet-Footed\n4. Edge: Free-Runner"
             },
             "trombley-hicks": {
-                name: "Trombley Hicks",
-                bennies: 3,
+                name: "Trombley Hicks", bennies: 3, weapons: [],
                 attributes: { Agility: {die:"10", mod:"+0"}, Smarts: {die:"6", mod:"+0"}, Spirit: {die:"6", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"8", mod:"+0"} },
                 skills: { Athletics: {die:"10", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Fighting: {die:"8", mod:"+0"}, Notice: {die:"6", mod:"+0"}, Persuasion: {die:"4", mod:"+0"}, Research: {die:"4", mod:"+0"}, Stealth: {die:"10", mod:"+0"}, Survival: {die:"6", mod:"+0"}, Thievery: {die:"8", mod:"+0"} },
                 derived: { pace: "6", parry: "6", toughness: "6" },
@@ -281,7 +422,7 @@
 
         let activeCharId = currentUser === "Administrator" ? "katey-commons" : currentUser.toLowerCase().replace(' ', '-');
         let charData = {};
-        let globalState = { characters: {}, webhook: "" };
+        let globalState = { characters: {}, webhook: "", presets: defaultPresets };
         let pendingRoll = null;
         let isEditing = false; 
 
@@ -295,7 +436,7 @@
         }
 
         // ==========================================
-        // 3. EVENT DRIVEN REAL-TIME SYNCHRONIZATION
+        // 3. REAL-TIME EVENT-DRIVEN DATABASE SYNC
         // ==========================================
         function init() {
             document.getElementById('char-name-display').innerText = "CONNECTING TO COGNITIVE ARRAY...";
@@ -305,17 +446,21 @@
                     const data = snapshot.val();
                     if (data) {
                         globalState = data;
+                        if (!globalState.presets) globalState.presets = defaultPresets;
                         if (!isEditing) {
                             loadCharacter();
+                            if (currentUser === "Administrator") {
+                                renderMasterPresets();
+                            }
                         }
                     } else {
-                        globalState = { characters: defaultData, webhook: "" };
+                        globalState = { characters: defaultData, webhook: "", presets: defaultPresets };
                         set(ref(db, 'campaignState'), globalState);
                         loadCharacter();
                     }
                 });
             } else {
-                globalState = JSON.parse(localStorage.getItem('localFallbackDB')) || { characters: defaultData, webhook: "" };
+                globalState = JSON.parse(localStorage.getItem('localFallbackDB')) || { characters: defaultData, webhook: "", presets: defaultPresets };
                 loadCharacter();
             }
         }
@@ -327,16 +472,16 @@
                 charData = JSON.parse(JSON.stringify(defaultData[activeCharId]));
             }
             
-            // Normalize older database versions if bennies is undefined
-            if (charData.bennies === undefined) {
-                charData.bennies = 3;
-            }
+            // Normalize data models
+            if (charData.bennies === undefined) charData.bennies = 3;
+            if (!charData.weapons) charData.weapons = [];
 
             document.getElementById('char-name-display').innerText = `SUBJECT: ${charData.name.toUpperCase()}`;
             if (currentUser === "Administrator" && globalState.webhook) {
                 document.getElementById('discord-webhook').value = globalState.webhook;
             }
             renderSheet();
+            renderWeapons();
         }
 
         async function saveCharacter() {
@@ -351,28 +496,17 @@
             setTimeout(() => { document.getElementById('save-status').innerText = ""; }, 1500);
         }
 
-        // Admin controls
-        if (currentUser === "Administrator") {
-            document.getElementById('admin-controls').style.display = 'block';
-            document.getElementById('admin-char-select').addEventListener('change', (e) => {
-                activeCharId = e.target.value;
-                loadCharacter();
-            });
-            document.getElementById('save-webhook').addEventListener('click', async () => {
-                let url = document.getElementById('discord-webhook').value;
-                if (isFirebaseConfigured) {
-                    await set(ref(db, 'campaignState/webhook'), url);
-                } else {
-                    globalState.webhook = url;
-                    localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
-                }
-                logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
-            });
+        async function saveGlobalPresets() {
+            if (isFirebaseConfigured) {
+                await set(ref(db, 'campaignState/presets'), globalState.presets);
+            } else {
+                localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+            }
         }
 
-        // Focus trackers to prevent incoming writes from overwriting current keystrokes
+        // Focus listeners to prevent cursor bouncing
         document.addEventListener('focusin', (e) => {
-            if (e.target.classList.contains('editable') || e.target.classList.contains('edit-area')) {
+            if (e.target.classList.contains('editable') || e.target.classList.contains('edit-area') || e.target.classList.contains('preset-edit')) {
                 isEditing = true;
             }
         });
@@ -380,25 +514,23 @@
             isEditing = false;
         });
 
-        // Syncable Benny adjustments
         async function adjustBennies(amount) {
-            if (charData.bennies === undefined) charData.bennies = 3;
-            let val = charData.bennies + amount;
-            if (val < 0) val = 0; // Bennies cannot be negative
+            let val = (charData.bennies || 0) + amount;
+            if (val < 0) val = 0;
             charData.bennies = val;
             document.getElementById('benny-count').innerText = val;
             await saveCharacter();
         }
 
         // ==========================================
-        // 4. SHEET RENDERING & DYNAMIC EDITS
+        // 4. UI COMPONENT RENDERING (SHEET & WEAPONS)
         // ==========================================
         function renderSheet() {
             const attrContainer = document.getElementById('attributes-container');
             const skillContainer = document.getElementById('skills-container');
             attrContainer.innerHTML = ''; skillContainer.innerHTML = '';
 
-            document.getElementById('benny-count').innerText = charData.bennies !== undefined ? charData.bennies : 3;
+            document.getElementById('benny-count').innerText = charData.bennies;
 
             for (let [attr, data] of Object.entries(charData.attributes)) {
                 attrContainer.innerHTML += `
@@ -483,29 +615,219 @@
             }
         }
 
-        document.getElementById('clear-term-btn').addEventListener('click', () => {
-            document.getElementById('roll-terminal').innerHTML = '<div>> TERMINAL LOG CLEARED...</div>';
-        });
+        // ==========================================
+        // 5. TACTICAL WEAPONS MANAGEMENT & HUD
+        // ==========================================
+        function renderWeapons() {
+            const container = document.getElementById('weapons-list-container');
+            container.innerHTML = '';
 
-        // ==========================================
-        // 5. ROLL LOGIC & TARGET NUMBER MODAL
-        // ==========================================
-        function prepareRoll(name, cat) {
-            pendingRoll = { name, cat };
-            document.getElementById('tn-input').value = "4"; 
-            document.getElementById('tn-modal').style.display = 'block';
+            if (charData.weapons.length === 0) {
+                container.innerHTML = `<div style="text-align: center; font-style: italic; opacity: 0.6; padding: 20px;">[ NO ARMAMENT MOUNTED TO SYSTEM ]</div>`;
+                return;
+            }
+
+            charData.weapons.forEach((w, index) => {
+                container.innerHTML += `
+                    <div class="weapon-card">
+                        <img class="weapon-icon" src="${w.icon || 'https://i.imgur.com/niLzrfW.png'}" alt="${w.name}">
+                        <div class="weapon-details">
+                            <div><b>${w.name.toUpperCase()}</b></div>
+                            <div>Range: <i>${w.range}</i></div>
+                            <div>Damage: <b>${w.damage}</b></div>
+                            <div>AP: <i>${w.ap}</i></div>
+                            <div>RoF: <i>${w.rof}</i></div>
+                            <div>Shots: <i>${w.shots}</i></div>
+                            <div>Min Str: <i>${w.minStr}</i></div>
+                        </div>
+                        <div class="weapon-actions">
+                            <button class="die-btn" onclick="rollWeaponAttack('${w.name}', '${w.range}')">ATTACK</button>
+                            <button class="die-btn" onclick="rollWeaponDamage('${w.name}', '${w.damage}')">DAMAGE</button>
+                            <button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
+                        </div>
+                    </div>`;
+            });
         }
 
-        document.getElementById('tn-btn-cancel').addEventListener('click', () => {
-            document.getElementById('tn-modal').style.display = 'none';
-            pendingRoll = null;
+        // Modal triggers for equipping weapons
+        function openEquipModal() {
+            const select = document.getElementById('equip-weapon-select');
+            select.innerHTML = '';
+            
+            globalState.presets.forEach(p => {
+                select.innerHTML += `<option value="${p.id}">${p.name} (DMG: ${p.damage} / RNG: ${p.range})</option>`;
+            });
+
+            document.getElementById('weapon-add-modal').style.display = 'block';
+        }
+
+        document.getElementById('equip-cancel-btn').addEventListener('click', () => {
+            document.getElementById('weapon-add-modal').style.display = 'none';
         });
 
-        document.getElementById('tn-btn-roll').addEventListener('click', () => {
-            let tn = parseInt(document.getElementById('tn-input').value) || 4;
-            document.getElementById('tn-modal').style.display = 'none';
-            executeRoll(pendingRoll.name, pendingRoll.cat, tn);
+        document.getElementById('equip-confirm-btn').addEventListener('click', () => {
+            let id = document.getElementById('equip-weapon-select').value;
+            let preset = globalState.presets.find(p => p.id === id);
+            
+            if (preset) {
+                charData.weapons.push(JSON.parse(JSON.stringify(preset))); // Clone preset
+                saveCharacter();
+                renderWeapons();
+            }
+            document.getElementById('weapon-add-modal').style.display = 'none';
         });
+
+        function removeWeaponFromCharacter(index) {
+            charData.weapons.splice(index, 1);
+            saveCharacter();
+            renderWeapons();
+        }
+
+        // ==========================================
+        // 6. MASTER PRESETS GENERATOR (ADMIN ONLY)
+        // ==========================================
+        function renderMasterPresets() {
+            document.getElementById('master-presets-panel').style.display = 'block';
+            const tbody = document.getElementById('master-presets-body');
+            tbody.innerHTML = '';
+
+            globalState.presets.forEach((p, index) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="text-align:center;"><img style="width: 50px; height: 25px; object-fit: contain; filter: drop-shadow(0 0 1px var(--theme-color));" src="${p.icon}"></td>
+                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="name">${p.name}</td>
+                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="range">${p.range}</td>
+                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="damage">${p.damage}</td>
+                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="ap">${p.ap}</td>
+                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="rof">${p.rof}</td>
+                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="shots">${p.shots}</td>
+                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="minStr">${p.minStr}</td>
+                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="icon" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.icon}</td>
+                        <td><button class="die-btn del-btn" onclick="deletePreset(${index})">DELETE</button></td>
+                    </tr>`;
+            });
+
+            // Bind master updates
+            document.querySelectorAll('.preset-edit').forEach(el => {
+                el.addEventListener('blur', async (e) => {
+                    let idx = e.target.dataset.index;
+                    let field = e.target.dataset.field;
+                    globalState.presets[idx][field] = e.target.innerText.trim();
+                    await saveGlobalPresets();
+                });
+            });
+        }
+
+        function addCustomPreset() {
+            let id = "custom_" + Date.now();
+            globalState.presets.push({
+                id: id, name: "New Weapon", range: "Melee", damage: "2d6", ap: "0", rof: "1", shots: "—", minStr: "d4", icon: "https://i.imgur.com/niLzrfW.png"
+            });
+            saveGlobalPresets();
+            renderMasterPresets();
+        }
+
+        function deletePreset(index) {
+            if (confirm("WARNING: Instigate erasure of this Weapon Preset from global system archives?")) {
+                globalState.presets.splice(index, 1);
+                saveGlobalPresets();
+                renderMasterPresets();
+            }
+        }
+
+        // ==========================================
+        // 7. WEAPON ATTACK & EXPLODING DAMAGE ROLLS
+        // ==========================================
+        function rollWeaponAttack(weaponName, rangeStr) {
+            // Determine rolling stat: Melee -> Fighting, Ranged -> Shooting
+            let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
+            let skillNeeded = isMelee ? "Fighting" : "Shooting";
+
+            if (charData.skills[skillNeeded]) {
+                prepareRoll(skillNeeded, "skills");
+            } else {
+                // System forces standard SWADE Unskilled attempt
+                logToTerminal(`> SKILL [${skillNeeded.toUpperCase()}] UNAVAILABLE. CONVERTING TO UNSKILLED ACTION...`);
+                prepareRoll("Unskilled Attempt", null);
+            }
+        }
+
+        // Parser supporting nested standard SWADE math configurations
+        function parseDamage(damageStr) {
+            let cleaned = damageStr.replace(/\s+/g, '').toLowerCase();
+            let match = cleaned.match(/(\d+)d(\d+)(?:\+(\d+))?/);
+            if (match) {
+                return {
+                    count: parseInt(match[1]),
+                    sides: parseInt(match[2]),
+                    modifier: parseInt(match[3]) || 0
+                };
+            }
+            return null;
+        }
+
+        async function rollWeaponDamage(weaponName, damageStr) {
+            let parsed = parseDamage(damageStr);
+            let total = 0;
+            let rolls = [];
+            let displayString = "";
+
+            if (!parsed) {
+                // If special damage formula is detected, allow prompt input
+                let customQuery = prompt(`Enter custom roll calculation for ${weaponName}:`, "2d8");
+                if (!customQuery) return;
+                parsed = parseDamage(customQuery);
+                if (!parsed) {
+                    alert("INVALID COMPUTATION FORMULA.");
+                    return;
+                }
+            }
+
+            // Exponent/Explosion loops for weapon damage dice
+            for (let i = 0; i < parsed.count; i++) {
+                let r = rollExploding(parsed.sides);
+                total += r.total;
+                rolls.push(...r.history);
+            }
+            total += parsed.modifier;
+
+            let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : "";
+            displayString = `${rolls.join(' + ')}${modStr} = **${total}**`;
+
+            let termLog = `> ${charData.name} dealt damage with ${weaponName.toUpperCase()}<br>`;
+            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
+            logToTerminal(termLog);
+
+            // Fetch live state for Webhook output
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} rolled damage with ${weaponName}`,
+                    description: `**Damage Total: ${total}**`,
+                    color: 0xff3333,
+                    fields: [
+                        { name: "Dice History", value: `${rolls.join(' + ')}`, inline: true }
+                    ]
+                };
+                if (parsed.modifier !== 0) embed.fields.push({ name: "Modifier", value: `${parsed.modifier > 0 ? '+' : ''}${parsed.modifier}`, inline: true });
+
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
+            }
+        }
+
+        // ==========================================
+        // 8. GLOBAL NAV TABS & HOOK TRIGGERS
+        // ==========================================
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active-tab'));
+            document.querySelectorAll('.tab-content').forEach(content => content.style.display = 'none');
+
+            document.getElementById(`tab-${tabId}`).classList.add('active-tab');
+            document.getElementById(`section-${tabId}`).style.display = 'block';
+            scrollToBottom();
+        }
 
         function rollExploding(sides) {
             let total = 0; let currentRoll; let history = [];
@@ -521,7 +843,6 @@
             let sides, modifier;
             
             if (cat === null) {
-                // SWADE Unskilled attempt overrides: rolls a d4 and subtracts 2
                 sides = 4;
                 modifier = -2;
             } else {
@@ -557,7 +878,6 @@
             termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> ${modStrDisplay} -> ${outcomeText}`;
             logToTerminal(termLog);
 
-            // Fetch the webhook live directly from our local globalState cache
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name} rolled ${name}`,
@@ -585,10 +905,25 @@
             term.scrollTop = term.scrollHeight;
         }
 
-        // Expose modules to inline HTML onclick handles
+        function prepareRoll(name, cat) {
+            pendingRoll = { name, cat };
+            document.getElementById('tn-input').value = "4"; 
+            document.getElementById('tn-modal').style.display = 'block';
+        }
+
+        function scrollToBottom() { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
+
+        // Bind internal modular scope to standard global elements
         window.prepareRoll = prepareRoll;
         window.deleteSkill = deleteSkill;
         window.adjustBennies = adjustBennies;
+        window.switchTab = switchTab;
+        window.openEquipModal = openEquipModal;
+        window.removeWeaponFromCharacter = removeWeaponFromCharacter;
+        window.deletePreset = deletePreset;
+        window.addCustomPreset = addCustomPreset;
+        window.rollWeaponAttack = rollWeaponAttack;
+        window.rollWeaponDamage = rollWeaponDamage;
 
         init();
     </script>
