@@ -510,6 +510,24 @@
             logToTerminal("<span style='color:red;'>[ WARNING: FIREBASE CONFIGURATION MISSING. EDIT CODES TO SYNC. ]</span>");
         }
 
+        // SWADE Helper: Determine ammunition categorization
+        function getAmmoType(weaponName) {
+            const name = weaponName.toLowerCase();
+            if (name.includes("crowbar") || name.includes("stunstick") || name.includes("gravity gun")) {
+                return "none"; // Melee or unlimited special items
+            }
+            if (name.includes("orb") || name.includes("rpg") || name.includes("grenade") || name.includes("slam") || name.includes("bugbait")) {
+                return "strong"; // Syncable numeric counts
+            }
+            return "ballistic"; // standard range tier options
+        }
+
+        function parseChamberMax(shotsStr) {
+            if (!shotsStr || shotsStr === "—" || shotsStr.toLowerCase().includes("unlimited")) return 0;
+            let match = shotsStr.match(/\d+/);
+            return match ? parseInt(match[0]) : 0;
+        }
+
         // ==========================================
         // 3. REAL-TIME EVENT-DRIVEN DATABASE SYNC
         // ==========================================
@@ -551,6 +569,21 @@
             if (charData.bennies === undefined) charData.bennies = 3;
             if (!charData.weapons) charData.weapons = [];
 
+            // Normalize weapons with new ammo models securely
+            charData.weapons.forEach(w => {
+                if (w.chamberMax === undefined) {
+                    w.chamberMax = parseChamberMax(w.shots);
+                    w.chamberCurrent = w.chamberMax;
+                }
+                let type = getAmmoType(w.name);
+                if (type === "ballistic" && w.ammoTier === undefined) {
+                    w.ammoTier = "Full";
+                }
+                if (type === "strong" && w.ammoCount === undefined) {
+                    w.ammoCount = 1; // Default reserve counts
+                }
+            });
+
             document.getElementById('char-name-display').innerText = `SUBJECT: ${charData.name.toUpperCase()}`;
             if (isAdmin && globalState.webhook) {
                 document.getElementById('discord-webhook').value = globalState.webhook;
@@ -581,7 +614,7 @@
 
         // Focus listeners to prevent cursor bouncing
         document.addEventListener('focusin', (e) => {
-            if (e.target.classList.contains('editable') || e.target.classList.contains('edit-area') || e.target.classList.contains('preset-edit')) {
+            if (e.target.classList.contains('editable') || e.target.classList.contains('edit-area') || e.target.classList.contains('preset-edit') || e.target.classList.contains('chamber-current-edit')) {
                 isEditing = true;
             }
         });
@@ -600,17 +633,11 @@
         // SWADE Helper: Determine if character Strength die is lower than weapon requirements
         function evaluateMinStr(weaponMinStr) {
             if (!weaponMinStr || weaponMinStr === "—" || weaponMinStr === "-") return false;
-            
-            // Get character's base strength die
             let currentStrStr = charData.attributes.Strength ? charData.attributes.Strength.die : "4";
             let currentStrVal = parseInt(currentStrStr) || 4;
-            
-            // Get weapon requirement
             let reqStrMatch = weaponMinStr.match(/d(\d+)/i);
             if (!reqStrMatch) return false;
             let reqStrVal = parseInt(reqStrMatch[1]);
-            
-            // Compare die sizes (d4=4, d6=6, d8=8, etc.)
             return currentStrVal < reqStrVal;
         }
 
@@ -721,18 +748,23 @@
             charData.weapons.forEach((w, index) => {
                 // Determine if Strength requirement is satisfied
                 let minStrAlert = evaluateMinStr(w.minStr) ? `<span class="min-str-alert">[!] MIN STR REQ NOT MET</span>` : '';
+                
+                // Real-time HUD stats displaying range modifications and ammunition capacity
+                let statsLayout = `
+                    <div>Range: <i>${w.range}</i></div>
+                    <div>Damage: <b>${w.damage}</b></div>
+                    <div>AP: <i>${w.ap}</i></div>
+                    <div>RoF: <i>${w.rof}</i></div>
+                    <div>Shots: <i>${w.shots}</i></div>
+                    <div>Min Str: <i>${w.minStr}</i></div>
+                `;
 
                 container.innerHTML += `
                     <div class="weapon-card">
                         <img class="weapon-icon" src="${w.icon || 'https://i.imgur.com/niLzrfW.png'}" alt="${w.name}">
                         <div class="weapon-details">
-                            <div><b>${w.name.toUpperCase()}</b>${minStrAlert}</div>
-                            <div>Range: <i>${w.range}</i></div>
-                            <div>Damage: <b>${w.damage}</b></div>
-                            <div>AP: <i>${w.ap}</i></div>
-                            <div>RoF: <i>${w.rof}</i></div>
-                            <div>Shots: <i>${w.shots}</i></div>
-                            <div>Min Str: <i>${w.minStr}</i></div>
+                            <div style="grid-column: span 3;"><b>${w.name.toUpperCase()}</b>${minStrAlert}</div>
+                            ${statsLayout(w)}
                         </div>
                         <div class="weapon-actions">
                             <button class="die-btn" onclick="rollWeaponAttack('${w.name}', '${w.range}')">ATTACK</button>
@@ -741,6 +773,84 @@
                         </div>
                     </div>`;
             });
+
+            // Bind Chamber manual edits
+            document.querySelectorAll('.chamber-current-edit').forEach(el => {
+                el.addEventListener('blur', (e) => {
+                    let idx = parseInt(e.target.dataset.index);
+                    let val = parseInt(e.target.innerText) || 0;
+                    let weapon = charData.weapons[idx];
+                    weapon.chamberCurrent = Math.min(weapon.chamberMax, Math.max(0, val));
+                    saveCharacter();
+                    renderWeapons();
+                });
+            });
+        }
+
+        // Sub-layout rendering weapon statistics + Ammo system widgets
+        function statsLayout(w) {
+            let ammoType = getAmmoType(w.name);
+            let index = charData.weapons.indexOf(w);
+            let chamberMarkup = "";
+
+            if (w.chamberMax > 0) {
+                let currentVal = w.chamberCurrent !== undefined ? w.chamberCurrent : w.chamberMax;
+                let reloadBtn = currentVal === 0 ? `<button class="die-btn" onclick="reloadWeapon(${index})" style="margin-left:5px; border:none; color:#ff9900; padding:1px 5px;">RELOAD</button>` : '';
+                chamberMarkup = `
+                    <div>Chamber: 
+                        <span class="editable chamber-current-edit" data-index="${index}" contenteditable="true" style="font-weight:bold; border-bottom:1px dashed var(--theme-color);">${currentVal}</span>/${w.chamberMax}${reloadBtn}
+                    </div>
+                `;
+            } else {
+                chamberMarkup = `<div>Chamber: <i>—</i></div>`;
+            }
+
+            let reserveMarkup = "";
+            if (ammoType === "ballistic") {
+                let currentTier = w.ammoTier || "Full";
+                let tierClass = currentTier === "Out" ? "style='color:#ff3333; font-weight:bold;'" : "style='font-weight:bold;'";
+                
+                if (isAdmin) {
+                    let options = ["Full", "High", "OK", "Low", "Very Low", "Out"].map(tier => 
+                        `<option value="${tier}" ${currentTier === tier ? 'selected' : ''}>${tier}</option>`
+                    ).join("");
+                    reserveMarkup = `
+                        <div style="grid-column: span 2;">Reserve: 
+                            <select class="admin-input" style="width:100px; padding:2px; font-size:0.95em;" onchange="updateWeaponAmmoTier(${index}, this.value)">${options}</select>
+                            <button class="die-btn" style="border:none; margin-left:3px; padding:1px 5px;" onclick="checkAmmoRoll(${index})">CHECK AMMO</button>
+                        </div>
+                    `;
+                } else {
+                    reserveMarkup = `<div style="grid-column: span 2;">Reserve: <span ${tierClass}>${currentTier}</span></div>`;
+                }
+            } else if (ammoType === "strong") {
+                let currentCount = w.ammoCount !== undefined ? w.ammoCount : 1;
+                let countClass = currentCount === 0 ? "style='color:#ff3333; font-weight:bold;'" : "style='font-weight:bold;'";
+                
+                if (isAdmin) {
+                    reserveMarkup = `
+                        <div style="grid-column: span 2;">Projectiles: 
+                            <input type="number" class="admin-input" style="width:50px; padding:2px; font-size:0.95em;" value="${currentCount}" onchange="updateWeaponAmmoCount(${index}, this.value)">
+                            <button class="die-btn" style="border:none; margin-left:3px; padding:1px 5px;" onclick="checkAmmoRoll(${index})">CHECK AMMO</button>
+                        </div>
+                    `;
+                } else {
+                    reserveMarkup = `<div style="grid-column: span 2;">Projectiles: <span ${countClass}>${currentCount}</span></div>`;
+                }
+            } else {
+                reserveMarkup = `<div style="grid-column: span 2;">Reserve: <i>—</i></div>`;
+            }
+
+            return `
+                <div>Rng: <i>${w.range}</i></div>
+                <div>AP: <i>${w.ap}</i></div>
+                <div>Min Str: <i>${w.minStr}</i></div>
+                <div>Dmg: <b>${w.damage}</b></div>
+                <div>RoF: <i>${w.rof}</i></div>
+                <div>Max Shots: <i>${w.shots}</i></div>
+                ${chamberMarkup}
+                ${reserveMarkup}
+            `;
         }
 
         // Modal triggers for equipping weapons
@@ -817,22 +927,45 @@
         // 7. WEAPON ATTACK & EXPLODING DAMAGE ROLLS
         // ==========================================
         function rollWeaponAttack(weaponName, rangeStr) {
+            let weapon = charData.weapons.find(w => w.name === weaponName);
+            if (!weapon) return;
+
             let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
+            let ammoType = getAmmoType(weapon.name);
+
+            // Out of Ammunition Verification checks
+            if (!isMelee) {
+                let isOut = (ammoType === "ballistic" && weapon.ammoTier === "Out") || 
+                            (ammoType === "strong" && (weapon.ammoCount || 0) <= 0 && (weapon.chamberCurrent || 0) <= 0);
+
+                if (isOut) {
+                    logToTerminal(`> ERROR: Cannot execute attack. ${weapon.name.toUpperCase()} is completely depleted of ammunition!`);
+                    sendOutOfAmmoEmbed(weapon);
+                    return;
+                }
+
+                // Verify chamber status
+                if (weapon.chamberMax > 0 && (weapon.chamberCurrent || 0) <= 0) {
+                    logToTerminal(`> WARNING: ${weapon.name.toUpperCase()} chamber is empty. reloading required.`);
+                    return;
+                }
+            }
+
             let isThrown = rangeStr.toLowerCase().includes("throw") || weaponName.toLowerCase().includes("grenade");
             
             // SWADE: Melee uses Fighting, Thrown uses Athletics, Gunfire/Bows use Shooting
             let skillNeeded = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
-            let weaponObj = charData.weapons.find(w => w.name === weaponName);
 
             if (charData.skills[skillNeeded]) {
-                prepareRoll(skillNeeded, "skills", weaponObj);
+                prepareRoll(skillNeeded, "skills", weapon);
             } else {
+                // System forces standard SWADE Unskilled attempt
                 logToTerminal(`> SKILL [${skillNeeded.toUpperCase()}] UNAVAILABLE. CONVERTING TO UNSKILLED ACTION...`);
-                prepareRoll("Unskilled Attempt", null, weaponObj);
+                prepareRoll("Unskilled Attempt", null, weapon);
             }
         }
 
-        // Parser supporting standard SWADE math calculations
+        // Parser supporting nested standard SWADE math configurations
         function parseDamage(damageStr) {
             let cleaned = damageStr.replace(/\s+/g, '').toLowerCase();
             let match = cleaned.match(/(\d+)d(\d+)(?:\+(\d+))?/);
@@ -847,6 +980,17 @@
         }
 
         async function rollWeaponDamage(weaponName, damageStr) {
+            let weapon = charData.weapons.find(w => w.name === weaponName);
+            if (weapon) {
+                let ammoType = getAmmoType(weapon.name);
+                let isOut = (ammoType === "ballistic" && weapon.ammoTier === "Out") || 
+                            (ammoType === "strong" && (weapon.ammoCount || 0) <= 0 && (weapon.chamberCurrent || 0) <= 0);
+                if (isOut) {
+                    alert("UNABLE TO PERFORM DAMAGE CALCULATION: WEAPON ENTIRELY DEPLETED OF AMMUNITION.");
+                    return;
+                }
+            }
+
             let parsed = parseDamage(damageStr);
             let total = 0;
             let rolls = [];
@@ -904,7 +1048,6 @@
                 }
 
                 // Add Weapon specs and Image
-                let weapon = charData.weapons.find(w => w.name === weaponName);
                 if (weapon) {
                     embed.thumbnail = { url: weapon.icon };
                     embed.fields.push({
@@ -1051,9 +1194,23 @@
             let hitWithRaise = results.some(r => r.hasRaise);
             if (activeWeaponContext && hitWithRaise) {
                 localStorage.setItem(`raise_bonus_${activeWeaponContext.name}`, "true");
-                logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${activeWeaponContext.name} will include +1d6 raise bonus.`);
+                logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${activeWeaponContext.name} will automatically include +1d6 raise bonus.`);
             } else if (activeWeaponContext) {
                 localStorage.removeItem(`raise_bonus_${activeWeaponContext.name}`);
+            }
+
+            // Deduct shots from weapon chamber capacity automatically
+            if (activeWeaponContext) {
+                let wIndex = charData.weapons.findIndex(w => w.name === activeWeaponContext.name);
+                if (wIndex !== -1) {
+                    let weapon = charData.weapons[wIndex];
+                    if (weapon.chamberMax > 0) {
+                        weapon.chamberCurrent = Math.max(0, (weapon.chamberCurrent || 0) - shotsFired);
+                        charData.weapons[wIndex] = weapon;
+                        await saveCharacter();
+                        renderWeapons();
+                    }
+                }
             }
 
             renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail);
@@ -1236,7 +1393,15 @@
             let preset = globalState.presets.find(p => p.id === id);
             
             if (preset) {
-                charData.weapons.push(JSON.parse(JSON.stringify(preset))); // Clone preset
+                let clonedPreset = JSON.parse(JSON.stringify(preset));
+                // Fresh equipped weaponry defaults to Full tier capacity
+                clonedPreset.ammoTier = "Full";
+                clonedPreset.chamberMax = parseChamberMax(clonedPreset.shots);
+                clonedPreset.chamberCurrent = clonedPreset.chamberMax;
+                if (getAmmoType(clonedPreset.name) === "strong") {
+                    clonedPreset.ammoCount = 1;
+                }
+                charData.weapons.push(clonedPreset);
                 saveCharacter();
                 renderWeapons();
             }
@@ -1262,6 +1427,131 @@
             logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
         }
 
+        // --- OUT OF AMMUNITION NOTIFICATIONS ---
+        async function sendOutOfAmmoEmbed(weapon) {
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} - OUT OF AMMO!`,
+                    description: `Attempted to fire **${weapon.name}**, but the weapon clicked empty.`,
+                    color: 0xff3333,
+                    thumbnail: { url: weapon.icon }
+                };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) {}
+            }
+        }
+
+        async function reloadWeapon(index) {
+            let w = charData.weapons[index];
+            let ammoType = getAmmoType(w.name);
+            
+            if (ammoType === "ballistic" && w.ammoTier === "Out") {
+                logToTerminal(`> ERROR: Cannot reload ${w.name.toUpperCase()} - Reserve supply is completely depleted!`);
+                return;
+            }
+            if (ammoType === "strong" && (w.ammoCount || 0) <= 0) {
+                logToTerminal(`> ERROR: Cannot reload ${w.name.toUpperCase()} - No projectiles remaining in inventory!`);
+                return;
+            }
+
+            if (ammoType === "strong") {
+                w.ammoCount = Math.max(0, (w.ammoCount || 1) - 1);
+            }
+
+            w.chamberCurrent = w.chamberMax;
+            await saveCharacter();
+            renderWeapons();
+
+            logToTerminal(`> ${charData.name} reloaded ${w.name.toUpperCase()}.`);
+
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} is reloading!`,
+                    description: `Reloaded **${w.name}** to max capacity (${w.chamberMax}/${w.chamberMax}).`,
+                    color: 0x00ccff,
+                    thumbnail: { url: w.icon }
+                };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) {}
+            }
+        }
+
+        async function updateWeaponAmmoTier(index, value) {
+            charData.weapons[index].ammoTier = value;
+            await saveCharacter();
+            renderWeapons();
+        }
+
+        async function updateWeaponAmmoCount(index, value) {
+            charData.weapons[index].ammoCount = parseInt(value) || 0;
+            await saveCharacter();
+            renderWeapons();
+        }
+
+        // GM Supply check: Roll player's skill to see if weapon reserve degrades
+        async function checkAmmoRoll(index) {
+            let w = charData.weapons[index];
+            let isMelee = w.range.toLowerCase().includes("melee") || w.range.toLowerCase().includes("contact");
+            let isThrown = w.range.toLowerCase().includes("throw") || w.name.toLowerCase().includes("grenade");
+            let skillNeeded = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
+
+            let skillDie = 4;
+            let skillMod = 0;
+            let isUnskilled = true;
+
+            if (charData.skills[skillNeeded]) {
+                skillDie = parseInt(charData.skills[skillNeeded].die) || 4;
+                skillMod = parseInt(charData.skills[skillNeeded].mod) || 0;
+                isUnskilled = false;
+            } else {
+                skillMod = -2;
+            }
+
+            let traitRoll = rollExploding(skillDie);
+            let wildRoll = rollExploding(6);
+            let total = Math.max(traitRoll.total, wildRoll.total) + skillMod;
+            let success = total >= 4;
+
+            let ammoType = getAmmoType(w.name);
+            let statusMsg = "";
+            let color = 0x00ff00;
+
+            if (!success) {
+                color = 0xff3333;
+                if (ammoType === "ballistic") {
+                    const tiers = ["Full", "High", "OK", "Low", "Very Low", "Out"];
+                    let currentIdx = tiers.indexOf(w.ammoTier || "Full");
+                    if (currentIdx < tiers.length - 1) {
+                        w.ammoTier = tiers[currentIdx + 1];
+                    }
+                    statusMsg = `Supply check FAILED (Result: ${total}). **${w.name}** total supply level dropped to **${w.ammoTier}**!`;
+                } else if (ammoType === "strong") {
+                    w.ammoCount = Math.max(0, (w.ammoCount || 0) - 1);
+                    statusMsg = `Supply check FAILED (Result: ${total}). **${w.name}** remaining inventory dropped to **${w.ammoCount}**!`;
+                }
+            } else {
+                statusMsg = `Supply check SUCCEEDED (Result: ${total}). **${w.name}** supply level maintained.`;
+            }
+
+            await saveCharacter();
+            renderWeapons();
+            logToTerminal(`> GM Supply Check: ${statusMsg}`);
+
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `GM Supply Check: ${charData.name} - ${w.name}`,
+                    description: statusMsg,
+                    color: color,
+                    thumbnail: { url: w.icon }
+                };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) {}
+            }
+        }
+
         // Bind internal modular scope to standard global elements
         window.prepareRoll = prepareRoll;
         window.deleteSkill = deleteSkill;
@@ -1281,6 +1571,11 @@
         window.saveWebhook = saveWebhook;
         window.updateRangePenalty = updateRangePenalty;
         window.updateRecoilPenalty = updateRecoilPenalty;
+        window.getAmmoType = getAmmoType;
+        window.reloadWeapon = reloadWeapon;
+        window.updateWeaponAmmoTier = updateWeaponAmmoTier;
+        window.updateWeaponAmmoCount = updateWeaponAmmoCount;
+        window.checkAmmoRoll = checkAmmoRoll;
 
         // Admin controls
         if (isAdmin) {
