@@ -12,6 +12,7 @@
         if (!currentUser) window.location.replace("/");
     </script>
     <style>
+        /* FIX: Prevents overlap with the fixed settings button across all resolutions */
         #top-nav {
             display: flex;
             justify-content: space-between;
@@ -154,7 +155,12 @@
         .del-btn:hover { background: #ff3333; color: var(--bg-color); }
         .del-btn::before { content: ""; } .del-btn::after { content: ""; }
 
-        /* CRT Terminal Logs */
+        /* FIX: Styled priority layout to keep terminal layers strictly above standard tab pages */
+        .term-header, #roll-terminal {
+            position: relative !important;
+            z-index: 999998 !important; 
+            pointer-events: auto !important;
+        }
         .term-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px;}
         #roll-terminal {
             border: 1px solid var(--theme-color);
@@ -184,12 +190,21 @@
             text-align: left;
         }
 
-        /* Modals (Fixed z-index and clickability contexts defensively) */
+        /* FIX: Modals Stacking Context & Pointer Overrides */
         #tn-modal, #weapon-add-modal {
-            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px;
-            z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.9);
-            width: max-content; min-width: 350px;
+            display: none; 
+            position: fixed !important; 
+            top: 50% !important; 
+            left: 50% !important; 
+            transform: translate(-50%, -50%) !important;
+            border: 2px solid var(--theme-color) !important; 
+            background: var(--bg-color) !important; 
+            padding: 25px !important;
+            z-index: 999999 !important; /* Highest layer index priority */
+            text-align: center !important; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.9) !important;
+            width: max-content !important; 
+            min-width: 350px !important;
             pointer-events: auto !important;
         }
         #tn-modal h3, #weapon-add-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
@@ -215,6 +230,29 @@
         <button id="tab-armory" class="tab-btn" onclick="switchTab('armory')">TACTICAL ARMORY</button>
     </div>
 
+    <!-- Target Number Modal (Interactive fixes applied) -->
+    <div id="tn-modal" style="pointer-events: auto !important;">
+        <h3>INITIATING ROLL</h3>
+        <p>Enter Target Number (TN)</p>
+        <p style="font-size:0.8em; opacity:0.7;">Note: Only modify this if the GM instructs you to.</p>
+        <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center; font-size:1.2em; pointer-events: auto !important;">
+        <div class="tn-buttons">
+            <button class="die-btn" onclick="confirmRoll()" style="pointer-events: auto !important;">CONFIRM ROLL</button>
+            <button class="die-btn" onclick="cancelRoll()" style="pointer-events: auto !important;">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- Equip Weapon Selection Modal (Interactive fixes applied) -->
+    <div id="weapon-add-modal" style="pointer-events: auto !important;">
+        <h3>EQUIP ARMAMENT</h3>
+        <p>Select weapon from master presets:</p>
+        <select id="equip-weapon-select" class="admin-input" style="width:100%; margin-bottom: 15px; pointer-events: auto !important;"></select>
+        <div class="tn-buttons">
+            <button class="die-btn" onclick="confirmEquip()" style="pointer-events: auto !important;">EQUIP WEAPON</button>
+            <button class="die-btn" onclick="cancelEquip()" style="pointer-events: auto !important;">CANCEL</button>
+        </div>
+    </div>
+
     <!-- GM Controls -->
     <div id="admin-controls">
         <select id="admin-char-select" class="admin-input">
@@ -223,7 +261,7 @@
             <option value="trombley-hicks">View: Trombley Hicks</option>
         </select>
         <input type="text" id="discord-webhook" class="admin-input" placeholder="Paste Discord Webhook URL here...">
-        <button id="save-webhook" class="die-btn" style="border:none;">SAVE URL GLOBALLY</button>
+        <button id="save-webhook" class="die-btn" style="border:none;" onclick="saveWebhook()">SAVE URL GLOBALLY</button>
     </div>
 
     <!-- Tab Section 1: DIAGNOSTICS & STATUS -->
@@ -249,7 +287,7 @@
                     <h3>SKILLS (Wildcards)</h3>
                     <div id="skills-container"></div>
                     <div style="display: flex; justify-content: space-between; margin-top: 10px; gap: 10px;">
-                        <button class="die-btn" id="add-skill-btn" style="border:none; flex-grow: 1;">+ ADD SKILL</button>
+                        <button class="die-btn" id="add-skill-btn" style="border:none; flex-grow: 1;" onclick="addSkill()">+ ADD SKILL</button>
                         <button class="die-btn" onclick="prepareRoll('Unskilled Attempt', null)" style="border:none; flex-grow: 1;">UNSKILLED ATTEMPT</button>
                     </div>
                 </div>
@@ -317,33 +355,10 @@
     <!-- Live Roll Output -->
     <div class="term-header">
         <span>> TERMINAL OUTPUT</span>
-        <button id="clear-term-btn" class="die-btn" style="border:none;">CLEAR LOG</button>
+        <button id="clear-term-btn" class="die-btn" style="border:none;" onclick="clearLog()">CLEAR LOG</button>
     </div>
     <div id="roll-terminal">
         <div>> TERMINAL READY. WAITING FOR INPUT...</div>
-    </div>
-
-    <!-- Target Number Modal (Positioned to bottom of DOM tree) -->
-    <div id="tn-modal" style="pointer-events: auto !important;">
-        <h3>INITIATING ROLL</h3>
-        <p>Enter Target Number (TN)</p>
-        <p style="font-size:0.8em; opacity:0.7;">Note: Only modify this if the GM instructs you to.</p>
-        <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center; font-size:1.2em; pointer-events: auto !important;">
-        <div class="tn-buttons">
-            <button id="tn-btn-roll" class="die-btn" style="pointer-events: auto !important;">CONFIRM ROLL</button>
-            <button id="tn-btn-cancel" class="die-btn" style="pointer-events: auto !important;">CANCEL</button>
-        </div>
-    </div>
-
-    <!-- Equip Weapon Selection Modal (Positioned to bottom of DOM tree) -->
-    <div id="weapon-add-modal" style="pointer-events: auto !important;">
-        <h3>EQUIP ARMAMENT</h3>
-        <p>Select weapon from master presets:</p>
-        <select id="equip-weapon-select" class="admin-input" style="width:100%; margin-bottom: 15px; pointer-events: auto !important;"></select>
-        <div class="tn-buttons">
-            <button id="equip-confirm-btn" class="die-btn" style="pointer-events: auto !important;">EQUIP WEAPON</button>
-            <button id="equip-cancel-btn" class="die-btn" style="pointer-events: auto !important;">CANCEL</button>
-        </div>
     </div>
 
     <script src="/settings.js"></script>
@@ -420,7 +435,7 @@
             }
         };
 
-        // Determine Admin context safely without crashing if sessionStorage/localStorage is cleared
+        // Determine Admin context securely without crashing if sessionStorage/localStorage is cleared
         const isAdmin = (currentUser === "Administrator") || window.location.pathname.includes("adminview");
         let activeCharId = "katey-commons";
         if (currentUser && !isAdmin) {
@@ -612,7 +627,6 @@
             charData.skills["New Skill"] = { die: "4", mod: "+0" };
             saveCharacter(); renderSheet();
         }
-        document.getElementById('add-skill-btn').addEventListener('click', addSkill);
 
         function deleteSkill(skillName) {
             if(confirm(`WARNING: Initialize deletion of ${skillName}?`)) {
@@ -666,22 +680,6 @@
 
             document.getElementById('weapon-add-modal').style.display = 'block';
         }
-
-        document.getElementById('equip-cancel-btn').addEventListener('click', () => {
-            document.getElementById('weapon-add-modal').style.display = 'none';
-        });
-
-        document.getElementById('equip-confirm-btn').addEventListener('click', () => {
-            let id = document.getElementById('equip-weapon-select').value;
-            let preset = globalState.presets.find(p => p.id === id);
-            
-            if (preset) {
-                charData.weapons.push(JSON.parse(JSON.stringify(preset))); // Clone preset
-                saveCharacter();
-                renderWeapons();
-            }
-            document.getElementById('weapon-add-modal').style.display = 'none';
-        });
 
         function removeWeaponFromCharacter(index) {
             charData.weapons.splice(index, 1);
@@ -919,6 +917,51 @@
 
         function scrollToBottom() { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
 
+        // ==========================================
+        // 9. MODAL INTERACTION HANDLERS
+        // ==========================================
+        function confirmRoll() {
+            let tn = parseInt(document.getElementById('tn-input').value) || 4;
+            document.getElementById('tn-modal').style.display = 'none';
+            executeRoll(pendingRoll.name, pendingRoll.cat, tn);
+        }
+
+        function cancelRoll() {
+            document.getElementById('tn-modal').style.display = 'none';
+            pendingRoll = null;
+        }
+
+        function confirmEquip() {
+            let id = document.getElementById('equip-weapon-select').value;
+            let preset = globalState.presets.find(p => p.id === id);
+            
+            if (preset) {
+                charData.weapons.push(JSON.parse(JSON.stringify(preset))); // Clone preset
+                saveCharacter();
+                renderWeapons();
+            }
+            document.getElementById('weapon-add-modal').style.display = 'none';
+        }
+
+        function cancelEquip() {
+            document.getElementById('weapon-add-modal').style.display = 'none';
+        }
+
+        function clearLog() {
+            document.getElementById('roll-terminal').innerHTML = '<div>> TERMINAL LOG CLEARED...</div>';
+        }
+
+        async function saveWebhook() {
+            let url = document.getElementById('discord-webhook').value;
+            if (isFirebaseConfigured) {
+                await set(ref(db, 'campaignState/webhook'), url);
+            } else {
+                globalState.webhook = url;
+                localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+            }
+            logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
+        }
+
         // Bind internal modular scope to standard global elements
         window.prepareRoll = prepareRoll;
         window.deleteSkill = deleteSkill;
@@ -930,25 +973,12 @@
         window.addCustomPreset = addCustomPreset;
         window.rollWeaponAttack = rollWeaponAttack;
         window.rollWeaponDamage = rollWeaponDamage;
-
-        // Admin controls
-        if (isAdmin) {
-            document.getElementById('admin-controls').style.display = 'block';
-            document.getElementById('admin-char-select').addEventListener('change', (e) => {
-                activeCharId = e.target.value;
-                loadCharacter();
-            });
-            document.getElementById('save-webhook').addEventListener('click', async () => {
-                let url = document.getElementById('discord-webhook').value;
-                if (isFirebaseConfigured) {
-                    await set(ref(db, 'campaignState/webhook'), url);
-                } else {
-                    globalState.webhook = url;
-                    localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
-                }
-                logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
-            });
-        }
+        window.confirmRoll = confirmRoll;
+        window.cancelRoll = cancelRoll;
+        window.confirmEquip = confirmEquip;
+        window.cancelEquip = cancelEquip;
+        window.clearLog = clearLog;
+        window.saveWebhook = saveWebhook;
 
         init();
     </script>
