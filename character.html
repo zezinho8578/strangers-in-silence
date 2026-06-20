@@ -440,22 +440,22 @@
         // 2. DEFAULT WEAPON PRESETS DATABASE
         // ==========================================
         const defaultPresets = [
-            { id: "crowbar", name: "Crowbar", range: "Melee", damage: "2d6", ap: "0", rof: "1", shots: "—", minStr: "d4", icon: "https://i.imgur.com/niLzrfW.png" },
-            { id: "stunstick", name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", shots: "Charge 20", minStr: "d4", icon: "https://i.imgur.com/pMPZprv.png" },
-            { id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", shots: "18", minStr: "d4", icon: "https://i.imgur.com/sAz8rBR.png" },
-            { id: "magnum-357", name: "357 Magnum", range: "15/30/60", damage: "2d10", ap: "2", rof: "1", shots: "6", minStr: "d6", icon: "https://i.imgur.com/cLsJTiP.png" },
-            { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", shots: "30", minStr: "d6", icon: "https://i.imgur.com/oAbqfGW.png" },
-            { id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", shots: "6", minStr: "d8", icon: "https://i.imgur.com/8ewEl7D.png" },
-            { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", shots: "2", minStr: "d8", icon: "https://i.imgur.com/8ewEl7D.png" },
-            { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", shots: "30", minStr: "d6", icon: "https://i.imgur.com/3rgRKGo.png" },
-            { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", shots: "1", minStr: "d6", icon: "https://i.imgur.com/4lFt2CC.png" },
-            { id: "crossbow", name: "Crossbow", range: "24/48/96", damage: "3d10", ap: "4", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/2oHfVXb.png" },
-            { id: "rpg", name: "RPG Launcher", range: "36/72/144", damage: "6d10", ap: "6", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/yyVsqkD.png" },
-            { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "—", shots: "1", minStr: "d6", icon: "https://i.imgur.com/9a4Uprg.png" },
-            { id: "mine", name: "SLAM Mine", range: "Contact", damage: "5d6", ap: "3", rof: "—", shots: "1", minStr: "d4", icon: "https://i.imgur.com/38WpCXz.png" },
-            { id: "grav-punt", name: "Gravity Gun (Punt)", range: "6/12/24", damage: "Varies", ap: "Varies", rof: "1", shots: "—", minStr: "d6", icon: "https://i.imgur.com/fAMbiF1.png" },
-            { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "2", shots: "Unlimited", minStr: "d6", icon: "https://i.imgur.com/vhkAPmf.png" },
-            { id: "bugbait", name: "Bugbait", range: "12/24/48", damage: "Special", ap: "—", rof: "1", shots: "1", minStr: "d4", icon: "https://i.imgur.com/gwitRFd.png" }
+            { id: "crowbar", name: "Crowbar", range: "Melee", damage: "2d6", ap: "0", rof: "1", shots: "—", minStr: "d4", icon: "https://i.imgur.com/niLzrfW.png", maxShots: null, isStrong: false },
+            { id: "stunstick", name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", shots: "Charge 20", minStr: "d4", icon: "https://i.imgur.com/pMPZprv.png", maxShots: 20, isStrong: false },
+            { id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", shots: "18", minStr: "d4", icon: "https://i.imgur.com/sAz8rBR.png", maxShots: 18, isStrong: false },
+            { id: "magnum-357", name: "357 Magnum", range: "15/30/60", damage: "2d10", ap: "2", rof: "1", shots: "6", minStr: "d6", icon: "https://i.imgur.com/cLsJTiP.png", maxShots: 6, isStrong: false },
+            { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", shots: "30", minStr: "d6", icon: "https://i.imgur.com/oAbqfGW.png", maxShots: 30, isStrong: false },
+            { id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", shots: "6", minStr: "d8", icon: "https://i.imgur.com/8ewEl7D.png", maxShots: 6, isStrong: false },
+            { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", shots: "2", minStr: "d8", icon: "https://i.imgur.com/8ewEl7D.png", maxShots: 2, isStrong: false },
+            { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", shots: "30", minStr: "d6", icon: "https://i.imgur.com/3rgRKGo.png", maxShots: 30, isStrong: false },
+            { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", shots: "1", minStr: "d6", icon: "https://i.imgur.com/4lFt2CC.png", maxShots: 1, isStrong: true },
+            { id: "crossbow", name: "Crossbow", range: "24/48/96", damage: "3d10", ap: "4", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/2oHfVXb.png", maxShots: 1, isStrong: false },
+            { id: "rpg", name: "RPG Launcher", range: "36/72/144", damage: "6d10", ap: "6", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/yyVsqkD.png", maxShots: 1, isStrong: true },
+            { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "—", shots: "1", minStr: "d6", icon: "https://i.imgur.com/9a4Uprg.png", maxShots: 1, isStrong: true },
+            { id: "mine", name: "SLAM Mine", range: "Contact", damage: "5d6", ap: "3", rof: "—", shots: "1", minStr: "d4", icon: "https://i.imgur.com/38WpCXz.png", maxShots: 1, isStrong: true },
+            { id: "grav-punt", name: "Gravity Gun (Punt)", range: "6/12/24", damage: "Varies", ap: "Varies", rof: "1", shots: "—", minStr: "d6", icon: "https://i.imgur.com/fAMbiF1.png", maxShots: null, isStrong: false },
+            { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "2", shots: "Unlimited", minStr: "d6", icon: "https://i.imgur.com/vhkAPmf.png", maxShots: null, isStrong: false },
+            { id: "bugbait", name: "Bugbait", range: "12/24/48", damage: "Special", ap: "—", rof: "1", shots: "1", minStr: "d4", icon: "https://i.imgur.com/gwitRFd.png", maxShots: 1, isStrong: true }
         ];
 
         // ==========================================
@@ -498,7 +498,7 @@
         let charData = {};
         let globalState = { characters: {}, webhook: "", presets: defaultPresets };
         let pendingRoll = null;
-        let activeWeaponContext = null; // Stores weapon specs currently chosen for attack
+        let activeWeaponIndex = null; // Stores index of active weapon in charData.weapons
         let isEditing = false; 
 
         let db;
@@ -547,9 +547,20 @@
                 charData = JSON.parse(JSON.stringify(defaultData[activeCharId]));
             }
             
-            // Normalize data models
+            // Normalize data models and supply variables
             if (charData.bennies === undefined) charData.bennies = 3;
             if (!charData.weapons) charData.weapons = [];
+
+            charData.weapons.forEach(w => {
+                let preset = globalState.presets.find(p => p.id === w.id);
+                if (preset) {
+                    if (w.maxShots === undefined) w.maxShots = preset.maxShots;
+                    if (w.currentShots === undefined) w.currentShots = preset.maxShots;
+                    if (w.isStrong === undefined) w.isStrong = preset.isStrong;
+                    if (w.strongCount === undefined) w.strongCount = 1;
+                    if (w.ammoTier === undefined) w.ammoTier = "Full";
+                }
+            });
 
             document.getElementById('char-name-display').innerText = `SUBJECT: ${charData.name.toUpperCase()}`;
             if (isAdmin && globalState.webhook) {
@@ -597,20 +608,16 @@
             await saveCharacter();
         }
 
-        // SWADE Helper: Determine if character Strength die is lower than weapon requirements
+        // SWADE Helper: Determine if Strength die is lower than weapon requirements
         function evaluateMinStr(weaponMinStr) {
             if (!weaponMinStr || weaponMinStr === "—" || weaponMinStr === "-") return false;
-            
-            // Get character's base strength die
             let currentStrStr = charData.attributes.Strength ? charData.attributes.Strength.die : "4";
             let currentStrVal = parseInt(currentStrStr) || 4;
             
-            // Get weapon requirement
             let reqStrMatch = weaponMinStr.match(/d(\d+)/i);
             if (!reqStrMatch) return false;
             let reqStrVal = parseInt(reqStrMatch[1]);
             
-            // Compare die sizes (d4=4, d6=6, d8=8, etc.)
             return currentStrVal < reqStrVal;
         }
 
@@ -692,6 +699,23 @@
                     }
                 });
             });
+
+            // Dynamic Weapon Card active edits
+            document.querySelectorAll('.active-mag-edit').forEach(el => {
+                el.addEventListener('blur', (e) => {
+                    let idx = e.target.dataset.index;
+                    charData.weapons[idx].currentShots = parseInt(e.target.innerText) || 0;
+                    saveCharacter();
+                });
+            });
+
+            document.querySelectorAll('.strong-count-edit').forEach(el => {
+                el.addEventListener('blur', (e) => {
+                    let idx = e.target.dataset.index;
+                    charData.weapons[idx].strongCount = parseInt(e.target.innerText) || 0;
+                    saveCharacter();
+                });
+            });
         }
 
         function addSkill() {
@@ -719,8 +743,31 @@
             }
 
             charData.weapons.forEach((w, index) => {
-                // Determine if Strength requirement is satisfied
                 let minStrAlert = evaluateMinStr(w.minStr) ? `<span class="min-str-alert">[!] MIN STR REQ NOT MET</span>` : '';
+                
+                // Construct ammo systems panel
+                let ammoHTML = "";
+                if (w.maxShots !== null && w.maxShots !== undefined) {
+                    let isMagEmpty = (w.currentShots || 0) <= 0;
+                    let emptyWarning = isMagEmpty ? `<span style="color:#ff3333; font-weight:bold; margin-left:10px;">[ MAG EMPTY ]</span>` : '';
+                    ammoHTML += `
+                        <div style="margin-top: 5px;">
+                            Mag: <span class="editable active-mag-edit" data-index="${index}" contenteditable="true">${w.currentShots !== undefined ? w.currentShots : w.maxShots}</span> / ${w.maxShots} ${emptyWarning}
+                            <button class="die-btn" style="padding: 1px 6px; margin-left: 10px;" onclick="reloadWeapon(${index})">RELOAD</button>
+                        </div>`;
+                    
+                    if (w.isStrong) {
+                        ammoHTML += `<div style="margin-top: 5px;">Supply (Projectiles): <span class="editable strong-count-edit" data-index="${index}" contenteditable="${isAdmin}">${w.strongCount !== undefined ? w.strongCount : 1}</span> <span style="font-size:0.8em; opacity:0.7;">(GM Only)</span></div>`;
+                    } else {
+                        let options = ["Full", "High", "OK", "Low", "Very Low", "Out"].map(tier => {
+                            return `<option value="${tier}" ${w.ammoTier === tier ? 'selected' : ''}>${tier}</option>`;
+                        }).join('');
+                        let gmRollBtn = isAdmin ? `<button class="die-btn" style="padding: 1px 5px; margin-left: 5px;" onclick="gmAmmoRoll(${index})">🎲 CHECK</button>` : '';
+                        ammoHTML += `<div style="margin-top: 5px;">Supply: <select class="admin-input" style="width:100px; padding: 2px;" onchange="changeAmmoTier(${index}, this.value)" ${isAdmin ? '' : 'disabled'}>${options}</select>${gmRollBtn}</div>`;
+                    }
+                }
+
+                let isOut = !w.isStrong && w.ammoTier === "Out";
 
                 container.innerHTML += `
                     <div class="weapon-card">
@@ -733,10 +780,11 @@
                             <div>RoF: <i>${w.rof}</i></div>
                             <div>Shots: <i>${w.shots}</i></div>
                             <div>Min Str: <i>${w.minStr}</i></div>
+                            <div style="grid-column: span 3; border-top: 1px dashed rgba(255,153,0,0.2); padding-top: 5px;">${ammoHTML}</div>
                         </div>
                         <div class="weapon-actions">
-                            <button class="die-btn" onclick="rollWeaponAttack('${w.name}', '${w.range}')">ATTACK</button>
-                            <button class="die-btn" onclick="rollWeaponDamage('${w.name}', '${w.damage}')">DAMAGE</button>
+                            <button class="die-btn" onclick="rollWeaponAttack('${w.name}', '${w.range}', ${index})">ATTACK</button>
+                            <button class="die-btn" onclick="${isOut ? '' : `rollWeaponDamage('${w.name}', '${w.damage}')`}" ${isOut ? 'style="opacity:0.3; cursor:not-allowed;"' : ''}>DAMAGE</button>
                             <button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
                         </div>
                     </div>`;
@@ -816,23 +864,50 @@
         // ==========================================
         // 7. WEAPON ATTACK & EXPLODING DAMAGE ROLLS
         // ==========================================
-        function rollWeaponAttack(weaponName, rangeStr) {
+        function rollWeaponAttack(weaponName, rangeStr, index) {
+            let w = charData.weapons[index];
+
+            // Ranged weapon limits check
+            if (w.maxShots !== null && w.maxShots !== undefined) {
+                if (w.isStrong && (w.strongCount || 0) <= 0) {
+                    logToTerminal(`> [!] DEPLOYMENT PREVENTED: No projectiles remaining for ${w.name}!`);
+                    return;
+                }
+                if (!w.isStrong && w.ammoTier === "Out") {
+                    logToTerminal(`> [!] OUT OF AMMO: Cannot attack with ${w.name}!`);
+                    
+                    // Dispatch Discord out of ammo announcement
+                    if (globalState && globalState.webhook) {
+                        const embed = {
+                            title: `⚠️ OUT OF AMMO: ${charData.name}'s ${w.name}`,
+                            description: `Attempted to fire, but the supply status is completely **OUT**. Action cancelled.`,
+                            color: 0xff3333,
+                            thumbnail: { url: w.icon }
+                        };
+                        fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                    }
+                    return;
+                }
+                if ((w.currentShots || 0) <= 0) {
+                    logToTerminal(`> [!] MAG EMPTY: ${w.name} requires reloading!`);
+                    return;
+                }
+            }
+
+            // Determine rolling stat: Melee -> Fighting, Ranged Thrown -> Athletics, Ranged Guns -> Shooting
             let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
             let isThrown = rangeStr.toLowerCase().includes("throw") || weaponName.toLowerCase().includes("grenade");
-            
-            // SWADE: Melee uses Fighting, Thrown uses Athletics, Gunfire/Bows use Shooting
             let skillNeeded = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
-            let weaponObj = charData.weapons.find(w => w.name === weaponName);
 
             if (charData.skills[skillNeeded]) {
-                prepareRoll(skillNeeded, "skills", weaponObj);
+                prepareRoll(skillNeeded, "skills", w, index);
             } else {
                 logToTerminal(`> SKILL [${skillNeeded.toUpperCase()}] UNAVAILABLE. CONVERTING TO UNSKILLED ACTION...`);
-                prepareRoll("Unskilled Attempt", null, weaponObj);
+                prepareRoll("Unskilled Attempt", null, w, index);
             }
         }
 
-        // Parser supporting standard SWADE math calculations
+        // Parser supporting nested standard SWADE math configurations
         function parseDamage(damageStr) {
             let cleaned = damageStr.replace(/\s+/g, '').toLowerCase();
             let match = cleaned.match(/(\d+)d(\d+)(?:\+(\d+))?/);
@@ -942,20 +1017,20 @@
         }
 
         async function executeRoll(name, cat, targetNumber) {
-            let sides, traitModifier;
+            let sides, modifier;
             
             if (cat === null) {
                 sides = 4;
-                traitModifier = -2;
+                modifier = -2;
             } else {
                 let data = charData[cat][name];
                 sides = parseInt(data.die) || 4;
-                traitModifier = parseInt(data.mod) || 0;
+                modifier = parseInt(data.mod) || 0;
             }
-
+            
             // Read computed ranged or RoF modifiers + custom manual adjustments
             let customModifier = parseInt(document.getElementById('mod-override-input').value) || 0;
-            let totalModifier = traitModifier + customModifier;
+            let totalModifier = modifier + customModifier;
 
             let shotsFired = 1;
             if (activeWeaponContext && parseInt(activeWeaponContext.rof) > 1 && document.getElementById('rof-options-container').style.display !== 'none') {
@@ -966,72 +1041,71 @@
             let isCritFail = false;
 
             if (shotsFired > 1) {
-                // SWADE Rate of Fire: Roll shotsFired Trait Dice and 1 Wild Die
+                // SWADE Rate of Fire: Roll shotsFired Trait Dice and exactly 1 Wild Die per action
                 let traitRolls = [];
                 for (let i = 0; i < shotsFired; i++) {
                     traitRolls.push(rollExploding(sides));
                 }
-                let wildRoll = rollExploding(6);
+                let wildRoll = rollExploding(6); 
 
-                // SWADE RoF Critical Failure: if more than half of all rolled dice (including Wild) are natural 1s
-                let onesCount = 0;
-                traitRolls.forEach(r => { if (r.history[0] === 1) onesCount++; });
-                if (wildRoll.history[0] === 1) onesCount++;
+                // Check Critical Failure: If more than half the rolled dice are natural 1s
+                let naturalOnesCount = 0;
+                traitRolls.forEach(r => { if (r.history[0] === 1) naturalOnesCount++; });
+                if (wildRoll.history[0] === 1) naturalOnesCount++;
 
-                let totalDice = shotsFired + 1;
-                isCritFail = (onesCount > totalDice / 2);
+                let totalDiceRolled = shotsFired + 1;
+                isCritFail = (naturalOnesCount > totalDiceRolled / 2);
 
-                // SWADE: Match Wild Die to replace the lowest rolling Trait Die if higher
+                // Match Wild Die to replace the lowest Trait Die
                 let traitTotals = traitRolls.map(r => r.total);
-                let minVal = Math.min(...traitTotals);
-                let minIdx = traitTotals.indexOf(minVal);
+                let minTraitVal = Math.min(...traitTotals);
+                let minIndex = traitTotals.indexOf(minTraitVal);
 
-                if (wildRoll.total > minVal) {
-                    traitRolls[minIdx] = wildRoll;
+                if (wildRoll.total > minTraitVal) {
+                    traitRolls[minIndex] = wildRoll;
                 }
 
-                // Apply modifiers and determine raise outcome per shot
                 traitRolls.forEach((r, idx) => {
-                    let score = r.total + totalModifier;
-                    let outcome = "";
+                    let finalScore = r.total + totalModifier;
+                    let outcomeText = "";
                     let hasRaise = false;
 
                     if (isCritFail) {
-                        outcome = "CRITICAL FAILURE!";
-                    } else if (score < targetNumber) {
-                        outcome = "FAILURE.";
+                        outcomeText = "CRITICAL FAILURE!";
+                    } else if (finalScore < targetNumber) {
+                        outcomeText = "FAILURE.";
                     } else {
-                        let raises = Math.floor((score - targetNumber) / 4);
-                        outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                        let raises = Math.floor((finalScore - targetNumber) / 4);
+                        outcomeText = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
                         if (raises > 0) hasRaise = true;
                     }
 
                     results.push({
                         shotIndex: idx + 1,
-                        total: score,
+                        total: finalScore,
                         history: r.history,
-                        outcome: outcome,
+                        outcome: outcomeText,
                         hasRaise: hasRaise
                     });
                 });
             } else {
-                // Standard Single Die Roll
                 let traitRoll = rollExploding(sides);
-                let wildRoll = rollExploding(6);
+                let wildRoll = rollExploding(6); 
 
                 let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalModifier;
                 isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
-
-                let outcome = "";
+                
+                let outcomeText = ""; let color = 0xff9900; 
                 let hasRaise = false;
 
                 if (isCritFail) {
-                    outcome = "CRITICAL FAILURE!";
+                    outcomeText = "CRITICAL FAILURE!"; color = 0xff0000; 
                 } else if (bestTotal < targetNumber) {
-                    outcome = "FAILURE.";
+                    outcomeText = "FAILURE."; color = 0xff0000;
                 } else {
                     let raises = Math.floor((bestTotal - targetNumber) / 4);
-                    outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                    outcomeText = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                    color = 0x00ff00; 
                     if (raises > 0) hasRaise = true;
                 }
 
@@ -1039,7 +1113,7 @@
                     shotIndex: 1,
                     total: bestTotal,
                     history: traitRoll.total > wildRoll.total ? traitRoll.history : wildRoll.history,
-                    outcome: outcome,
+                    outcome: outcomeText,
                     hasRaise: hasRaise,
                     isSingle: true,
                     traitHistory: traitRoll.history,
@@ -1047,15 +1121,27 @@
                 });
             }
 
-            // If any shot hit with a raise, flag the weapon for bonus damage on next damage click
+            // Handle Raise Tracking for Bonus Damage (+1d6)
             let hitWithRaise = results.some(r => r.hasRaise);
             if (activeWeaponContext && hitWithRaise) {
                 localStorage.setItem(`raise_bonus_${activeWeaponContext.name}`, "true");
-                logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${activeWeaponContext.name} will include +1d6 raise bonus.`);
+                logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${activeWeaponContext.name} will automatically include +1d6 raise bonus.`);
             } else if (activeWeaponContext) {
                 localStorage.removeItem(`raise_bonus_${activeWeaponContext.name}`);
             }
 
+            // Deduct ammunition automatically if ranged weapon attack
+            if (activeWeaponContext && activeWeaponIndex !== null) {
+                let w = charData.weapons[activeWeaponIndex];
+                if (w.currentShots !== undefined && w.currentShots !== null) {
+                    let updatedAmmo = w.currentShots - shotsFired;
+                    if (updatedAmmo < 0) updatedAmmo = 0;
+                    w.currentShots = updatedAmmo;
+                    saveCharacter();
+                    renderWeapons();
+                }
+            }
+            
             renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail);
         }
 
@@ -1078,7 +1164,6 @@
 
             logToTerminal(termLog);
 
-            // Fetch live state for Webhook output
             if (globalState && globalState.webhook) {
                 let desc = "";
                 results.forEach(r => {
@@ -1133,9 +1218,10 @@
             term.scrollTop = term.scrollHeight;
         }
 
-        function prepareRoll(name, cat, weaponObj = null) {
+        function prepareRoll(name, cat, weaponObj = null, weaponIndex = null) {
             pendingRoll = { name, cat };
             activeWeaponContext = weaponObj;
+            activeWeaponIndex = weaponIndex;
 
             document.getElementById('tn-input').value = "4"; 
             document.getElementById('mod-override-input').value = "0";
@@ -1147,11 +1233,11 @@
             // Reset options
             document.getElementById('range-select').value = "0";
             document.getElementById('scope-checkbox').checked = false;
-
+            
             if (weaponObj) {
                 let isMelee = weaponObj.range.toLowerCase().includes("melee") || weaponObj.range.toLowerCase().includes("contact");
                 if (!isMelee) {
-                    // Show range calculation options
+                    // Ranged attack Setup
                     rangedOpts.style.display = "block";
                     scopeRow.style.display = "flex";
 
@@ -1188,12 +1274,11 @@
             if (rangePenalty === -8 && isScoped) {
                 rangePenalty = -6;
             }
-
-            applyComputedModifiers(rangePenalty);
+            
+            recalculateTotalModifier(rangePenalty);
         }
 
         function updateRecoilPenalty() {
-            if (!activeWeaponContext) return;
             let shots = parseInt(document.getElementById('rof-select').value) || 1;
             let recoilPenalty = (shots > 1) ? -2 : 0;
 
@@ -1218,7 +1303,7 @@
         function scrollToBottom() { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
 
         // ==========================================
-        // 9. MODAL INTERACTION HANDLERS
+        // 9. MODAL INTERACTION HANDLERS (EXPOSED GLOBALLY)
         // ==========================================
         function confirmRoll() {
             let tn = parseInt(document.getElementById('tn-input').value) || 4;
@@ -1236,7 +1321,15 @@
             let preset = globalState.presets.find(p => p.id === id);
             
             if (preset) {
-                charData.weapons.push(JSON.parse(JSON.stringify(preset))); // Clone preset
+                // Initialize default values for equipped weapon copy
+                let weaponCopy = JSON.parse(JSON.stringify(preset));
+                weaponCopy.maxShots = preset.maxShots;
+                weaponCopy.currentShots = preset.maxShots;
+                weaponCopy.isStrong = preset.isStrong;
+                weaponCopy.strongCount = 1;
+                weaponCopy.ammoTier = "Full";
+
+                charData.weapons.push(weaponCopy);
                 saveCharacter();
                 renderWeapons();
             }
@@ -1262,6 +1355,103 @@
             logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
         }
 
+        // ==========================================
+        // 10. REAL-TIME AMMUNITION & GM PRESET OVERRIDES
+        // ==========================================
+        async function reloadWeapon(index) {
+            let w = charData.weapons[index];
+            w.currentShots = w.maxShots;
+            await saveCharacter();
+            renderWeapons();
+            logToTerminal(`> ${charData.name} reloaded their ${w.name.toUpperCase()}!`);
+            
+            // Discord Webhook reload announce
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} reloaded`,
+                    description: `Loaded a fresh magazine into their **${w.name}** (${w.maxShots}/${w.maxShots} rounds).`,
+                    color: 0xff9900,
+                    thumbnail: { url: w.icon }
+                };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch(e) { console.warn("Discord post failed."); }
+            }
+        }
+
+        async function changeAmmoTier(index, tier) {
+            let w = charData.weapons[index];
+            if (w) {
+                w.ammoTier = tier;
+                await saveCharacter();
+                renderWeapons();
+            }
+        }
+
+        async function gmAmmoRoll(index) {
+            let w = charData.weapons[index];
+            if (!w) return;
+            
+            let isMelee = w.range.toLowerCase().includes("melee") || w.range.toLowerCase().includes("contact");
+            let isThrown = w.range.toLowerCase().includes("throw") || w.name.toLowerCase().includes("grenade");
+            let skillNeeded = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
+            
+            // Get player's skill data
+            let skillData = charData.skills[skillNeeded] || { die: "4", mod: "-2" };
+            let sides = parseInt(skillData.die) || 4;
+            let traitModifier = parseInt(skillData.mod) || 0;
+            
+            // Roll standard SWADE check
+            let traitRoll = rollExploding(sides);
+            let wildRoll = rollExploding(6);
+            
+            let total = Math.max(traitRoll.total, wildRoll.total) + traitModifier;
+            let isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
+            
+            let success = total >= 4 && !isCritFail;
+            let oldTier = w.ammoTier || "Full";
+            let newTier = oldTier;
+            
+            const tiers = ["Full", "High", "OK", "Low", "Very Low", "Out"];
+            let color = 0x00ff00;
+            let desc = "";
+            
+            if (!success) {
+                color = 0xff3333;
+                let curIdx = tiers.indexOf(oldTier);
+                if (curIdx < tiers.length - 1) {
+                    newTier = tiers[curIdx + 1];
+                    w.ammoTier = newTier;
+                    await saveCharacter();
+                    renderWeapons();
+                }
+                desc = `**Roll Result: ${total} (Failure!)**\nThe ammo supply for ${charData.name}'s **${w.name}** degrades from **${oldTier}** to **${newTier}**!`;
+            } else {
+                desc = `**Roll Result: ${total} (Success!)**\nThe ammo supply for ${charData.name}'s **${w.name}** remains stable at **${oldTier}**.`;
+            }
+            
+            let termLog = `> GM triggered Ammo Check for ${charData.name}'s ${w.name.toUpperCase()}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${total}</b> (${success ? 'Success' : 'Failure'}) -> Ammo: ${newTier}`;
+            logToTerminal(termLog);
+            
+            // Send Discord Embed
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `🎲 GM Ammo Supply Check - ${charData.name}'s ${w.name}`,
+                    description: desc,
+                    color: color,
+                    thumbnail: { url: w.icon },
+                    fields: [
+                        { name: `Roll Profile (${skillNeeded})`, value: `d${sides}${traitModifier >= 0 ? '+' : ''}${traitModifier}`, inline: true },
+                        { name: "Dice History", value: `Trait: ${traitRoll.history.join(' + ')}\nWild: ${wildRoll.history.join(' + ')}`, inline: true }
+                    ]
+                };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch(e) { console.warn("Discord post failed."); }
+            }
+        }
+
         // Bind internal modular scope to standard global elements
         window.prepareRoll = prepareRoll;
         window.deleteSkill = deleteSkill;
@@ -1281,8 +1471,11 @@
         window.saveWebhook = saveWebhook;
         window.updateRangePenalty = updateRangePenalty;
         window.updateRecoilPenalty = updateRecoilPenalty;
+        window.reloadWeapon = reloadWeapon;
+        window.changeAmmoTier = changeAmmoTier;
+        window.gmAmmoRoll = gmAmmoRoll;
 
-        // Admin controls
+        // Admin controls registration
         if (isAdmin) {
             document.getElementById('admin-controls').style.display = 'block';
             document.getElementById('admin-char-select').addEventListener('change', (e) => {
