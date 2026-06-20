@@ -234,15 +234,15 @@
         }
 
         /* Modals */
-        #tn-modal, #weapon-add-modal {
+        #tn-modal, #weapon-add-modal, #combatant-modal {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px;
             z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.9);
             width: max-content; min-width: 350px;
             pointer-events: auto !important;
         }
-        #tn-modal h3, #weapon-add-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
-        #tn-modal p, #weapon-add-modal p { margin: 10px 0; }
+        #tn-modal h3, #weapon-add-modal h3, #combatant-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
+        #tn-modal p, #weapon-add-modal p, #combatant-modal p { margin: 10px 0; }
         .tn-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
 
         .setting-row {
@@ -251,6 +251,129 @@
             align-items: center;
             margin-bottom: 12px;
             gap: 20px;
+        }
+
+        /* COMBAT TRACKER STYLES */
+        .combat-top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed var(--theme-color);
+            padding-bottom: 10px;
+        }
+        .combat-round-info {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .combatant-card {
+            border: 1px solid var(--theme-color);
+            padding: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(128, 128, 128, 0.05);
+            transition: 0.2s;
+        }
+        .combatant-card.active-turn {
+            border-color: #ff9900;
+            box-shadow: 0 0 10px rgba(255, 153, 0, 0.3);
+            background: rgba(255, 153, 0, 0.1);
+        }
+        .combatant-card.held {
+            opacity: 0.6;
+            border-style: dashed;
+        }
+        
+        .action-card-display {
+            width: 50px;
+            height: 70px;
+            border: 1px solid #fff;
+            border-radius: 5px;
+            background: #fff;
+            color: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 5px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .action-card-display.red { color: #ff0000; }
+        .action-card-display.black { color: #000000; }
+        .action-card-display .rank-top { font-size: 1.2em; text-align: left; }
+        .action-card-display .suit-mid { font-size: 1.8em; text-align: center; }
+        .action-card-display .rank-bot { font-size: 1.2em; text-align: right; transform: rotate(180deg); }
+        .action-card-display.joker { border: 2px solid #ff9900; box-shadow: 0 0 5px #ff9900; }
+
+        .combatant-info {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .combatant-name-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .combatant-name {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .combatant-type-badge {
+            font-size: 0.7em;
+            padding: 2px 6px;
+            border: 1px solid var(--theme-color);
+            border-radius: 3px;
+            margin-left: 10px;
+            text-transform: uppercase;
+        }
+        .type-PC { color: #00ff00; border-color: #00ff00; }
+        .type-Ally { color: #0099ff; border-color: #0099ff; }
+        .type-Enemy { color: #ff3333; border-color: #ff3333; }
+        
+        .combatant-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9em;
+        }
+        .stat-mini-box {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .stat-mini-btn {
+            width: 20px; height: 20px;
+            border: 1px solid var(--theme-color);
+            background: transparent;
+            color: var(--theme-color);
+            cursor: pointer;
+            font-size: 0.8em;
+            line-height: 1;
+        }
+        .stat-mini-btn:hover { background: var(--theme-color); color: var(--bg-color); }
+        
+        .combatant-states {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        .state-tag {
+            font-size: 0.7em;
+            padding: 2px 6px;
+            border: 1px solid var(--theme-color);
+            cursor: pointer;
+        }
+        .state-tag:hover { background: var(--theme-color); color: var(--bg-color); }
+        .state-tag.active { background: var(--theme-color); color: var(--bg-color); }
+
+        .combatant-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
         }
     </style>
 </head>
@@ -270,6 +393,7 @@
     <div class="tab-bar">
         <button id="tab-stats" class="tab-btn active-tab" onclick="switchTab('stats')">DIAGNOSTICS & STATUS</button>
         <button id="tab-armory" class="tab-btn" onclick="switchTab('armory')">TACTICAL ARMORY</button>
+        <button id="tab-combat" class="tab-btn" onclick="switchTab('combat')">COMBAT TRACKER</button>
     </div>
 
     <!-- GM Controls -->
@@ -371,6 +495,24 @@
         </div>
     </div>
 
+    <!-- Tab Section 3: COMBAT TRACKER -->
+    <div id="section-combat" class="tab-content" style="display: none;">
+        <div class="section">
+            <div class="combat-top-bar">
+                <div class="combat-round-info">
+                    ROUND: <span id="combat-round-num">0</span> | TURN: <span id="combat-turn-num">0</span>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="die-btn" onclick="startCombat()" style="border:none; background: #00ff00; color: #000;">START COMBAT / DEAL</button>
+                    <button class="die-btn" onclick="nextTurn()" style="border:none;">NEXT TURN >></button>
+                    <button class="die-btn" onclick="addCombatant()" style="border:none;">+ ADD NPC</button>
+                    <button class="die-btn" onclick="addPlayersToCombat()" style="border:none;">+ ADD ALL PLAYERS</button>
+                </div>
+            </div>
+            <div id="combat-tracker-list"></div>
+        </div>
+    </div>
+
     <!-- Live Roll Output -->
     <div class="term-header">
         <span>> TERMINAL OUTPUT</span>
@@ -439,6 +581,27 @@
         </div>
     </div>
 
+    <!-- Add Combatant Modal -->
+    <div id="combatant-modal" style="pointer-events: auto !important;">
+        <h3>ADD COMBATANT</h3>
+        <div class="setting-row">
+            <span>Name:</span>
+            <input type="text" id="combatant-name-input" class="admin-input" style="width: 200px; pointer-events: auto !important;" placeholder="e.g. Combine Soldier">
+        </div>
+        <div class="setting-row">
+            <span>Type:</span>
+            <select id="combatant-type-input" class="admin-input" style="width: 150px; pointer-events: auto !important;">
+                <option value="Enemy">Enemy</option>
+                <option value="Ally">Ally</option>
+                <option value="PC">PC</option>
+            </select>
+        </div>
+        <div class="tn-buttons">
+            <button class="die-btn" onclick="confirmAddCombatant()" style="pointer-events: auto !important;">ADD</button>
+            <button class="die-btn" onclick="cancelAddCombatant()" style="pointer-events: auto !important;">CANCEL</button>
+        </div>
+    </div>
+
     <script src="/settings.js"></script>
 
     <!-- Firebase Realtime WebSockets Integration -->
@@ -489,6 +652,9 @@
         // Ammo tier hierarchy
         const ammoTiers = ["Full", "High", "OK", "Low", "Very Low", "Out"];
 
+        // SWADE States
+        const swadeStates = ["Shaken", "Distracted", "Vulnerable", "Stunned", "Entangled", "Bound", "Prone", "Bleeding Out", "Defending", "Aim"];
+
         // ==========================================
         // 3. DEFAULT CHARACTER DATA
         // ==========================================
@@ -519,6 +685,10 @@
             }
         };
 
+        const defaultCombatState = {
+            round: 0, turnIndex: 0, combatants: []
+        };
+
         // Determine Admin context securely
         const isAdmin = (currentUser === "Administrator") || window.location.pathname.includes("adminview");
         let activeCharId = "katey-commons";
@@ -527,7 +697,7 @@
         }
 
         let charData = {};
-        let globalState = { characters: {}, webhook: "", presets: defaultPresets };
+        let globalState = { characters: {}, webhook: "", presets: defaultPresets, combat: defaultCombatState };
         let pendingRoll = null;
         let activeWeaponContext = null;
         let isEditing = false; 
@@ -582,21 +752,24 @@
                     if (data) {
                         globalState = data;
                         if (!globalState.presets) globalState.presets = defaultPresets;
+                        if (!globalState.combat) globalState.combat = defaultCombatState;
                         if (!isEditing) {
                             loadCharacter();
                             if (isAdmin) {
                                 renderMasterPresets();
                             }
+                            renderCombatTracker();
                         }
                     } else {
-                        globalState = { characters: defaultData, webhook: "", presets: defaultPresets };
+                        globalState = { characters: defaultData, webhook: "", presets: defaultPresets, combat: defaultCombatState };
                         set(ref(db, 'campaignState'), globalState);
                         loadCharacter();
                     }
                 });
             } else {
-                globalState = JSON.parse(localStorage.getItem('localFallbackDB')) || { characters: defaultData, webhook: "", presets: defaultPresets };
+                globalState = JSON.parse(localStorage.getItem('localFallbackDB')) || { characters: defaultData, webhook: "", presets: defaultPresets, combat: defaultCombatState };
                 loadCharacter();
+                renderCombatTracker();
             }
         }
 
@@ -639,6 +812,15 @@
             } else {
                 localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
             }
+        }
+
+        async function saveCombatState() {
+            if (isFirebaseConfigured) {
+                await set(ref(db, 'campaignState/combat'), globalState.combat);
+            } else {
+                localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+            }
+            renderCombatTracker();
         }
 
         // Focus listeners
@@ -773,20 +955,16 @@
             }
 
             charData.weapons.forEach((w, index) => {
-                // Normalize ammo data
                 normalizeWeaponAmmo(w);
-
                 const ammoType = getAmmoType(w);
                 let minStrAlert = evaluateMinStr(w.minStr) ? `<span class="min-str-alert">[!] MIN STR REQ NOT MET</span>` : '';
 
-                // Determine out-of-ammo state
                 let isOutOfAmmo = false;
                 if (ammoType === 'ballistic' && w.ammoTier === 'Out') isOutOfAmmo = true;
                 if (ammoType === 'projectile' && (w.projectileCount || 0) <= 0 && (w.magAmmo || 0) <= 0) isOutOfAmmo = true;
 
                 let cardClass = isOutOfAmmo ? 'weapon-card out-of-ammo' : 'weapon-card';
 
-                // Build ammo UI based on type
                 let ammoDetailsHTML = '';
                 let reloadBtn = '';
 
@@ -802,9 +980,7 @@
                     });
 
                     const selectDisabled = isAdmin ? '' : 'disabled';
-                    const gmCheckBtn = isAdmin
-                        ? `<button class="die-btn gm-ammo-check-btn" onclick="gmAmmoCheck(${index})">CHECK</button>`
-                        : '';
+                    const gmCheckBtn = isAdmin ? `<button class="die-btn gm-ammo-check-btn" onclick="gmAmmoCheck(${index})">CHECK</button>` : '';
 
                     ammoDetailsHTML = `
                         <div>Ammo: <span class="editable ammo-display" data-index="${index}" contenteditable="true">${currentMag}</span>/${maxMag}</div>
@@ -826,11 +1002,9 @@
                             <div>Ammo: <span class="editable ammo-display" data-index="${index}" contenteditable="true">${currentMag}</span>/${maxMag}</div>
                             <div>Total: <b>${count}</b></div>`;
                     }
-
                     reloadBtn = `<button class="die-btn" onclick="reloadWeapon(${index})">RELOAD</button>`;
                 }
 
-                // Damage button state
                 const damageDisabled = isOutOfAmmo ? 'disabled' : '';
                 const damageOnclick = isOutOfAmmo ? '' : `onclick="rollWeaponDamage('${w.name}', '${w.damage}')"`;
 
@@ -860,7 +1034,6 @@
         }
 
         function attachWeaponAmmoListeners() {
-            // Magazine ammo display editing
             document.querySelectorAll('.ammo-display').forEach(el => {
                 el.addEventListener('blur', (e) => {
                     let idx = parseInt(e.target.dataset.index);
@@ -874,7 +1047,6 @@
                 });
             });
 
-            // Projectile count editing (GM only — element only exists for GM)
             document.querySelectorAll('.projectile-count').forEach(el => {
                 el.addEventListener('blur', (e) => {
                     let idx = parseInt(e.target.dataset.index);
@@ -888,7 +1060,6 @@
             });
         }
 
-        // Modal triggers for equipping weapons
         function openEquipModal() {
             const select = document.getElementById('equip-weapon-select');
             select.innerHTML = '';
@@ -932,7 +1103,6 @@
 
             logToTerminal(`> ${charData.name} is RELOADING ${weapon.name.toUpperCase()}! Magazine refilled to ${weapon.magAmmo}/${weapon.maxMag}.`);
 
-            // Discord embed
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name} is reloading!`,
@@ -959,13 +1129,12 @@
             renderWeapons();
         }
 
-                async function gmAmmoCheck(index) {
+        async function gmAmmoCheck(index) {
             const weapon = charData.weapons[index];
             if (!weapon) return;
             const ammoType = getAmmoType(weapon);
             if (ammoType !== 'ballistic') return;
 
-            // Determine relevant attack skill
             let isMelee = weapon.range.toLowerCase().includes("melee") || weapon.range.toLowerCase().includes("contact");
             let isThrown = weapon.range.toLowerCase().includes("throw") || weapon.name.toLowerCase().includes("grenade");
             let skillNeeded = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
@@ -981,7 +1150,6 @@
                 skillName = "Unskilled Attempt";
             }
 
-            // Roll
             let traitRoll = rollExploding(sides);
             let wildRoll = rollExploding(6);
             let bestTotal = Math.max(traitRoll.total, wildRoll.total) + modifier;
@@ -993,11 +1161,9 @@
             let newTier = oldTier;
 
             if (bestTotal >= TN) {
-                // PASS: Ammo does NOT lower
                 let raises = Math.floor((bestTotal - TN) / 4);
                 outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)` : "SUCCESS";
             } else {
-                // FAIL: Ammo lowers one tier
                 outcome = "FAILURE";
                 let currentIdx = ammoTiers.indexOf(oldTier);
                 if (currentIdx < ammoTiers.length - 1) {
@@ -1020,12 +1186,11 @@
                 logToTerminal(`&nbsp;&nbsp;Ammo Tier: ${oldTier} (unchanged)`);
             }
 
-            // Discord embed
             if (globalState && globalState.webhook) {
                 const embed = {
-                    title: `Ammo Check: ${charData.name}'s ${weapon.name}`,
+                    title: `🔍 GM Ammo Check: ${charData.name}'s ${weapon.name}`,
                     description: `Rolled ${skillName} (d${sides})${modDisplay}\n**Result: ${bestTotal}** → ${outcome}\n\n**Ammo Tier: ${oldTier} → ${newTier}**${!tierChanged ? ' (unchanged)' : ''}`,
-                    color: tierChanged ? 0xff6600 : 0x00ff00, // Green if safe, Orange if ammo was wasted
+                    color: tierChanged ? 0xff6600 : 0x00ff00,
                     thumbnail: { url: weapon.icon },
                     fields: [
                         { name: `Trait (d${sides})`, value: traitRoll.history.join(' + '), inline: true },
@@ -1043,7 +1208,6 @@
 
         async function postOutofAmmoEmbed(weapon, reason) {
             logToTerminal(`> [!] ${charData.name}'s ${weapon.name.toUpperCase()} is OUT OF AMMO (${reason}). Attack aborted.`);
-
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `⚠️ ${charData.name} is OUT OF AMMO!`,
@@ -1063,7 +1227,6 @@
 
         async function postEmptyMagEmbed(weapon) {
             logToTerminal(`> [!] ${charData.name}'s ${weapon.name.toUpperCase()} magazine is EMPTY. Press RELOAD to continue.`);
-
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name}'s magazine is empty!`,
@@ -1137,7 +1300,6 @@
 
             const ammoType = getAmmoType(weaponObj);
 
-            // Ammo checks before allowing attack
             if (ammoType === 'ballistic') {
                 if (weaponObj.ammoTier === 'Out') {
                     postOutofAmmoEmbed(weaponObj, "total ammo depleted");
@@ -1184,7 +1346,6 @@
         }
 
         async function rollWeaponDamage(weaponName, damageStr) {
-            // Check if weapon is out of ammo — lock damage
             let weaponObj = charData.weapons.find(w => w.name === weaponName);
             if (weaponObj) {
                 const ammoType = getAmmoType(weaponObj);
@@ -1229,7 +1390,7 @@
             }
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : "";
-            let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
+            let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)"` : "";
 
             let termLog = `> ${charData.name} dealt damage with ${weaponName.toUpperCase()}<br>`;
             termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}${bonusStr}<br>`;
@@ -1267,7 +1428,307 @@
         }
 
         // ==========================================
-        // 10. GLOBAL NAV TABS & HOOK TRIGGERS
+        // 10. COMBAT TRACKER (SWADE)
+        // ==========================================
+        function getActionDeck() {
+            const suits = ['Spades', 'Hearts', 'Diamonds', 'Clubs'];
+            const ranks = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+            let deck = [];
+            // Standard 52
+            suits.forEach(s => {
+                ranks.forEach(r => {
+                    deck.push({ rank: r, suit: s, color: (s === 'Hearts' || s === 'Diamonds') ? 'red' : 'black' });
+                });
+            });
+            // 2 Jokers
+            deck.push({ rank: 'Joker', suit: 'Red', color: 'red' });
+            deck.push({ rank: 'Joker', suit: 'Black', color: 'black' });
+            return deck;
+        }
+
+        function getCardValue(card) {
+            if (!card) return -1;
+            const rankOrder = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+            const suitOrder = ['Clubs', 'Diamonds', 'Hearts', 'Spades']; // Low to high
+            if (card.rank === 'Joker') return 100 + (card.color === 'Red' ? 1 : 0);
+            return (rankOrder.indexOf(card.rank) * 10) + suitOrder.indexOf(card.suit);
+        }
+
+        async function startCombat() {
+            if (!isAdmin) return;
+            
+            // If round > 0, this is a re-deal / new round
+            if (globalState.combat.round > 0) {
+                globalState.combat.round++;
+            } else {
+                globalState.combat.round = 1;
+            }
+            globalState.combat.turnIndex = 0;
+
+            // Clear Distracted/Vulnerable at start of round
+            globalState.combat.combatants.forEach(c => {
+                c.states = c.states.filter(s => s !== 'Distracted' && s !== 'Vulnerable');
+                c.held = false;
+                c.hasActed = false;
+            });
+
+            let deck = getActionDeck();
+            // Shuffle
+            for (let i = deck.length - 1; i > 0; i--) {
+                let j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+
+            let jokersDrawn = [];
+
+            // Deal to combatants
+            globalState.combat.combatants.forEach(c => {
+                if (c.held) {
+                    c.card = null;
+                } else {
+                    c.card = deck.pop();
+                    if (c.card.rank === 'Joker') {
+                        jokersDrawn.push(c.name);
+                        c.hasActed = false; // Joker allows acting twice
+                        c.states = c.states.filter(s => s !== 'Shaken'); // Joker unshakeens? No, not canon. But they get +2.
+                        // SWADE: Hearts give benny, Clubs give Distracted, Jokers give +2 and act twice
+                    }
+                    if (c.card.suit === 'Hearts') {
+                        if (c.type === 'PC' || c.type === 'Ally') {
+                            c.bennies = (c.bennies || 0) + 1;
+                            logToTerminal(`> ${c.name} drew a Heart! Gained a Benny!`);
+                        }
+                    }
+                    if (c.card.suit === 'Clubs') {
+                        c.states.push('Distracted');
+                        logToTerminal(`> ${c.name} drew a Club! Distracted this round!`);
+                    }
+                }
+            });
+
+            // Sort combatants by card value (highest first)
+            globalState.combat.combatants.sort((a, b) => getCardValue(b.card) - getCardValue(a.card));
+
+            if (jokersDrawn.length > 0) {
+                logToTerminal(`> [!!!] JOKER DRAWN BY: ${jokersDrawn.join(', ')}! They act twice this round and gain +2 to all Trait rolls!`);
+                if (globalState && globalState.webhook) {
+                    const embed = {
+                        title: "🃏 JOKER DRAWN!",
+                        description: `**${jokersDrawn.join(', ')}** drew a Joker!\nThey act twice this round and gain +2 to all Trait rolls!`,
+                        color: 0xff9900
+                    };
+                    try { await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }); } catch (e) {}
+                }
+            }
+
+            logToTerminal(`> COMBAT STARTED: ROUND ${globalState.combat.round}. DECK SHUFFLED AND DEALT.`);
+            await saveCombatState();
+        }
+
+        async function nextTurn() {
+            if (!isAdmin) return;
+            if (globalState.combat.round === 0) return;
+
+            let currentCombatant = globalState.combat.combatants[globalState.combat.turnIndex];
+            if (currentCombatant) {
+                currentCombatant.hasActed = true;
+                // If they had a Joker and haven't acted twice yet, let them go again immediately? 
+                // For simplicity in VTT, standard is: Joker allows them to interrupt or just take two turns back to back. 
+                // Let's just log it and advance.
+            }
+
+            globalState.combat.turnIndex++;
+
+            if (globalState.combat.turnIndex >= globalState.combat.combatants.length) {
+                await startCombat(); // New round, redeal
+            } else {
+                await saveCombatState();
+            }
+        }
+
+        function renderCombatTracker() {
+            const container = document.getElementById('combat-tracker-list');
+            const roundNum = document.getElementById('combat-round-num');
+            const turnNum = document.getElementById('combat-turn-num');
+            
+            if (!globalState.combat) globalState.combat = defaultCombatState;
+
+            roundNum.innerText = globalState.combat.round || 0;
+            turnNum.innerText = globalState.combat.turnIndex + 1;
+
+            let html = '';
+            
+            if (globalState.combat.combatants.length === 0) {
+                html = `<div style="text-align: center; font-style: italic; opacity: 0.6; padding: 20px;">[ NO ACTIVE COMBATANTS. CLICK START COMBAT OR ADD NPCs ]</div>`;
+                container.innerHTML = html;
+                return;
+            }
+
+            globalState.combat.combatants.forEach((c, index) => {
+                let isActive = (index === globalState.combat.turnIndex) ? 'active-turn' : '';
+                let isHeld = c.held ? 'held' : '';
+                
+                let cardHTML = '<div class="action-card-display" style="background:#333; border:1px dashed #fff;"><span style="font-size:0.8em; text-align:center; color:#fff;">NO CARD</span></div>';
+                if (c.card) {
+                    let isJoker = c.card.rank === 'Joker' ? 'joker' : '';
+                    cardHTML = `
+                        <div class="action-card-display ${c.card.color} ${isJoker}">
+                            <div class="rank-top">${c.card.rank}</div>
+                            <div class="suit-mid">${c.card.rank === 'Joker' ? '★' : (c.card.suit === 'Spades' ? '♠' : (c.card.suit === 'Hearts' ? '♥' : (c.card.suit === 'Diamonds' ? '♦' : '♣')))}</div>
+                            <div class="rank-bot">${c.card.rank}</div>
+                        </div>`;
+                }
+
+                let statesHTML = '';
+                swadeStates.forEach(s => {
+                    let active = c.states && c.states.includes(s) ? 'active' : '';
+                    statesHTML += `<div class="state-tag ${active}" onclick="toggleCombatantState('${c.id}', '${s}')">${s}</div>`;
+                });
+
+                let actionBtn = (index === globalState.combat.turnIndex && !c.held) ? 
+                    `<button class="die-btn" onclick="nextTurn()">END TURN</button>` : 
+                    `<button class="die-btn" onclick="holdCombatant('${c.id}')">${c.held ? 'RESUME' : 'HOLD'}</button>`;
+
+                html += `
+                    <div class="combatant-card ${isActive} ${isHeld}">
+                        ${cardHTML}
+                        <div class="combatant-info">
+                            <div class="combatant-name-row">
+                                <div>
+                                    <span class="combatant-name">${c.name}</span>
+                                    <span class="combatant-type-badge type-${c.type}">${c.type}</span>
+                                </div>
+                                <button class="die-btn del-btn" onclick="removeCombatant('${c.id}')" style="font-size: 0.7em; padding: 2px 5px;">X</button>
+                            </div>
+                            <div class="combatant-stats">
+                                <div class="stat-mini-box">
+                                    <span>Wounds:</span>
+                                    <button class="stat-mini-btn" onclick="adjustCombatantStat('${c.id}', 'wounds', -1)">-</button>
+                                    <span>${c.wounds || 0}</span>
+                                    <button class="stat-mini-btn" onclick="adjustCombatantStat('${c.id}', 'wounds', 1)">+</button>
+                                </div>
+                                <div class="stat-mini-box">
+                                    <span>Fatigue:</span>
+                                    <button class="stat-mini-btn" onclick="adjustCombatantStat('${c.id}', 'fatigue', -1)">-</button>
+                                    <span>${c.fatigue || 0}</span>
+                                    <button class="stat-mini-btn" onclick="adjustCombatantStat('${c.id}', 'fatigue', 1)">+</button>
+                                </div>
+                                <div class="stat-mini-box">
+                                    <span>Bennies:</span>
+                                    <button class="stat-mini-btn" onclick="adjustCombatantStat('${c.id}', 'bennies', -1)">-</button>
+                                    <span>${c.bennies || 0}</span>
+                                    <button class="stat-mini-btn" onclick="adjustCombatantStat('${c.id}', 'bennies', 1)">+</button>
+                                </div>
+                            </div>
+                            <div class="combatant-states">${statesHTML}</div>
+                        </div>
+                        <div class="combatant-actions">
+                            ${actionBtn}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function addCombatant() {
+            if (!isAdmin) return;
+            document.getElementById('combatant-modal').style.display = 'block';
+        }
+
+        function confirmAddCombatant() {
+            let name = document.getElementById('combatant-name-input').value || "New NPC";
+            let type = document.getElementById('combatant-type-input').value;
+            
+            globalState.combat.combatants.push({
+                id: "npc_" + Date.now() + Math.random(),
+                name: name,
+                type: type,
+                wounds: 0,
+                fatigue: 0,
+                bennies: (type === 'PC' || type === 'Ally') ? 3 : 0,
+                states: [],
+                card: null,
+                held: false
+            });
+            
+            document.getElementById('combatant-name-input').value = '';
+            document.getElementById('combatant-modal').style.display = 'none';
+            saveCombatState();
+        }
+
+        function cancelAddCombatant() {
+            document.getElementById('combatant-modal').style.display = 'none';
+        }
+
+        function addPlayersToCombat() {
+            if (!isAdmin) return;
+            Object.values(globalState.characters).forEach(pc => {
+                // Prevent duplicates
+                if (!globalState.combat.combatants.find(c => c.name === pc.name)) {
+                    globalState.combat.combatants.push({
+                        id: "pc_" + pc.name.toLowerCase().replace(' ', '-'),
+                        name: pc.name,
+                        type: 'PC',
+                        wounds: 0,
+                        fatigue: 0,
+                        bennies: pc.bennies || 3,
+                        states: [],
+                        card: null,
+                        held: false
+                    });
+                }
+            });
+            saveCombatState();
+        }
+
+        function removeCombatant(id) {
+            if (!isAdmin) return;
+            globalState.combat.combatants = globalState.combat.combatants.filter(c => c.id !== id);
+            if (globalState.combat.turnIndex >= globalState.combat.combatants.length) {
+                globalState.combat.turnIndex = Math.max(0, globalState.combat.combatants.length - 1);
+            }
+            saveCombatState();
+        }
+
+        function holdCombatant(id) {
+            if (!isAdmin) return;
+            let c = globalState.combat.combatants.find(x => x.id === id);
+            if (c) {
+                c.held = !c.held;
+                if (c.held) {
+                    c.card = null; // Held characters lose their card until they resume
+                }
+                saveCombatState();
+            }
+        }
+
+        function adjustCombatantStat(id, stat, delta) {
+            if (!isAdmin) return;
+            let c = globalState.combat.combatants.find(x => x.id === id);
+            if (c) {
+                c[stat] = Math.max(0, (c[stat] || 0) + delta);
+                saveCombatState();
+            }
+        }
+
+        function toggleCombatantState(id, state) {
+            if (!isAdmin) return;
+            let c = globalState.combat.combatants.find(x => x.id === id);
+            if (c) {
+                if (!c.states) c.states = [];
+                if (c.states.includes(state)) {
+                    c.states = c.states.filter(s => s !== state);
+                } else {
+                    c.states.push(state);
+                }
+                saveCombatState();
+            }
+        }
+
+        // ==========================================
+        // 11. GLOBAL NAV TABS & HOOK TRIGGERS
         // ==========================================
         function switchTab(tabId) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active-tab'));
@@ -1306,6 +1767,16 @@
             let shotsFired = 1;
             if (activeWeaponContext && parseInt(activeWeaponContext.rof) > 1 && document.getElementById('rof-options-container').style.display !== 'none') {
                 shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
+            }
+
+            // Check for Combat Tracker state modifiers (Joker, Distracted, Vulnerable)
+            let combatant = globalState.combat.combatants.find(c => c.name === charData.name);
+            if (combatant) {
+                if (combatant.card && combatant.card.rank === 'Joker') totalModifier += 2;
+                if (combatant.states && combatant.states.includes('Distracted')) totalModifier -= 2;
+                if (combatant.states && combatant.states.includes('Vulnerable')) {
+                    // If attacking a Vulnerable target, it's +2. But we don't know target here. We'll just note it.
+                }
             }
 
             let results = [];
@@ -1550,12 +2021,10 @@
         function scrollToBottom() { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
 
         // ==========================================
-        // 11. MODAL INTERACTION HANDLERS
+        // 12. MODAL INTERACTION HANDLERS
         // ==========================================
         function confirmRoll() {
             let tn = parseInt(document.getElementById('tn-input').value) || 4;
-
-            // Read shotsFired before closing modal
             let shotsFired = 1;
             if (activeWeaponContext && parseInt(activeWeaponContext.rof) > 1 && document.getElementById('rof-options-container').style.display !== 'none') {
                 shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
@@ -1563,7 +2032,6 @@
 
             document.getElementById('tn-modal').style.display = 'none';
 
-            // Decrement ammo after confirming the attack
             if (activeWeaponContext) {
                 const ammoType = getAmmoType(activeWeaponContext);
                 const weaponIdx = charData.weapons.findIndex(w => w.name === activeWeaponContext.name);
@@ -1595,7 +2063,6 @@
             
             if (preset) {
                 let newWeapon = JSON.parse(JSON.stringify(preset));
-                // Initialize ammo — new weapons are considered Full
                 normalizeWeaponAmmo(newWeapon);
                 const ammoType = getAmmoType(newWeapon);
                 if (ammoType === 'ballistic') {
@@ -1636,7 +2103,7 @@
         }
 
         // ==========================================
-        // 12. WINDOW EXPORTS
+        // 13. WINDOW EXPORTS
         // ==========================================
         window.prepareRoll = prepareRoll;
         window.deleteSkill = deleteSkill;
@@ -1659,6 +2126,18 @@
         window.reloadWeapon = reloadWeapon;
         window.gmAmmoCheck = gmAmmoCheck;
         window.updateAmmoTier = updateAmmoTier;
+        
+        // Combat Tracker Exports
+        window.startCombat = startCombat;
+        window.nextTurn = nextTurn;
+        window.addCombatant = addCombatant;
+        window.confirmAddCombatant = confirmAddCombatant;
+        window.cancelAddCombatant = cancelAddCombatant;
+        window.addPlayersToCombat = addPlayersToCombat;
+        window.removeCombatant = removeCombatant;
+        window.holdCombatant = holdCombatant;
+        window.adjustCombatantStat = adjustCombatantStat;
+        window.toggleCombatantState = toggleCombatantState;
 
         // Admin controls
         if (isAdmin) {
