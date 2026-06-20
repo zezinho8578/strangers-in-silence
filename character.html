@@ -1023,7 +1023,7 @@
             // Discord embed
             if (globalState && globalState.webhook) {
                 const embed = {
-                    title: `🔍 GM Ammo Check: ${charData.name}'s ${weapon.name}`,
+                    title: `Ammo Check: ${charData.name}'s ${weapon.name}`,
                     description: `Rolled ${skillName} (d${sides})${modDisplay}\n**Result: ${bestTotal}** → ${outcome}\n\n**Ammo Tier: ${oldTier} → ${newTier}**${!tierChanged ? ' (unchanged)' : ''}`,
                     color: tierChanged ? 0xff6600 : 0x00ff00, // Green if safe, Orange if ammo was wasted
                     thumbnail: { url: weapon.icon },
