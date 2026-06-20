@@ -959,7 +959,7 @@
             renderWeapons();
         }
 
-        async function gmAmmoCheck(index) {
+                async function gmAmmoCheck(index) {
             const weapon = charData.weapons[index];
             if (!weapon) return;
             const ammoType = getAmmoType(weapon);
@@ -993,7 +993,12 @@
             let newTier = oldTier;
 
             if (bestTotal >= TN) {
+                // PASS: Ammo does NOT lower
                 let raises = Math.floor((bestTotal - TN) / 4);
+                outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)` : "SUCCESS";
+            } else {
+                // FAIL: Ammo lowers one tier
+                outcome = "FAILURE";
                 let currentIdx = ammoTiers.indexOf(oldTier);
                 if (currentIdx < ammoTiers.length - 1) {
                     currentIdx++;
@@ -1002,9 +1007,6 @@
                     if (newTier === 'Out') weapon.magAmmo = 0;
                     tierChanged = true;
                 }
-                outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)` : "SUCCESS";
-            } else {
-                outcome = "FAILURE";
             }
 
             let modDisplay = modifier !== 0 ? ` (${modifier > 0 ? '+' : ''}${modifier})` : "";
@@ -1023,7 +1025,7 @@
                 const embed = {
                     title: `🔍 GM Ammo Check: ${charData.name}'s ${weapon.name}`,
                     description: `Rolled ${skillName} (d${sides})${modDisplay}\n**Result: ${bestTotal}** → ${outcome}\n\n**Ammo Tier: ${oldTier} → ${newTier}**${!tierChanged ? ' (unchanged)' : ''}`,
-                    color: tierChanged ? 0xff6600 : 0x999999,
+                    color: tierChanged ? 0xff6600 : 0x00ff00, // Green if safe, Orange if ammo was wasted
                     thumbnail: { url: weapon.icon },
                     fields: [
                         { name: `Trait (d${sides})`, value: traitRoll.history.join(' + '), inline: true },
