@@ -7,6 +7,10 @@
     {
       "source": "/tracker/:path*",
       "destination": "/tracker.html"
+    },
+    {
+      "source": "/threats/:path*",
+      "destination": "/threats.html"
     }
   ]
 }
