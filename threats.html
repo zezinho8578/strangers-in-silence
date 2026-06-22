@@ -13,181 +13,61 @@
         }
     </script>
     <style>
-        #top-nav {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #ff3333;
-            padding-bottom: 10px;
-            color: #ff3333;
-            gap: 20px;
-        }
+        #top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #ff3333; padding-bottom: 10px; color: #ff3333; gap: 20px; }
         .nav-link { color: #ff3333; text-decoration: none; cursor: pointer; white-space: nowrap; }
         .nav-link:hover { background: #ff3333; color: var(--bg-color); }
+        #top-nav > div { white-space: nowrap; font-size: 0.95em; }
 
-        #top-nav > div {
-            white-space: nowrap;
-            font-size: 0.95em;
-        }
-
-        .threat-grid {
-            display: grid;
-            grid-template-columns: 250px 1fr 300px;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
+        .threat-grid { display: grid; grid-template-columns: 280px 1fr 300px; gap: 20px; margin-bottom: 20px; align-items: start; }
         @media (max-width: 1000px) { .threat-grid { grid-template-columns: 1fr; } }
 
-        .panel-box {
-            border: 1px solid var(--theme-color);
-            background: rgba(128, 128, 128, 0.1);
-            padding: 15px;
-            height: max-content;
-        }
+        .panel-box { border: 1px solid var(--theme-color); background: rgba(128, 128, 128, 0.1); padding: 15px; height: max-content; }
         .panel-box h3 { margin-top: 0; border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px; font-size: 1.1em; }
 
-        .list-item {
-            padding: 8px;
-            border-bottom: 1px dashed rgba(255,153,0,0.3);
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        .list-item { padding: 8px; border-bottom: 1px dashed rgba(255,153,0,0.3); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .list-item:hover { background: rgba(255,153,0,0.2); }
         .list-item.active { border-left: 3px solid var(--theme-color); background: rgba(255,153,0,0.1); font-weight: bold; }
 
         .form-row { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; gap: 10px; }
         .form-input { background: var(--bg-color); color: var(--theme-color); border: 1px solid var(--theme-color); padding: 5px; font-family: inherit; box-sizing: border-box; }
-        .form-input.small { width: 75px; text-align: center; font-size: 1em; }
+        .form-input.small { width: 50px; text-align: center; font-size: 1em; }
 
-        .die-btn {
-            background: transparent;
-            color: var(--theme-color);
-            border: 1px solid var(--theme-color);
-            padding: 4px 10px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.9em;
-            transition: 0.2s;
-            white-space: nowrap;
-        }
+        .die-btn { background: transparent; color: var(--theme-color); border: 1px solid var(--theme-color); padding: 4px 10px; cursor: pointer; font-family: inherit; font-size: 0.9em; transition: 0.2s; white-space: nowrap; }
         .die-btn:hover { background: var(--theme-color); color: var(--bg-color); }
         .die-btn.danger { border-color: #ff3333; color: #ff3333; }
         .die-btn.danger:hover { background: #ff3333; color: var(--bg-color); }
 
-        /* Custom Checkbox */
-        .custom-checkbox {
-            display: inline-flex;
-            align-items: center;
-            cursor: pointer;
-            gap: 8px;
-            user-select: none;
-        }
+        .custom-checkbox { display: inline-flex; align-items: center; cursor: pointer; gap: 8px; user-select: none; }
         .custom-checkbox input[type="checkbox"] { display: none; }
-        .custom-checkbox .check-box {
-            width: 18px;
-            height: 18px;
-            border: 1px solid var(--theme-color);
-            background: var(--bg-color);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            transition: 0.2s;
-            flex-shrink: 0;
-        }
+        .custom-checkbox .check-box { width: 18px; height: 18px; border: 1px solid var(--theme-color); background: var(--bg-color); display: inline-flex; align-items: center; justify-content: center; transition: 0.2s; flex-shrink: 0; }
         .custom-checkbox input[type="checkbox"]:checked + .check-box { background: var(--theme-color); }
         .custom-checkbox input[type="checkbox"]:checked + .check-box::after { content: "✓"; color: var(--bg-color); font-size: 14px; font-weight: bold; }
-        .custom-checkbox .check-label { color: var(--theme-color); font-size: 0.95em; }
 
-        /* Editor Header */
-        .editor-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            border-bottom: 1px dashed var(--theme-color);
-            padding-bottom: 10px;
-            gap: 15px;
-        }
+        .editor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px dashed var(--theme-color); padding-bottom: 10px; gap: 15px; }
         .editor-header input { font-size: 1.2em; font-weight: bold; flex-grow: 1; }
 
-        /* Stats Row */
-        .stats-row { display: flex; gap: 30px; margin-bottom: 20px; }
+        .stats-row { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
         .stats-row .form-row { margin-bottom: 0; }
-        .stats-row .form-row span { white-space: nowrap; }
+        .stats-row .form-row span { white-space: nowrap; font-size: 0.9em; }
 
-        /* Trait Row */
-        .trait-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-            gap: 8px;
-        }
+        .trait-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
         .trait-row > span { white-space: nowrap; }
         .trait-row > div { display: flex; gap: 5px; align-items: center; }
 
-        /* Weapon Card with Image */
-        .weapon-card {
-            border: 1px solid var(--theme-color);
-            padding: 0;
-            margin-bottom: 12px;
-            font-size: 0.9em;
-            background: rgba(0,0,0,0.3);
-            overflow: hidden;
-        }
-        .weapon-card-header {
-            display: flex;
-            align-items: stretch;
-            border-bottom: 1px solid rgba(255,153,0,0.3);
-        }
-        .weapon-icon {
-            width: 64px;
-            height: 64px;
-            border-right: 1px solid rgba(255,153,0,0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0,0,0,0.4);
-            flex-shrink: 0;
-            overflow: hidden;
-        }
-        .weapon-icon img { max-width: 90%; max-height: 90%; object-fit: contain; }
-        .weapon-icon .weapon-icon-placeholder { font-size: 2em; opacity: 0.4; }
-        .weapon-info {
-            flex-grow: 1;
-            padding: 8px 10px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
-        .weapon-info-top { display: flex; justify-content: space-between; align-items: center; }
-        .weapon-name { font-weight: bold; font-size: 1em; }
-        .weapon-remove-btn {
-            background: transparent; color: #ff3333; border: 1px solid #ff3333;
-            padding: 2px 6px; cursor: pointer; font-family: inherit; font-size: 0.85em; line-height: 1;
-        }
-        .weapon-remove-btn:hover { background: #ff3333; color: var(--bg-color); }
-        .weapon-stats { font-size: 0.85em; opacity: 0.85; line-height: 1.5; }
-        .weapon-stats span { white-space: nowrap; }
-        .weapon-actions { display: flex; gap: 8px; padding: 8px 10px; flex-wrap: wrap; }
+        .weapon-card { border: 1px solid var(--theme-color); padding: 10px; margin-bottom: 12px; font-size: 0.9em; background: rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 8px; }
+        .wep-edit-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .wep-edit-row span { font-size: 0.8em; opacity: 0.8; }
+        .wep-input { background: transparent; color: var(--theme-color); border: none; border-bottom: 1px dashed var(--theme-color); font-family: inherit; width: 60px; text-align: center; outline: none; }
+        .wep-input:focus { background: rgba(255,153,0,0.1); }
+        .weapon-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; border-top: 1px dashed rgba(255,153,0,0.3); padding-top: 8px; }
 
-        #roll-terminal {
-            border: 1px solid #ff3333; padding: 10px; height: 200px;
-            overflow-y: auto; background: rgba(0,0,0,0.5); color: #ff3333;
-        }
+        .edit-area { width: 100%; min-height: 80px; background: rgba(0,0,0,0.5); color: var(--theme-color); border: 1px solid var(--theme-color); font-family: inherit; font-size: 0.9em; resize: vertical; padding: 5px; box-sizing: border-box; margin-bottom: 15px; }
 
-        .section-header { margin: 0 0 10px 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 5px; }
+        #roll-terminal { border: 1px solid #ff3333; padding: 10px; height: 200px; overflow-y: auto; background: rgba(0,0,0,0.5); color: #ff3333; }
+        .section-header { margin: 0 0 10px 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 5px; font-size: 1.05em; }
 
         /* Modal Settings */
-        #tn-modal {
-            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px;
-            z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.9);
-            width: max-content; min-width: 350px; pointer-events: auto !important;
-        }
+        #tn-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px; z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.9); width: max-content; min-width: 350px; pointer-events: auto !important; }
         #tn-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
         .tn-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
         .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 20px; }
@@ -200,7 +80,7 @@
 
     <div id="top-nav">
         <a href="/dashboard.html" class="nav-link">< RETURN TO DASHBOARD</a>
-        <div></div>
+        <div>OVERWATCH THREAT REGISTRY [ADMIN]</div>
     </div>
 
     <div class="threat-grid">
@@ -209,7 +89,8 @@
         <div class="panel-box">
             <h3>THE CODEX</h3>
             <div id="codex-list" style="margin-bottom: 15px; max-height: 400px; overflow-y: auto;"></div>
-            <button class="die-btn" style="width:100%;" onclick="createNewTemplate()">+ CREATE NEW TEMPLATE</button>
+            <button class="die-btn" style="width:100%; margin-bottom: 10px;" onclick="createNewTemplate()">+ CREATE NEW TEMPLATE</button>
+            <button class="die-btn danger" style="width:100%; border-style: dashed;" onclick="seedBestiary()">[ SEED HL2 BESTIARY ]</button>
         </div>
 
         <!-- COL 2: EDITOR & ROLLER -->
@@ -224,11 +105,14 @@
             </div>
 
             <div class="stats-row">
+                <div class="form-row"><span>Pace:</span><input type="number" id="edit-pace" class="form-input small" onchange="updateActive()"></div>
                 <div class="form-row"><span>Parry:</span><input type="number" id="edit-parry" class="form-input small" onchange="updateActive()"></div>
                 <div class="form-row"><span>Toughness:</span><input type="number" id="edit-toughness" class="form-input small" onchange="updateActive()"></div>
+                <div class="form-row"><span>Armor:</span><input type="number" id="edit-armor" class="form-input small" onchange="updateActive()"></div>
+                <div class="form-row"><span>Scale:</span><input type="number" id="edit-scale" class="form-input small" onchange="updateActive()" title="Normal=0, Large=2, Huge=4, Gargantuan=6"></div>
             </div>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
                 <!-- Attributes -->
                 <div>
                     <h4 class="section-header">ATTRIBUTES</h4>
@@ -238,26 +122,30 @@
                 <div>
                     <h4 class="section-header">SKILLS</h4>
                     <div id="skill-list"></div>
-                    <div class="form-row" style="margin-top: 10px;">
+                    <div class="form-row" style="margin-top: 10px; border-top: 1px dashed rgba(255,153,0,0.3); padding-top: 10px;">
                         <input type="text" id="new-skill-name" class="form-input" placeholder="Skill Name" style="flex-grow:1;">
-                        <input type="text" id="new-skill-die" class="form-input small" placeholder="d6" style="width: 60px;">
+                        <input type="text" id="new-skill-die" class="form-input small" placeholder="d6">
                         <button class="die-btn" onclick="addSkill()">ADD</button>
                     </div>
                 </div>
             </div>
 
+            <h4 class="section-header">SPECIAL ABILITIES & EDGES</h4>
+            <textarea id="edit-abilities" class="edit-area" placeholder="e.g. Construct, Undead, Immunities..." onchange="updateActive()"></textarea>
+
             <!-- Weapons -->
-            <div style="margin-top: 20px;">
-                <h4 class="section-header">ARMAMENT</h4>
+            <div>
+                <h4 class="section-header">ARMAMENT & ATTACKS</h4>
                 <div id="weapon-list"></div>
-                <div class="form-row" style="margin-top: 10px;">
-                    <select id="preset-weapon-select" class="form-input" style="flex-grow:1; margin-right: 10px;"></select>
-                    <button class="die-btn" onclick="addWeapon()">EQUIP WEAPON</button>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <select id="preset-weapon-select" class="form-input" style="flex-grow:1;"></select>
+                    <button class="die-btn" onclick="addWeaponFromPreset()">IMPORT PRESET</button>
                 </div>
+                <button class="die-btn" style="width:100%; border-style:dashed; margin-top: 10px;" onclick="addCustomWeapon()">+ ADD INTRINSIC ATTACK (CLAWS, BITE, ETC)</button>
             </div>
 
             <div style="margin-top: 25px; display: flex; justify-content: space-between;">
-                <button class="die-btn" onclick="saveTemplateToDB()">[ SAVE TEMPLATE TO CODEX ]</button>
+                <button class="die-btn" style="border-color:#00ff00; color:#00ff00;" onclick="saveTemplateToDB()">[ SAVE TEMPLATE TO CODEX ]</button>
                 <button class="die-btn danger" onclick="deleteTemplate()">[ DELETE ]</button>
             </div>
         </div>
@@ -266,12 +154,10 @@
         <div class="panel-box">
             <h3>DEPLOY TO COMBAT</h3>
             <p style="font-size: 0.85em; opacity: 0.8;">Spawn instances of the active template directly into the live Combat Tracker.</p>
-            
             <div class="form-row">
                 <span>Unit Count:</span>
-                <input type="number" id="deploy-count" value="1" min="1" max="10" class="form-input small">
+                <input type="number" id="deploy-count" value="1" min="1" max="20" class="form-input small">
             </div>
-            
             <button class="die-btn" style="width:100%; border-color:#00ff00; color:#00ff00; margin-top: 10px;" onclick="deployToTracker()">EXECUTE DEPLOYMENT</button>
 
             <h3 style="margin-top: 25px;">ACTIVE ON BOARD</h3>
@@ -280,21 +166,18 @@
 
     </div>
 
-    <!-- Live Roll Output -->
     <div style="margin-bottom: 5px; color: #ff3333; font-weight: bold;">> TACTICAL TERMINAL</div>
     <div id="roll-terminal">
         <div>> TERMINAL READY. WAITING FOR INPUT...</div>
     </div>
 
-    <!-- Target Number Modal (Matches Character.html) -->
+    <!-- Target Number Modal -->
     <div id="tn-modal">
         <h3>TACTICAL ENGAGEMENT MONITOR</h3>
-        
         <div class="setting-row">
             <span>Target Number (TN):</span>
             <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center;">
         </div>
-
         <div id="ranged-options-container" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <div class="setting-row">
                 <span>Range Bracket:</span>
@@ -310,7 +193,6 @@
                 <input type="checkbox" id="scope-checkbox" onchange="updateRangePenalty()" style="width: 20px; height: 20px;">
             </div>
         </div>
-
         <div id="rof-options-container" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <div class="setting-row">
                 <span>Shots Fired (RoF):</span>
@@ -318,16 +200,12 @@
                     <option value="1">Single Shot (1 Die)</option>
                 </select>
             </div>
-            <div id="recoil-warning" style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">
-                * Firing at RoF > 1 incurs a -2 Recoil penalty.
-            </div>
+            <div id="recoil-warning" style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">* RoF > 1 incurs a -2 Recoil penalty.</div>
         </div>
-
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Modifier Adjust:</span>
             <input type="number" id="mod-override-input" value="0" class="admin-input" style="width:80px; text-align:center;">
         </div>
-
         <div class="tn-buttons">
             <button class="die-btn" onclick="confirmRoll()">[ CONFIRM ROLL ]</button>
             <button class="die-btn" onclick="cancelRoll()">[ CANCEL ]</button>
@@ -335,6 +213,9 @@
     </div>
 
     <script src="/settings.js"></script>
+    <!-- Bestiary Seeder Script -->
+    <script src="https://strangers-in-silence.vercel.app/seedBestiary.js"></script>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
@@ -355,14 +236,11 @@
         let globalState = {};
         let activeTemplateId = null;
         let activeThreat = null;
-
-        // Roll State variables
         let pendingRoll = null;
         let activeWeaponContext = null;
 
-        const defaultAttributes = { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" };
-        const defaultSkills = { Fighting: "d6", Shooting: "d6", Notice: "d6" };
-
+        const defaultAttributes = { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" };
+        const defaultSkills = { Athletics: "d6", Fighting: "d6", Notice: "d6" };
         const defaultWeaponIcon = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="%23ff9900" opacity="0.5"><circle cx="32" cy="32" r="20" fill="none" stroke="%23ff9900" stroke-width="2"/><circle cx="32" cy="32" r="3"/><line x1="32" y1="6" x2="32" y2="18" stroke="%23ff9900" stroke-width="2"/><line x1="32" y1="46" x2="32" y2="58" stroke="%23ff9900" stroke-width="2"/><line x1="6" y1="32" x2="18" y2="32" stroke="%23ff9900" stroke-width="2"/><line x1="46" y1="32" x2="58" y2="32" stroke="%23ff9900" stroke-width="2"/></svg>`;
 
         onValue(ref(db, 'campaignState'), (snapshot) => {
@@ -399,10 +277,8 @@
 
         function populateWeaponDropdown() {
             const select = document.getElementById('preset-weapon-select');
-            select.innerHTML = '<option value="">-- Select Preset --</option>';
-            globalState.presets.forEach(p => {
-                select.innerHTML += `<option value="${p.id}">${p.name}</option>`;
-            });
+            select.innerHTML = '<option value="">-- Select Master Preset --</option>';
+            globalState.presets.forEach(p => { select.innerHTML += `<option value="${p.id}">${p.name}</option>`; });
         }
 
         function renderDeployed() {
@@ -410,9 +286,7 @@
             list.innerHTML = '';
             if (globalState.combat && globalState.combat.participants) {
                 globalState.combat.participants.forEach(p => {
-                    if (!p.isPlayer) {
-                        list.innerHTML += `<div style="padding: 4px; border-bottom: 1px dashed var(--theme-color);">${p.name} [Wounds: ${p.wounds}]</div>`;
-                    }
+                    if (!p.isPlayer) list.innerHTML += `<div style="padding: 4px; border-bottom: 1px dashed var(--theme-color);">${p.name} [Wounds: ${p.wounds}]</div>`;
                 });
             } else {
                 list.innerHTML = '<div style="opacity: 0.5;">No active combat or NPCs on board.</div>';
@@ -425,14 +299,11 @@
         window.createNewTemplate = function() {
             let id = "threat_" + Date.now();
             activeThreat = {
-                name: "New Threat", isWildCard: false, parry: 5, toughness: 5,
-                attributes: JSON.parse(JSON.stringify(defaultAttributes)),
-                skills: JSON.parse(JSON.stringify(defaultSkills)),
-                weapons: []
+                name: "New Threat", isWildCard: false, pace: 6, parry: 5, toughness: 5, armor: 0, scale: 0,
+                attributes: JSON.parse(JSON.stringify(defaultAttributes)), skills: JSON.parse(JSON.stringify(defaultSkills)), abilities: "", weapons: []
             };
             activeTemplateId = id;
-            renderEditor();
-            renderCodex();
+            renderEditor(); renderCodex();
         };
 
         window.loadTemplate = function(id) {
@@ -441,19 +312,21 @@
             if (!activeThreat.attributes) activeThreat.attributes = JSON.parse(JSON.stringify(defaultAttributes));
             if (!activeThreat.skills) activeThreat.skills = JSON.parse(JSON.stringify(defaultSkills));
             if (!activeThreat.weapons) activeThreat.weapons = [];
-            renderEditor();
-            renderCodex();
+            renderEditor(); renderCodex();
         };
 
         function renderEditor() {
             if (!activeThreat) return;
             document.getElementById('editor-panel').style.display = 'block';
-            document.getElementById('edit-name').value = activeThreat.name;
+            document.getElementById('edit-name').value = activeThreat.name || "";
             document.getElementById('edit-wildcard').checked = activeThreat.isWildCard;
-            document.getElementById('edit-parry').value = activeThreat.parry;
-            document.getElementById('edit-toughness').value = activeThreat.toughness;
+            document.getElementById('edit-pace').value = activeThreat.pace || 6;
+            document.getElementById('edit-parry').value = activeThreat.parry || 5;
+            document.getElementById('edit-toughness').value = activeThreat.toughness || 5;
+            document.getElementById('edit-armor').value = activeThreat.armor || 0;
+            document.getElementById('edit-scale').value = activeThreat.scale || 0;
+            document.getElementById('edit-abilities').value = activeThreat.abilities || "";
 
-            // Attributes
             let attrHtml = '';
             for (let [k, v] of Object.entries(activeThreat.attributes)) {
                 attrHtml += `
@@ -467,7 +340,6 @@
             }
             document.getElementById('attr-list').innerHTML = attrHtml;
 
-            // Skills
             let skillHtml = '';
             for (let [k, v] of Object.entries(activeThreat.skills)) {
                 skillHtml += `
@@ -482,35 +354,26 @@
             }
             document.getElementById('skill-list').innerHTML = skillHtml;
 
-            // Weapons with images
             let wepHtml = '';
-            activeThreat.weapons.forEach((wId, index) => {
-                let preset = globalState.presets.find(p => p.id === wId);
-                if (preset) {
-                    let imgUrl = preset.image || preset.icon || defaultWeaponIcon;
-                    wepHtml += `
-                        <div class="weapon-card">
-                            <div class="weapon-card-header">
-                                <div class="weapon-icon">
-                                    <img src="${imgUrl}" alt="${preset.name}" onerror="this.parentElement.innerHTML='<span class=&quot;weapon-icon-placeholder&quot;>⚙</span>'">
-                                </div>
-                                <div class="weapon-info">
-                                    <div class="weapon-info-top">
-                                        <span class="weapon-name">${preset.name.toUpperCase()}</span>
-                                        <button class="weapon-remove-btn" onclick="removeWeapon(${index})">X</button>
-                                    </div>
-                                    <div class="weapon-stats">
-                                        <span>Range: ${preset.range}</span> | <span>Dmg: ${preset.damage}</span> | <span>AP: ${preset.ap}</span> | <span>RoF: ${preset.rof}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="weapon-actions">
-                                <button class="die-btn" onclick="prepareAttack('${preset.id}')">ATTACK</button>
-                                <button class="die-btn" onclick="rollDamage('${preset.id}', false)">DAMAGE</button>
-                                <button class="die-btn" style="border-color:#00ff00; color:#00ff00;" onclick="rollDamage('${preset.id}', true)">+1d6 RAISE DMG</button>
-                            </div>
-                        </div>`;
-                }
+            activeThreat.weapons.forEach((w, index) => {
+                wepHtml += `
+                    <div class="weapon-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,153,0,0.3); padding-bottom:5px; margin-bottom:5px;">
+                            <input type="text" class="form-input" value="${w.name}" style="font-weight:bold; width: 60%;" onchange="updateWep(${index}, 'name', this.value)">
+                            <button class="die-btn danger" style="padding: 2px 6px;" onclick="removeWeapon(${index})">X</button>
+                        </div>
+                        <div class="wep-edit-row">
+                            <span>Rng:</span><input type="text" class="wep-input" style="width:70px;" value="${w.range}" onchange="updateWep(${index}, 'range', this.value)">
+                            <span>Dmg:</span><input type="text" class="wep-input" style="width:70px;" value="${w.damage}" onchange="updateWep(${index}, 'damage', this.value)">
+                            <span>AP:</span><input type="number" class="wep-input" style="width:40px;" value="${w.ap}" onchange="updateWep(${index}, 'ap', this.value)">
+                            <span>RoF:</span><input type="number" class="wep-input" style="width:40px;" value="${w.rof}" onchange="updateWep(${index}, 'rof', this.value)">
+                        </div>
+                        <div class="weapon-actions">
+                            <button class="die-btn" onclick="prepareAttack(${index})">ATTACK</button>
+                            <button class="die-btn" onclick="rollDamage(${index}, false)">DAMAGE</button>
+                            <button class="die-btn" style="border-color:#00ff00; color:#00ff00;" onclick="rollDamage(${index}, true)">+1d6 RAISE</button>
+                        </div>
+                    </div>`;
             });
             document.getElementById('weapon-list').innerHTML = wepHtml;
 
@@ -521,35 +384,42 @@
             if (!activeThreat) return;
             activeThreat.name = document.getElementById('edit-name').value;
             activeThreat.isWildCard = document.getElementById('edit-wildcard').checked;
+            activeThreat.pace = parseInt(document.getElementById('edit-pace').value) || 6;
             activeThreat.parry = parseInt(document.getElementById('edit-parry').value) || 5;
             activeThreat.toughness = parseInt(document.getElementById('edit-toughness').value) || 5;
+            activeThreat.armor = parseInt(document.getElementById('edit-armor').value) || 0;
+            activeThreat.scale = parseInt(document.getElementById('edit-scale').value) || 0;
+            activeThreat.abilities = document.getElementById('edit-abilities').value;
+        };
+
+        window.updateWep = function(index, field, val) {
+            activeThreat.weapons[index][field] = val;
         };
 
         function attachEditorListeners() {
-            document.querySelectorAll('.attr-input').forEach(el => {
-                el.addEventListener('change', (e) => { activeThreat.attributes[e.target.dataset.key] = e.target.value; });
-            });
-            document.querySelectorAll('.skill-input').forEach(el => {
-                el.addEventListener('change', (e) => { activeThreat.skills[e.target.dataset.key] = e.target.value; });
-            });
+            document.querySelectorAll('.attr-input').forEach(el => { el.addEventListener('change', (e) => { activeThreat.attributes[e.target.dataset.key] = e.target.value; }); });
+            document.querySelectorAll('.skill-input').forEach(el => { el.addEventListener('change', (e) => { activeThreat.skills[e.target.dataset.key] = e.target.value; }); });
         }
 
         window.addSkill = function() {
             let name = document.getElementById('new-skill-name').value.trim();
             let die = document.getElementById('new-skill-die').value.trim() || "d6";
-            if (name) {
-                activeThreat.skills[name] = die;
-                document.getElementById('new-skill-name').value = '';
-                document.getElementById('new-skill-die').value = '';
+            if (name) { activeThreat.skills[name] = die; renderEditor(); }
+        };
+        window.removeSkill = function(name) { delete activeThreat.skills[name]; renderEditor(); };
+
+        window.addWeaponFromPreset = function() {
+            let wId = document.getElementById('preset-weapon-select').value;
+            let preset = globalState.presets.find(p => p.id === wId);
+            if (preset) {
+                activeThreat.weapons.push({ name: preset.name, range: preset.range, damage: preset.damage, ap: preset.ap, rof: preset.rof, icon: preset.icon });
                 renderEditor();
             }
         };
 
-        window.removeSkill = function(name) { delete activeThreat.skills[name]; renderEditor(); };
-
-        window.addWeapon = function() {
-            let wId = document.getElementById('preset-weapon-select').value;
-            if (wId) { activeThreat.weapons.push(wId); renderEditor(); }
+        window.addCustomWeapon = function() {
+            activeThreat.weapons.push({ name: "New Attack", range: "Melee", damage: "Str+d6", ap: 0, rof: 1 });
+            renderEditor();
         };
 
         window.removeWeapon = function(index) { activeThreat.weapons.splice(index, 1); renderEditor(); };
@@ -559,14 +429,44 @@
             await set(ref(db, `campaignState/threatTemplates/${activeTemplateId}`), activeThreat);
             logToTerminal(`> TEMPLATE SAVED: ${activeThreat.name}`);
         };
-
         window.deleteTemplate = async function() {
             if (confirm("Delete this template?")) {
                 await set(ref(db, `campaignState/threatTemplates/${activeTemplateId}`), null);
                 document.getElementById('editor-panel').style.display = 'none';
-                activeTemplateId = null;
-                activeThreat = null;
+                activeTemplateId = null; activeThreat = null;
             }
+        };
+
+        // ==========================================
+        // BESTIARY SEEDER (Half-Life 2 Integration)
+        // ==========================================
+        window.seedBestiary = async function() {
+            if(!confirm("Initialize Master HL2 Bestiary? This will add 19 pre-configured templates to the Codex.")) return;
+            
+            const hl2Threats = {
+                "hl2_headcrab": { name: "Headcrab", isWildCard: false, pace: 6, parry: 5, toughness: 4, armor: 0, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d6", Notice: "d6", Stealth: "d8" }, abilities: "Leap: Jumps 6\" ignoring elevation.\nLatch: Raise on Fighting roll latches onto head. Victim rolls Vigor or becomes Shaken and starts transforming.", weapons: [ { name: "Latch/Bite", range: "Melee", damage: "Str+d4", ap: 0, rof: 1 } ] },
+                "hl2_headcrab_fast": { name: "Fast Headcrab", isWildCard: false, pace: 8, parry: 5, toughness: 3, armor: 0, scale: -2, attributes: { Agility: "d10", Smarts: "d4", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Athletics: "d10", Fighting: "d6", Notice: "d8", Stealth: "d10" }, abilities: "Leap & Latch.", weapons: [ { name: "Bite", range: "Melee", damage: "Str+d4", ap: 0, rof: 1 } ] },
+                "hl2_headcrab_poison": { name: "Poison Headcrab", isWildCard: false, pace: 6, parry: 6, toughness: 5, armor: 0, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8", Intimidation: "d10" }, abilities: "Leap & Latch.\nToxic Bite: Hit requires Vigor roll. Fail = Fatigue. Success = Shaken with pain (no Spirit recovery next round).", weapons: [ { name: "Toxic Bite", range: "Melee", damage: "Str", ap: 0, rof: 1 } ] },
+                "hl2_zombie": { name: "Zombie", isWildCard: false, pace: 4, parry: 5, toughness: 7, armor: 0, scale: 0, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d8", Vigor: "d8" }, skills: { Fighting: "d6", Intimidation: "d6", Notice: "d6", Throwing: "d6", Athletics: "d6" }, abilities: "Undead: +2 recover Shaken, no Called Shot dmg, immune poison/disease.\nHeadcrab Survivor: Destroying body drops 1-Wound Headcrab.", weapons: [ { name: "Claws", range: "Melee", damage: "Str+d6", ap: 0, rof: 1 }, { name: "Swat Object", range: "3/6/12", damage: "Str+d6", ap: 0, rof: 1 } ] },
+                "hl2_zombie_fast": { name: "Fast Zombie", isWildCard: false, pace: 8, parry: 6, toughness: 5, armor: 0, scale: 0, attributes: { Agility: "d10", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d6" }, abilities: "Undead.\nWall Crawler: Climb verticals at Pace 8.", weapons: [ { name: "Claws", range: "Melee", damage: "Str+d6", ap: 0, rof: 1 } ] },
+                "hl2_zombie_poison": { name: "Poison Zombie", isWildCard: false, pace: 4, parry: 6, toughness: 8, armor: 0, scale: 0, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Undead.\nToxic Aura: Start turn in melee = Vigor roll or Fatigue.\nHive: Can throw 2-3 Poison Headcrabs.", weapons: [ { name: "Claws", range: "Melee", damage: "Str+d6", ap: 0, rof: 1 }, { name: "Throw Headcrab", range: "4/8/16", damage: "Special", ap: 0, rof: 1 } ] },
+                "hl2_antlion": { name: "Antlion", isWildCard: false, pace: 8, parry: 6, toughness: 6, armor: 1, scale: 0, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Flight: Winged flight at Pace 8.\nBurrower: Hides underground, pops out as action.", weapons: [ { name: "Bite/Claws", range: "Melee", damage: "Str+d6", ap: 1, rof: 1 } ] },
+                "hl2_antlion_guard": { name: "Antlion Guard", isWildCard: true, pace: 8, parry: 6, toughness: 12, armor: 2, scale: 2, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d12+2", Vigor: "d12" }, skills: { Athletics: "d8", Fighting: "d8", Intimidation: "d10", Notice: "d6" }, abilities: "Charge: +4 Dmg and +2 Athletics pushback if runs 6\" straight line.\nCarapace: +2 Armor.\nSize +2: Large.", weapons: [ { name: "Ram/Gore", range: "Melee", damage: "Str+d8", ap: 2, rof: 1 } ] },
+                "hl2_scanner": { name: "City Scanner", isWildCard: false, pace: 10, parry: 4, toughness: 6, armor: 2, scale: -2, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Driving: "d8", Notice: "d10", Taunt: "d6" }, abilities: "Construct: +2 recover Shaken, immune poison/disease, no Called Shot dmg.\nMark Target: Grants Combine +1 hit vs target.\nFlashbulb: Small Burst, Vigor or Distracted 1d4 rnds.", weapons: [] },
+                "hl2_manhack": { name: "Manhack", isWildCard: false, pace: 8, parry: 6, toughness: 5, armor: 2, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d6" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Construct.\nSmall: Attackers -2 to hit.", weapons: [ { name: "Buzzsaw", range: "Melee", damage: "Str+d6", ap: 1, rof: 1 } ] },
+                "hl2_rollermine": { name: "Rollermine", isWildCard: false, pace: 8, parry: 4, toughness: 8, armor: 2, scale: -1, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d8", Notice: "d8" }, abilities: "Construct.\nEMP Burst: Explodes Small Burst 2d6 electrical damage when destroyed.", weapons: [ { name: "Electric Shock", range: "Melee", damage: "2d6", ap: 2, rof: 1 } ] },
+                "hl2_metrocop": { name: "Civil Protection (Metrocop)", isWildCard: false, pace: 6, parry: 4, toughness: 6, armor: 1, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Driving: "d6", Fighting: "d6", Intimidation: "d6", Notice: "d6", Shooting: "d6", Taunt: "d6", Athletics: "d6" }, abilities: "Tactical Doctrine: +1 recover Shaken near command.", weapons: [ { name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: 0, rof: 1 }, { name: "Stunstick", range: "Melee", damage: "Str+d4", ap: 1, rof: 1 } ] },
+                "hl2_combine_soldier": { name: "Combine Soldier", isWildCard: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8", Stealth: "d6", Throwing: "d6" }, abilities: "Edges: Steady Hands.", weapons: [ { name: "Pulse Rifle (SMG)", range: "24/48/96", damage: "2d6", ap: 1, rof: 3 }, { name: "Frag Grenade", range: "5/10/20", damage: "3d6", ap: 2, rof: 1 } ] },
+                "hl2_combine_shotgunner": { name: "Combine Shotgunner", isWildCard: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8" }, abilities: "Edges: Sweep.", weapons: [ { name: "SPAS-12", range: "12/24/48", damage: "3d6", ap: 0, rof: 2 }, { name: "SPAS Double", range: "12/24/48", damage: "5d6", ap: 0, rof: 1 } ] },
+                "hl2_combine_elite": { name: "Combine Elite", isWildCard: true, pace: 6, parry: 6, toughness: 9, armor: 3, scale: 0, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d8", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Shooting: "d10", Stealth: "d8" }, abilities: "Edges: Rock and Roll!", weapons: [ { name: "AR2 Pulse Rifle", range: "24/48/96", damage: "2d8", ap: 2, rof: 3 }, { name: "AR2 Energy Orb", range: "24/48/96", damage: "3d10", ap: 4, rof: 1 } ] },
+                "hl2_gunship": { name: "Combine Gunship", isWildCard: true, pace: 15, parry: 7, toughness: 17, armor: 4, scale: 4, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: "Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms).\nPoint Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.", weapons: [ { name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: 2, rof: 4 } ] },
+                "hl2_strider": { name: "Strider", isWildCard: true, pace: 12, parry: 7, toughness: 28, armor: 6, scale: 8, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: "Construct. Massive (+8 Tgh, -8 to be hit by small arms).\nImpale: Legs deal Str+d10 AP4 in melee.\nCrouch: Can lower body to enter buildings.", weapons: [ { name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: 2, rof: 4 }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: 10, rof: 1 } ] },
+                "hl2_barnacle": { name: "Barnacle", isWildCard: false, pace: 0, parry: 2, toughness: 6, armor: 0, scale: 0, attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: "Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3\" up per round.\nWeak Point: Tongue is Toughness 5 to sever.", weapons: [ { name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: 0, rof: 1 } ] },
+                "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, armor: 1, scale: 0, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Aquatic: Pace 10 in water.\nDrag: Raise on bite pulls target underwater (hold breath).", weapons: [ { name: "Jaws", range: "Melee", damage: "Str+d6", ap: 1, rof: 1 } ] }
+            };
+
+            await update(ref(db, 'campaignState/threatTemplates'), hl2Threats);
+            logToTerminal("> OVERWATCH BESTIARY FULLY INTEGRATED.");
         };
 
         // ==========================================
@@ -584,7 +484,6 @@
 
         window.rollTrait = function(traitName, dieValue, modifier = 0) {
             if (!activeThreat) return;
-            
             let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
             let sides = match ? parseInt(match[1]) : 4;
             let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
@@ -594,29 +493,23 @@
             let wRoll = activeThreat.isWildCard ? rollExploding(6) : null;
 
             let finalTotal = tRoll.total + totalMod;
-            if (wRoll) {
-                finalTotal = Math.max(tRoll.total, wRoll.total) + totalMod;
-            }
+            if (wRoll) finalTotal = Math.max(tRoll.total, wRoll.total) + totalMod;
 
             let tn = 4;
             let isCritFail = wRoll ? (tRoll.history[0] === 1 && wRoll.history[0] === 1) : (tRoll.history[0] === 1);
+            let outcome = "FAILURE"; let color = "#ff3333";
             
-            let outcome = "FAILURE";
-            let color = "#ff3333";
-            if (isCritFail) {
-                outcome = "CRITICAL FAILURE!";
-            } else if (finalTotal >= tn) {
+            if (isCritFail) { outcome = "CRITICAL FAILURE!"; } 
+            else if (finalTotal >= tn) {
                 let raises = Math.floor((finalTotal - tn) / 4);
                 outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
                 color = raises > 0 ? "#00ff00" : "#ff9900";
             }
 
-            let logStr = `> ${activeThreat.name} rolled ${traitName} (${dieValue}):<br>`;
-            logStr += `&nbsp;&nbsp;Trait: ${tRoll.history.join(' + ')}`;
+            let logStr = `> ${activeThreat.name} rolled ${traitName} (${dieValue}):<br>&nbsp;&nbsp;Trait: ${tRoll.history.join(' + ')}`;
             if (wRoll) logStr += ` | Wild: ${wRoll.history.join(' + ')}`;
             if (totalMod !== 0) logStr += ` | Mod: ${totalMod > 0 ? '+'+totalMod : totalMod}`;
             logStr += `<br>&nbsp;&nbsp;Result: <b style="color:${color};">${finalTotal}</b> -> ${outcome}`;
-            
             logToTerminal(logStr);
 
             if (globalState && globalState.webhook) {
@@ -624,7 +517,7 @@
                     title: `${activeThreat.name} rolled ${traitName}`,
                     description: `**Result: ${finalTotal}**\n${outcome}`,
                     color: color === "#00ff00" ? 0x00ff00 : (color === "#ff9900" ? 0xff9900 : 0xff0000),
-                    fields: [ { name: `Trait (${dieValue})`, value: tRoll.history.join(' + '), inline: true } ]
+                    fields: [ { name: `Trait (d${sides})`, value: tRoll.history.join(' + '), inline: true } ]
                 };
                 if (wRoll) embed.fields.push({ name: "Wild (d6)", value: wRoll.history.join(' + '), inline: true });
                 if (totalMod !== 0) embed.fields.push({ name: "Modifier", value: totalMod > 0 ? `+${totalMod}` : `${totalMod}`, inline: true });
@@ -633,19 +526,16 @@
         };
 
         // ==========================================
-        // WEAPON ATTACKS & MODAL LOGIC
+        // WEAPON ATTACKS & MODALS
         // ==========================================
-        window.prepareAttack = function(weaponId) {
-            let preset = globalState.presets.find(p => p.id === weaponId);
-            if (!preset) return;
-            
-            let rangeStr = preset.range;
-            let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
-            let isThrown = rangeStr.toLowerCase().includes("throw") || preset.name.toLowerCase().includes("grenade");
+        window.prepareAttack = function(wepIndex) {
+            let wep = activeThreat.weapons[wepIndex];
+            let isMelee = wep.range.toLowerCase().includes("melee") || wep.range.toLowerCase().includes("contact");
+            let isThrown = wep.range.toLowerCase().includes("throw") || wep.name.toLowerCase().includes("grenade");
             let skillName = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
             
             pendingRoll = { skill: skillName };
-            activeWeaponContext = preset;
+            activeWeaponContext = wep;
             
             document.getElementById('tn-input').value = "4"; 
             document.getElementById('mod-override-input').value = "0";
@@ -658,24 +548,15 @@
             document.getElementById('scope-checkbox').checked = false;
 
             if (!isMelee) {
-                rangedOpts.style.display = "block";
-                scopeRow.style.display = "flex";
-
-                let rofVal = parseInt(preset.rof) || 1;
+                rangedOpts.style.display = "block"; scopeRow.style.display = "flex";
+                let rofVal = parseInt(wep.rof) || 1;
                 if (rofVal > 1) {
                     rofOpts.style.display = "block";
                     const rofSelect = document.getElementById('rof-select');
                     rofSelect.innerHTML = `<option value="1">Single Shot (1 Die)</option>`;
-                    for (let r = 2; r <= rofVal; r++) {
-                        rofSelect.innerHTML += `<option value="${r}">Burst - ${r} Shots (${r} Dice)</option>`;
-                    }
-                } else {
-                    rofOpts.style.display = "none";
-                }
-            } else {
-                rangedOpts.style.display = "none";
-                rofOpts.style.display = "none";
-            }
+                    for (let r = 2; r <= rofVal; r++) { rofSelect.innerHTML += `<option value="${r}">Burst - ${r} Shots (${r} Dice)</option>`; }
+                } else { rofOpts.style.display = "none"; }
+            } else { rangedOpts.style.display = "none"; rofOpts.style.display = "none"; }
 
             document.getElementById('tn-modal').style.display = 'block';
         };
@@ -684,29 +565,21 @@
             if (!activeWeaponContext) return;
             let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
             let isScoped = document.getElementById('scope-checkbox').checked;
-            if (rangePenalty === -8 && isScoped) {
-                rangePenalty = -6;
-            }
-            applyComputedModifiers(rangePenalty);
+            if (rangePenalty === -8 && isScoped) rangePenalty = -6;
+            document.getElementById('mod-override-input').value = rangePenalty;
         };
 
         window.updateRecoilPenalty = function() {
             if (!activeWeaponContext) return;
             let shots = parseInt(document.getElementById('rof-select').value) || 1;
             let recoilPenalty = (shots > 1) ? -2 : 0;
-
             let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
             let isScoped = document.getElementById('scope-checkbox').checked;
             if (rangePenalty === -8 && isScoped) rangePenalty = -6;
 
             const warning = document.getElementById('recoil-warning');
-            if (warning) { warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none'; }
-
-            applyComputedModifiers(rangePenalty + recoilPenalty);
-        };
-
-        window.applyComputedModifiers = function(computedVal) {
-            document.getElementById('mod-override-input').value = computedVal;
+            if (warning) warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none';
+            document.getElementById('mod-override-input').value = rangePenalty + recoilPenalty;
         };
 
         window.confirmRoll = function() {
@@ -716,75 +589,49 @@
                 shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
             }
             document.getElementById('tn-modal').style.display = 'none';
-            
             executeThreatRoll(pendingRoll.skill, tn, shotsFired);
         };
 
-        window.cancelRoll = function() {
-            document.getElementById('tn-modal').style.display = 'none';
-            pendingRoll = null;
-            activeWeaponContext = null;
-        };
+        window.cancelRoll = function() { document.getElementById('tn-modal').style.display = 'none'; pendingRoll = null; activeWeaponContext = null; };
 
         function executeThreatRoll(skillName, targetNumber, shotsFired) {
-            if (!activeThreat || !activeWeaponContext) return;
-            
             let dieValue = activeThreat.skills[skillName] || "d4";
             let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
             let sides = match ? parseInt(match[1]) : 4;
             let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
             
             let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
-            let customModifier = parseInt(document.getElementById('mod-override-input').value) || 0;
-            let totalModifier = intrinsicMod + unskilledMod + customModifier;
+            let customMod = parseInt(document.getElementById('mod-override-input').value) || 0;
+            let totalModifier = intrinsicMod + unskilledMod + customMod;
 
-            let results = [];
-            let isCritFail = false;
+            let results = []; let isCritFail = false;
 
             if (shotsFired > 1) {
                 let traitRolls = [];
-                for (let i = 0; i < shotsFired; i++) {
-                    traitRolls.push(rollExploding(sides));
-                }
+                for (let i = 0; i < shotsFired; i++) traitRolls.push(rollExploding(sides));
                 let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
 
                 let onesCount = 0;
                 traitRolls.forEach(r => { if (r.history[0] === 1) onesCount++; });
                 if (wildRoll && wildRoll.history[0] === 1) onesCount++;
 
-                let totalDice = wildRoll ? shotsFired + 1 : shotsFired;
-                isCritFail = (onesCount > totalDice / 2);
+                isCritFail = (onesCount > (wildRoll ? shotsFired + 1 : shotsFired) / 2);
 
-                let traitTotals = traitRolls.map(r => r.total);
-                let minVal = Math.min(...traitTotals);
-                let minIdx = traitTotals.indexOf(minVal);
-
-                if (wildRoll && wildRoll.total > minVal) {
-                    traitRolls[minIdx] = wildRoll;
-                }
+                let minVal = Math.min(...traitRolls.map(r => r.total));
+                let minIdx = traitRolls.findIndex(r => r.total === minVal);
+                if (wildRoll && wildRoll.total > minVal) traitRolls[minIdx] = wildRoll;
 
                 traitRolls.forEach((r, idx) => {
                     let score = r.total + totalModifier;
-                    let outcome = "";
-                    let hasRaise = false;
-
-                    if (isCritFail) {
-                        outcome = "CRITICAL FAILURE!";
-                    } else if (score < targetNumber) {
-                        outcome = "FAILURE.";
-                    } else {
+                    let outcome = ""; let hasRaise = false;
+                    if (isCritFail) outcome = "CRITICAL FAILURE!";
+                    else if (score < targetNumber) outcome = "FAILURE.";
+                    else {
                         let raises = Math.floor((score - targetNumber) / 4);
                         outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
                         if (raises > 0) hasRaise = true;
                     }
-
-                    results.push({
-                        shotIndex: idx + 1,
-                        total: score,
-                        history: r.history,
-                        outcome: outcome,
-                        hasRaise: hasRaise
-                    });
+                    results.push({ shotIndex: idx + 1, total: score, history: r.history, outcome: outcome, hasRaise: hasRaise });
                 });
             } else {
                 let traitRoll = rollExploding(sides);
@@ -794,44 +641,28 @@
                 if (wildRoll) {
                     bestTotal = Math.max(traitRoll.total, wildRoll.total);
                     isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
-                } else {
-                    isCritFail = (traitRoll.history[0] === 1);
-                }
+                } else isCritFail = (traitRoll.history[0] === 1);
                 bestTotal += totalModifier;
 
-                let outcome = "";
-                let hasRaise = false;
-
-                if (isCritFail) {
-                    outcome = "CRITICAL FAILURE!";
-                } else if (bestTotal < targetNumber) {
-                    outcome = "FAILURE.";
-                } else {
+                let outcome = ""; let hasRaise = false;
+                if (isCritFail) outcome = "CRITICAL FAILURE!";
+                else if (bestTotal < targetNumber) outcome = "FAILURE.";
+                else {
                     let raises = Math.floor((bestTotal - targetNumber) / 4);
                     outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
                     if (raises > 0) hasRaise = true;
                 }
-
                 results.push({
-                    shotIndex: 1,
-                    total: bestTotal,
-                    history: wildRoll && wildRoll.total > traitRoll.total ? wildRoll.history : traitRoll.history,
-                    outcome: outcome,
-                    hasRaise: hasRaise,
-                    isSingle: true,
-                    traitHistory: traitRoll.history,
-                    wildHistory: wildRoll ? wildRoll.history : null
+                    shotIndex: 1, total: bestTotal, history: wildRoll && wildRoll.total > traitRoll.total ? wildRoll.history : traitRoll.history,
+                    outcome: outcome, hasRaise: hasRaise, isSingle: true, traitHistory: traitRoll.history, wildHistory: wildRoll ? wildRoll.history : null
                 });
             }
-
             renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail);
         }
 
         async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail) {
             let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
-            let displayMod = totalModifier !== 0 ? (totalModifier > 0 ? `+${totalModifier}` : `${totalModifier}`) : "";
-            let modStrDisplay = totalModifier !== 0 ? ` (${displayMod})` : "";
-
+            let modStrDisplay = totalModifier !== 0 ? ` (${totalModifier > 0 ? '+' : ''}${totalModifier})` : "";
             let title = `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
             let termLog = `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
 
@@ -840,136 +671,94 @@
                     termLog += `&nbsp;&nbsp;Trait: ${r.traitHistory.join(' + ')}<br>`;
                     if (r.wildHistory) termLog += `&nbsp;&nbsp;Wild:  ${r.wildHistory.join(' + ')}<br>`;
                     termLog += `&nbsp;&nbsp;Result: <b>${r.total}</b> -> ${r.outcome}<br>`;
-                } else {
-                    termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
-                }
+                } else termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
             });
-
             logToTerminal(termLog);
 
             if (globalState && globalState.webhook) {
                 let desc = "";
                 results.forEach(r => {
-                    if (r.isSingle) {
-                        desc += `**Result: ${r.total}**\n${r.outcome}`;
-                    } else {
-                        desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
-                    }
+                    if (r.isSingle) desc += `**Result: ${r.total}**\n${r.outcome}`;
+                    else desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
                 });
 
-                const embed = {
-                    title: title,
-                    description: desc,
-                    color: color,
-                    fields: []
-                };
-
+                const embed = { title: title, description: desc, color: color, fields: [] };
                 if (results[0].isSingle) {
                     embed.fields.push({ name: `Trait (d${sides})`, value: `${results[0].traitHistory.join(' + ')}`, inline: true });
-                    if (results[0].wildHistory) {
-                        embed.fields.push({ name: "Wild (d6)", value: `${results[0].wildHistory.join(' + ')}`, inline: true });
-                    }
-                } else {
-                    results.forEach(r => {
-                        embed.fields.push({ name: `Shot #${r.shotIndex} History`, value: `${r.history.join(' + ')}`, inline: true });
-                    });
-                }
+                    if (results[0].wildHistory) embed.fields.push({ name: "Wild (d6)", value: `${results[0].wildHistory.join(' + ')}`, inline: true });
+                } else results.forEach(r => embed.fields.push({ name: `Shot #${r.shotIndex}`, value: `${r.history.join(' + ')}`, inline: true }));
 
-                if (totalModifier !== 0) {
-                    embed.fields.push({ name: "Modifier", value: `${displayMod}`, inline: true });
-                }
-
-                if (activeWeaponContext) {
-                    let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || defaultWeaponIcon;
-                    embed.thumbnail = { url: imgUrl };
-                    embed.fields.push({
-                        name: "Weapon Specifications",
-                        value: `Range: ${activeWeaponContext.range}\nDamage: ${activeWeaponContext.damage}\nAP: ${activeWeaponContext.ap}\nRoF: ${activeWeaponContext.rof}\nShots: ${activeWeaponContext.shots}\nMin Str: ${activeWeaponContext.minStr}`
-                    });
-                }
-
-                try {
-                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
-                } catch (e) {}
+                if (totalModifier !== 0) embed.fields.push({ name: "Modifier", value: `${totalModifier > 0 ? '+' : ''}${totalModifier}`, inline: true });
+                
+                let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || defaultWeaponIcon;
+                embed.thumbnail = { url: imgUrl };
+                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${activeWeaponContext.range}\nDamage: ${activeWeaponContext.damage}\nAP: ${activeWeaponContext.ap}\nRoF: ${activeWeaponContext.rof}` });
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => {});
             }
         }
 
         // ==========================================
-        // WEAPON DAMAGE
+        // WEAPON DAMAGE (Str+d6 Support)
         // ==========================================
-        function parseDamage(damageStr) {
-            let cleaned = damageStr.replace(/\s+/g, '').toLowerCase();
-            let match = cleaned.match(/(\d+)d(\d+)(?:\+(\d+))?/);
-            if (match) return { count: parseInt(match[1]), sides: parseInt(match[2]), modifier: parseInt(match[3]) || 0 };
-            return null;
-        }
-
-        window.rollDamage = async function(weaponId, addRaise = false) {
-            let preset = globalState.presets.find(p => p.id === weaponId);
-            if (!preset) return;
+        window.rollDamage = async function(wepIndex, addRaise = false) {
+            let wep = activeThreat.weapons[wepIndex];
+            let dmgStr = wep.damage.toLowerCase().replace(/\s/g, '');
             
-            let damageStr = preset.damage;
-            let parsed = parseDamage(damageStr);
-            if (!parsed) { alert("Custom damage parsing required."); return; }
+            let total = 0; let rolls = []; let flatMod = 0;
+            let parts = dmgStr.split('+');
+            
+            parts.forEach(part => {
+                if (part === 'str') {
+                    let strVal = activeThreat.attributes.Strength || "d6";
+                    let sides = parseInt(strVal.match(/\d+/)[0]) || 4;
+                    let r = rollExploding(sides);
+                    total += r.total; rolls.push(`Str(d${sides}):[${r.history.join('+')}]`);
+                } else if (part.includes('d')) {
+                    let [c, s] = part.split('d');
+                    let count = parseInt(c) || 1; let sides = parseInt(s);
+                    for(let i=0; i<count; i++){
+                        let r = rollExploding(sides);
+                        total += r.total; rolls.push(`d${sides}:[${r.history.join('+')}]`);
+                    }
+                } else if (!isNaN(parseInt(part))) flatMod += parseInt(part);
+            });
 
-            let total = 0;
-            let rolls = [];
-            for (let i = 0; i < parsed.count; i++) {
-                let r = rollExploding(parsed.sides);
-                total += r.total;
-                rolls.push(...r.history);
-            }
-            total += parsed.modifier;
+            total += flatMod;
 
-            let bonusStr = "";
-            let bonusRolls = [];
+            let bonusStr = ""; let bonusRolls = [];
             if (addRaise) {
-                let raiseRoll = rollExploding(6);
-                total += raiseRoll.total;
-                bonusRolls = raiseRoll.history;
-                bonusStr = ` + ${raiseRoll.history.join(' + ')} [Raise]`;
+                let rRoll = rollExploding(6);
+                total += rRoll.total; bonusRolls = rRoll.history;
+                bonusStr = ` + ${rRoll.history.join('+')} [Raise]`;
             }
 
-            let termLog = `> ${activeThreat.name} dealt damage with ${preset.name.toUpperCase()}<br>`;
-            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${parsed.modifier > 0 ? '+'+parsed.modifier : ''}${bonusStr}<br>`;
-            termLog += `&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
+            let termLog = `> ${activeThreat.name} dealt damage with ${wep.name.toUpperCase()}<br>&nbsp;&nbsp;Dmg Roll [${wep.damage}]: ${rolls.join(' + ')}${flatMod!==0?'+'+flatMod:''}${bonusStr}<br>&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
             logToTerminal(termLog);
 
             if (globalState && globalState.webhook) {
                 const embed = {
-                    title: `${activeThreat.name} rolled damage with ${preset.name}`,
-                    description: `**Damage Total: ${total}**`,
-                    color: 0xff3333,
-                    fields: [
-                        { name: "Dice History", value: `${rolls.join(' + ')}`, inline: true }
-                    ]
+                    title: `${activeThreat.name} rolled damage with ${wep.name}`,
+                    description: `**Damage Total: ${total}**`, color: 0xff3333,
+                    fields: [ { name: "Dice History", value: rolls.join('\n'), inline: true } ]
                 };
-                if (parsed.modifier !== 0) embed.fields.push({ name: "Modifier", value: `${parsed.modifier > 0 ? '+' : ''}${parsed.modifier}`, inline: true });
+                if (flatMod !== 0) embed.fields.push({ name: "Modifier", value: `+${flatMod}`, inline: true });
                 if (addRaise) {
                     embed.fields.push({ name: "Raise Bonus (+1d6)", value: `${bonusRolls.join(' + ')}`, inline: true });
                     embed.description += `\n*(Includes +1d6 Raise Bonus)*`;
                 }
 
-                let imgUrl = preset.image || preset.icon || defaultWeaponIcon;
+                let imgUrl = wep.image || wep.icon || defaultWeaponIcon;
                 embed.thumbnail = { url: imgUrl };
-                embed.fields.push({
-                    name: "Weapon Specifications",
-                    value: `Range: ${preset.range}\nDamage: ${preset.damage}\nAP: ${preset.ap}\nRoF: ${preset.rof}\nShots: ${preset.shots}\nMin Str: ${preset.minStr}`
-                });
-
-                try {
-                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
-                } catch (e) {}
+                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${wep.range}\nDamage: ${wep.damage}\nAP: ${wep.ap}\nRoF: ${wep.rof}` });
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => {});
             }
         };
 
         function logToTerminal(html) {
             const term = document.getElementById('roll-terminal');
             const div = document.createElement('div');
-            div.style.marginBottom = "8px";
-            div.innerHTML = html;
-            term.appendChild(div);
-            term.scrollTop = term.scrollHeight;
+            div.style.marginBottom = "8px"; div.innerHTML = html;
+            term.appendChild(div); term.scrollTop = term.scrollHeight;
         }
 
         // ==========================================
@@ -988,33 +777,20 @@
             for (let i = 0; i < count; i++) {
                 let suffix = count > 1 ? ` ${letters[i % 26]}` : "";
                 let newNpc = {
-                    id: "npc_" + activeTemplateId + "_" + Date.now() + "_" + i,
-                    name: baseName + suffix,
-                    isPlayer: false,
-                    isWildCard: activeThreat.isWildCard,
-                    parry: activeThreat.parry,
-                    toughness: activeThreat.toughness,
-                    wounds: 0,
-                    fatigue: 0,
-                    shaken: false,
-                    distracted: false,
-                    vulnerable: false,
-                    card: null
+                    id: "npc_" + activeTemplateId + "_" + Date.now() + "_" + i, name: baseName + suffix, isPlayer: false,
+                    isWildCard: activeThreat.isWildCard, parry: activeThreat.parry, toughness: activeThreat.toughness,
+                    wounds: 0, fatigue: 0, shaken: false, distracted: false, vulnerable: false, card: null
                 };
                 participants.push(newNpc);
             }
-
             await set(ref(db, 'campaignState/combat/participants'), participants);
             logToTerminal(`> DEPLOYMENT SUCCESS: Deployed ${count} unit(s) of ${baseName} to Combat Monitor.`);
             
             if (globalState && globalState.webhook) {
                 const embed = { title: "REINFORCEMENTS HAVE ARRIVED", description: `${count} unit(s) of **${baseName}** spawned into the tactical net.`, color: 0xff3333 };
-                try {
-                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
-                } catch(e){}
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e=>{});
             }
         };
-
     </script>
 </body>
 </html>
