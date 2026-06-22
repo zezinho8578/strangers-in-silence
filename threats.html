@@ -85,9 +85,7 @@
             gap: 8px;
             user-select: none;
         }
-        .custom-checkbox input[type="checkbox"] {
-            display: none;
-        }
+        .custom-checkbox input[type="checkbox"] { display: none; }
         .custom-checkbox .check-box {
             width: 18px;
             height: 18px;
@@ -99,19 +97,9 @@
             transition: 0.2s;
             flex-shrink: 0;
         }
-        .custom-checkbox input[type="checkbox"]:checked + .check-box {
-            background: var(--theme-color);
-        }
-        .custom-checkbox input[type="checkbox"]:checked + .check-box::after {
-            content: "✓";
-            color: var(--bg-color);
-            font-size: 14px;
-            font-weight: bold;
-        }
-        .custom-checkbox .check-label {
-            color: var(--theme-color);
-            font-size: 0.95em;
-        }
+        .custom-checkbox input[type="checkbox"]:checked + .check-box { background: var(--theme-color); }
+        .custom-checkbox input[type="checkbox"]:checked + .check-box::after { content: "✓"; color: var(--bg-color); font-size: 14px; font-weight: bold; }
+        .custom-checkbox .check-label { color: var(--theme-color); font-size: 0.95em; }
 
         /* Editor Header */
         .editor-header {
@@ -123,24 +111,12 @@
             padding-bottom: 10px;
             gap: 15px;
         }
-        .editor-header input {
-            font-size: 1.2em;
-            font-weight: bold;
-            flex-grow: 1;
-        }
+        .editor-header input { font-size: 1.2em; font-weight: bold; flex-grow: 1; }
 
         /* Stats Row */
-        .stats-row {
-            display: flex;
-            gap: 30px;
-            margin-bottom: 20px;
-        }
-        .stats-row .form-row {
-            margin-bottom: 0;
-        }
-        .stats-row .form-row span {
-            white-space: nowrap;
-        }
+        .stats-row { display: flex; gap: 30px; margin-bottom: 20px; }
+        .stats-row .form-row { margin-bottom: 0; }
+        .stats-row .form-row span { white-space: nowrap; }
 
         /* Trait Row */
         .trait-row {
@@ -150,14 +126,8 @@
             margin-bottom: 8px;
             gap: 8px;
         }
-        .trait-row > span {
-            white-space: nowrap;
-        }
-        .trait-row > div {
-            display: flex;
-            gap: 5px;
-            align-items: center;
-        }
+        .trait-row > span { white-space: nowrap; }
+        .trait-row > div { display: flex; gap: 5px; align-items: center; }
 
         /* Weapon Card with Image */
         .weapon-card {
@@ -184,15 +154,8 @@
             flex-shrink: 0;
             overflow: hidden;
         }
-        .weapon-icon img {
-            max-width: 90%;
-            max-height: 90%;
-            object-fit: contain;
-        }
-        .weapon-icon .weapon-icon-placeholder {
-            font-size: 2em;
-            opacity: 0.4;
-        }
+        .weapon-icon img { max-width: 90%; max-height: 90%; object-fit: contain; }
+        .weapon-icon .weapon-icon-placeholder { font-size: 2em; opacity: 0.4; }
         .weapon-info {
             flex-grow: 1;
             padding: 8px 10px;
@@ -200,53 +163,35 @@
             flex-direction: column;
             justify-content: space-between;
         }
-        .weapon-info-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .weapon-name {
-            font-weight: bold;
-            font-size: 1em;
-        }
+        .weapon-info-top { display: flex; justify-content: space-between; align-items: center; }
+        .weapon-name { font-weight: bold; font-size: 1em; }
         .weapon-remove-btn {
-            background: transparent;
-            color: #ff3333;
-            border: 1px solid #ff3333;
-            padding: 2px 6px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.85em;
-            line-height: 1;
+            background: transparent; color: #ff3333; border: 1px solid #ff3333;
+            padding: 2px 6px; cursor: pointer; font-family: inherit; font-size: 0.85em; line-height: 1;
         }
         .weapon-remove-btn:hover { background: #ff3333; color: var(--bg-color); }
-        .weapon-stats {
-            font-size: 0.85em;
-            opacity: 0.85;
-            line-height: 1.5;
-        }
+        .weapon-stats { font-size: 0.85em; opacity: 0.85; line-height: 1.5; }
         .weapon-stats span { white-space: nowrap; }
-        .weapon-actions {
-            display: flex;
-            gap: 8px;
-            padding: 8px 10px;
-            flex-wrap: wrap;
-        }
+        .weapon-actions { display: flex; gap: 8px; padding: 8px 10px; flex-wrap: wrap; }
 
         #roll-terminal {
-            border: 1px solid #ff3333;
-            padding: 10px;
-            height: 200px;
-            overflow-y: auto;
-            background: rgba(0,0,0,0.5); 
-            color: #ff3333;
+            border: 1px solid #ff3333; padding: 10px; height: 200px;
+            overflow-y: auto; background: rgba(0,0,0,0.5); color: #ff3333;
         }
 
-        .section-header {
-            margin: 0 0 10px 0;
-            border-bottom: 1px solid var(--theme-color);
-            padding-bottom: 5px;
+        .section-header { margin: 0 0 10px 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 5px; }
+
+        /* Modal Settings */
+        #tn-modal {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px;
+            z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.9);
+            width: max-content; min-width: 350px; pointer-events: auto !important;
         }
+        #tn-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
+        .tn-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 20px; }
+        .admin-input { background: var(--bg-color); color: var(--theme-color); border: 1px solid var(--theme-color); padding: 5px; font-family: inherit; }
     </style>
 </head>
 <body>
@@ -255,7 +200,7 @@
 
     <div id="top-nav">
         <a href="/dashboard.html" class="nav-link">< RETURN TO DASHBOARD</a>
-        <div></div>
+        <div>OVERWATCH THREAT REGISTRY [ADMIN]</div>
     </div>
 
     <div class="threat-grid">
@@ -341,6 +286,54 @@
         <div>> TERMINAL READY. WAITING FOR INPUT...</div>
     </div>
 
+    <!-- Target Number Modal (Matches Character.html) -->
+    <div id="tn-modal">
+        <h3>TACTICAL ENGAGEMENT MONITOR</h3>
+        
+        <div class="setting-row">
+            <span>Target Number (TN):</span>
+            <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center;">
+        </div>
+
+        <div id="ranged-options-container" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <div class="setting-row">
+                <span>Range Bracket:</span>
+                <select id="range-select" class="admin-input" style="width:180px;" onchange="updateRangePenalty()">
+                    <option value="0">Short Range (+0)</option>
+                    <option value="-2">Medium Range (-2)</option>
+                    <option value="-4">Long Range (-4)</option>
+                    <option value="-8">Extreme Range (-8)</option>
+                </select>
+            </div>
+            <div class="setting-row" id="scope-row" style="display:none;">
+                <span>Scoped Sight Mounted?</span>
+                <input type="checkbox" id="scope-checkbox" onchange="updateRangePenalty()" style="width: 20px; height: 20px;">
+            </div>
+        </div>
+
+        <div id="rof-options-container" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <div class="setting-row">
+                <span>Shots Fired (RoF):</span>
+                <select id="rof-select" class="admin-input" style="width:180px;" onchange="updateRecoilPenalty()">
+                    <option value="1">Single Shot (1 Die)</option>
+                </select>
+            </div>
+            <div id="recoil-warning" style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">
+                * Firing at RoF > 1 incurs a -2 Recoil penalty.
+            </div>
+        </div>
+
+        <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Modifier Adjust:</span>
+            <input type="number" id="mod-override-input" value="0" class="admin-input" style="width:80px; text-align:center;">
+        </div>
+
+        <div class="tn-buttons">
+            <button class="die-btn" onclick="confirmRoll()">[ CONFIRM ROLL ]</button>
+            <button class="die-btn" onclick="cancelRoll()">[ CANCEL ]</button>
+        </div>
+    </div>
+
     <script src="/settings.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -363,10 +356,13 @@
         let activeTemplateId = null;
         let activeThreat = null;
 
+        // Roll State variables
+        let pendingRoll = null;
+        let activeWeaponContext = null;
+
         const defaultAttributes = { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" };
         const defaultSkills = { Fighting: "d6", Shooting: "d6", Notice: "d6" };
 
-        // Default weapon icon SVG (crosshair/gun silhouette)
         const defaultWeaponIcon = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="%23ff9900" opacity="0.5"><circle cx="32" cy="32" r="20" fill="none" stroke="%23ff9900" stroke-width="2"/><circle cx="32" cy="32" r="3"/><line x1="32" y1="6" x2="32" y2="18" stroke="%23ff9900" stroke-width="2"/><line x1="32" y1="46" x2="32" y2="58" stroke="%23ff9900" stroke-width="2"/><line x1="6" y1="32" x2="18" y2="32" stroke="%23ff9900" stroke-width="2"/><line x1="46" y1="32" x2="58" y2="32" stroke="%23ff9900" stroke-width="2"/></svg>`;
 
         onValue(ref(db, 'campaignState'), (snapshot) => {
@@ -509,9 +505,9 @@
                                 </div>
                             </div>
                             <div class="weapon-actions">
-                                <button class="die-btn" onclick="rollAttack('${preset.name}', '${preset.range}')">ATTACK</button>
-                                <button class="die-btn" onclick="rollDamage('${preset.name}', '${preset.damage}')">DAMAGE</button>
-                                <button class="die-btn" style="border-color:#00ff00; color:#00ff00;" onclick="rollDamage('${preset.name}', '${preset.damage}', true)">+1d6 RAISE DMG</button>
+                                <button class="die-btn" onclick="prepareAttack('${preset.id}')">ATTACK</button>
+                                <button class="die-btn" onclick="rollDamage('${preset.id}', false)">DAMAGE</button>
+                                <button class="die-btn" style="border-color:#00ff00; color:#00ff00;" onclick="rollDamage('${preset.id}', true)">+1d6 RAISE DMG</button>
                             </div>
                         </div>`;
                 }
@@ -531,14 +527,10 @@
 
         function attachEditorListeners() {
             document.querySelectorAll('.attr-input').forEach(el => {
-                el.addEventListener('change', (e) => {
-                    activeThreat.attributes[e.target.dataset.key] = e.target.value;
-                });
+                el.addEventListener('change', (e) => { activeThreat.attributes[e.target.dataset.key] = e.target.value; });
             });
             document.querySelectorAll('.skill-input').forEach(el => {
-                el.addEventListener('change', (e) => {
-                    activeThreat.skills[e.target.dataset.key] = e.target.value;
-                });
+                el.addEventListener('change', (e) => { activeThreat.skills[e.target.dataset.key] = e.target.value; });
             });
         }
 
@@ -553,23 +545,14 @@
             }
         };
 
-        window.removeSkill = function(name) {
-            delete activeThreat.skills[name];
-            renderEditor();
-        };
+        window.removeSkill = function(name) { delete activeThreat.skills[name]; renderEditor(); };
 
         window.addWeapon = function() {
             let wId = document.getElementById('preset-weapon-select').value;
-            if (wId) {
-                activeThreat.weapons.push(wId);
-                renderEditor();
-            }
+            if (wId) { activeThreat.weapons.push(wId); renderEditor(); }
         };
 
-        window.removeWeapon = function(index) {
-            activeThreat.weapons.splice(index, 1);
-            renderEditor();
-        };
+        window.removeWeapon = function(index) { activeThreat.weapons.splice(index, 1); renderEditor(); };
 
         window.saveTemplateToDB = async function() {
             updateActive();
@@ -587,7 +570,7 @@
         };
 
         // ==========================================
-        // ROLLING ENGINE
+        // BASE ROLLING ENGINE
         // ==========================================
         function rollExploding(sides) {
             let total = 0; let currentRoll; let history = [];
@@ -629,29 +612,291 @@
             }
 
             let logStr = `> ${activeThreat.name} rolled ${traitName} (${dieValue}):<br>`;
-            logStr += `&nbsp;&nbsp;Trait: ${tRoll.history.join('+')}`;
-            if (wRoll) logStr += ` | Wild: ${wRoll.history.join('+')}`;
+            logStr += `&nbsp;&nbsp;Trait: ${tRoll.history.join(' + ')}`;
+            if (wRoll) logStr += ` | Wild: ${wRoll.history.join(' + ')}`;
             if (totalMod !== 0) logStr += ` | Mod: ${totalMod > 0 ? '+'+totalMod : totalMod}`;
             logStr += `<br>&nbsp;&nbsp;Result: <b style="color:${color};">${finalTotal}</b> -> ${outcome}`;
             
             logToTerminal(logStr);
-            logToDiscord(`${activeThreat.name} rolled ${traitName}`, `**Result: ${finalTotal}** -> ${outcome}\nTrait: ${tRoll.history.join('+')}${wRoll ? `\nWild: ${wRoll.history.join('+')}` : ''}`);
-        };
 
-        window.rollAttack = function(weaponName, rangeStr) {
-            let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
-            let skillName = isMelee ? "Fighting" : "Shooting";
-            
-            let dieValue = activeThreat.skills[skillName];
-            let mod = 0;
-            if (!dieValue) {
-                dieValue = "d4";
-                mod = -2; // Unskilled
-                logToTerminal(`> ${activeThreat.name} lacks ${skillName}. Rolling UNSKILLED (-2).`);
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${activeThreat.name} rolled ${traitName}`,
+                    description: `**Result: ${finalTotal}**\n${outcome}`,
+                    color: color === "#00ff00" ? 0x00ff00 : (color === "#ff9900" ? 0xff9900 : 0xff0000),
+                    fields: [ { name: `Trait (${dieValue})`, value: tRoll.history.join(' + '), inline: true } ]
+                };
+                if (wRoll) embed.fields.push({ name: "Wild (d6)", value: wRoll.history.join(' + '), inline: true });
+                if (totalMod !== 0) embed.fields.push({ name: "Modifier", value: totalMod > 0 ? `+${totalMod}` : `${totalMod}`, inline: true });
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => {});
             }
-            window.rollTrait(`Attack [${weaponName}] via ${skillName}`, dieValue, mod);
         };
 
+        // ==========================================
+        // WEAPON ATTACKS & MODAL LOGIC
+        // ==========================================
+        window.prepareAttack = function(weaponId) {
+            let preset = globalState.presets.find(p => p.id === weaponId);
+            if (!preset) return;
+            
+            let rangeStr = preset.range;
+            let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
+            let isThrown = rangeStr.toLowerCase().includes("throw") || preset.name.toLowerCase().includes("grenade");
+            let skillName = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
+            
+            pendingRoll = { skill: skillName };
+            activeWeaponContext = preset;
+            
+            document.getElementById('tn-input').value = "4"; 
+            document.getElementById('mod-override-input').value = "0";
+
+            const rangedOpts = document.getElementById('ranged-options-container');
+            const rofOpts = document.getElementById('rof-options-container');
+            const scopeRow = document.getElementById('scope-row');
+            
+            document.getElementById('range-select').value = "0";
+            document.getElementById('scope-checkbox').checked = false;
+
+            if (!isMelee) {
+                rangedOpts.style.display = "block";
+                scopeRow.style.display = "flex";
+
+                let rofVal = parseInt(preset.rof) || 1;
+                if (rofVal > 1) {
+                    rofOpts.style.display = "block";
+                    const rofSelect = document.getElementById('rof-select');
+                    rofSelect.innerHTML = `<option value="1">Single Shot (1 Die)</option>`;
+                    for (let r = 2; r <= rofVal; r++) {
+                        rofSelect.innerHTML += `<option value="${r}">Burst - ${r} Shots (${r} Dice)</option>`;
+                    }
+                } else {
+                    rofOpts.style.display = "none";
+                }
+            } else {
+                rangedOpts.style.display = "none";
+                rofOpts.style.display = "none";
+            }
+
+            document.getElementById('tn-modal').style.display = 'block';
+        };
+
+        window.updateRangePenalty = function() {
+            if (!activeWeaponContext) return;
+            let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
+            let isScoped = document.getElementById('scope-checkbox').checked;
+            if (rangePenalty === -8 && isScoped) {
+                rangePenalty = -6;
+            }
+            applyComputedModifiers(rangePenalty);
+        };
+
+        window.updateRecoilPenalty = function() {
+            if (!activeWeaponContext) return;
+            let shots = parseInt(document.getElementById('rof-select').value) || 1;
+            let recoilPenalty = (shots > 1) ? -2 : 0;
+
+            let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
+            let isScoped = document.getElementById('scope-checkbox').checked;
+            if (rangePenalty === -8 && isScoped) rangePenalty = -6;
+
+            const warning = document.getElementById('recoil-warning');
+            if (warning) { warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none'; }
+
+            applyComputedModifiers(rangePenalty + recoilPenalty);
+        };
+
+        window.applyComputedModifiers = function(computedVal) {
+            document.getElementById('mod-override-input').value = computedVal;
+        };
+
+        window.confirmRoll = function() {
+            let tn = parseInt(document.getElementById('tn-input').value) || 4;
+            let shotsFired = 1;
+            if (activeWeaponContext && parseInt(activeWeaponContext.rof) > 1 && document.getElementById('rof-options-container').style.display !== 'none') {
+                shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
+            }
+            document.getElementById('tn-modal').style.display = 'none';
+            
+            executeThreatRoll(pendingRoll.skill, tn, shotsFired);
+        };
+
+        window.cancelRoll = function() {
+            document.getElementById('tn-modal').style.display = 'none';
+            pendingRoll = null;
+            activeWeaponContext = null;
+        };
+
+        function executeThreatRoll(skillName, targetNumber, shotsFired) {
+            if (!activeThreat || !activeWeaponContext) return;
+            
+            let dieValue = activeThreat.skills[skillName] || "d4";
+            let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
+            let sides = match ? parseInt(match[1]) : 4;
+            let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
+            
+            let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
+            let customModifier = parseInt(document.getElementById('mod-override-input').value) || 0;
+            let totalModifier = intrinsicMod + unskilledMod + customModifier;
+
+            let results = [];
+            let isCritFail = false;
+
+            if (shotsFired > 1) {
+                let traitRolls = [];
+                for (let i = 0; i < shotsFired; i++) {
+                    traitRolls.push(rollExploding(sides));
+                }
+                let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
+
+                let onesCount = 0;
+                traitRolls.forEach(r => { if (r.history[0] === 1) onesCount++; });
+                if (wildRoll && wildRoll.history[0] === 1) onesCount++;
+
+                let totalDice = wildRoll ? shotsFired + 1 : shotsFired;
+                isCritFail = (onesCount > totalDice / 2);
+
+                let traitTotals = traitRolls.map(r => r.total);
+                let minVal = Math.min(...traitTotals);
+                let minIdx = traitTotals.indexOf(minVal);
+
+                if (wildRoll && wildRoll.total > minVal) {
+                    traitRolls[minIdx] = wildRoll;
+                }
+
+                traitRolls.forEach((r, idx) => {
+                    let score = r.total + totalModifier;
+                    let outcome = "";
+                    let hasRaise = false;
+
+                    if (isCritFail) {
+                        outcome = "CRITICAL FAILURE!";
+                    } else if (score < targetNumber) {
+                        outcome = "FAILURE.";
+                    } else {
+                        let raises = Math.floor((score - targetNumber) / 4);
+                        outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                        if (raises > 0) hasRaise = true;
+                    }
+
+                    results.push({
+                        shotIndex: idx + 1,
+                        total: score,
+                        history: r.history,
+                        outcome: outcome,
+                        hasRaise: hasRaise
+                    });
+                });
+            } else {
+                let traitRoll = rollExploding(sides);
+                let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
+
+                let bestTotal = traitRoll.total;
+                if (wildRoll) {
+                    bestTotal = Math.max(traitRoll.total, wildRoll.total);
+                    isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
+                } else {
+                    isCritFail = (traitRoll.history[0] === 1);
+                }
+                bestTotal += totalModifier;
+
+                let outcome = "";
+                let hasRaise = false;
+
+                if (isCritFail) {
+                    outcome = "CRITICAL FAILURE!";
+                } else if (bestTotal < targetNumber) {
+                    outcome = "FAILURE.";
+                } else {
+                    let raises = Math.floor((bestTotal - targetNumber) / 4);
+                    outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                    if (raises > 0) hasRaise = true;
+                }
+
+                results.push({
+                    shotIndex: 1,
+                    total: bestTotal,
+                    history: wildRoll && wildRoll.total > traitRoll.total ? wildRoll.history : traitRoll.history,
+                    outcome: outcome,
+                    hasRaise: hasRaise,
+                    isSingle: true,
+                    traitHistory: traitRoll.history,
+                    wildHistory: wildRoll ? wildRoll.history : null
+                });
+            }
+
+            renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail);
+        }
+
+        async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail) {
+            let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
+            let displayMod = totalModifier !== 0 ? (totalModifier > 0 ? `+${totalModifier}` : `${totalModifier}`) : "";
+            let modStrDisplay = totalModifier !== 0 ? ` (${displayMod})` : "";
+
+            let title = `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
+            let termLog = `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
+
+            results.forEach(r => {
+                if (r.isSingle) {
+                    termLog += `&nbsp;&nbsp;Trait: ${r.traitHistory.join(' + ')}<br>`;
+                    if (r.wildHistory) termLog += `&nbsp;&nbsp;Wild:  ${r.wildHistory.join(' + ')}<br>`;
+                    termLog += `&nbsp;&nbsp;Result: <b>${r.total}</b> -> ${r.outcome}<br>`;
+                } else {
+                    termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
+                }
+            });
+
+            logToTerminal(termLog);
+
+            if (globalState && globalState.webhook) {
+                let desc = "";
+                results.forEach(r => {
+                    if (r.isSingle) {
+                        desc += `**Result: ${r.total}**\n${r.outcome}`;
+                    } else {
+                        desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
+                    }
+                });
+
+                const embed = {
+                    title: title,
+                    description: desc,
+                    color: color,
+                    fields: []
+                };
+
+                if (results[0].isSingle) {
+                    embed.fields.push({ name: `Trait (d${sides})`, value: `${results[0].traitHistory.join(' + ')}`, inline: true });
+                    if (results[0].wildHistory) {
+                        embed.fields.push({ name: "Wild (d6)", value: `${results[0].wildHistory.join(' + ')}`, inline: true });
+                    }
+                } else {
+                    results.forEach(r => {
+                        embed.fields.push({ name: `Shot #${r.shotIndex} History`, value: `${r.history.join(' + ')}`, inline: true });
+                    });
+                }
+
+                if (totalModifier !== 0) {
+                    embed.fields.push({ name: "Modifier", value: `${displayMod}`, inline: true });
+                }
+
+                if (activeWeaponContext) {
+                    let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || defaultWeaponIcon;
+                    embed.thumbnail = { url: imgUrl };
+                    embed.fields.push({
+                        name: "Weapon Specifications",
+                        value: `Range: ${activeWeaponContext.range}\nDamage: ${activeWeaponContext.damage}\nAP: ${activeWeaponContext.ap}\nRoF: ${activeWeaponContext.rof}\nShots: ${activeWeaponContext.shots}\nMin Str: ${activeWeaponContext.minStr}`
+                    });
+                }
+
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) {}
+            }
+        }
+
+        // ==========================================
+        // WEAPON DAMAGE
+        // ==========================================
         function parseDamage(damageStr) {
             let cleaned = damageStr.replace(/\s+/g, '').toLowerCase();
             let match = cleaned.match(/(\d+)d(\d+)(?:\+(\d+))?/);
@@ -659,7 +904,11 @@
             return null;
         }
 
-        window.rollDamage = function(weaponName, damageStr, addRaise = false) {
+        window.rollDamage = async function(weaponId, addRaise = false) {
+            let preset = globalState.presets.find(p => p.id === weaponId);
+            if (!preset) return;
+            
+            let damageStr = preset.damage;
             let parsed = parseDamage(damageStr);
             if (!parsed) { alert("Custom damage parsing required."); return; }
 
@@ -673,17 +922,45 @@
             total += parsed.modifier;
 
             let bonusStr = "";
+            let bonusRolls = [];
             if (addRaise) {
                 let raiseRoll = rollExploding(6);
                 total += raiseRoll.total;
-                bonusStr = ` + ${raiseRoll.history.join('+')} [Raise]`;
+                bonusRolls = raiseRoll.history;
+                bonusStr = ` + ${raiseRoll.history.join(' + ')} [Raise]`;
             }
 
-            let logStr = `> ${activeThreat.name} rolled damage with ${weaponName} [${damageStr}]:<br>`;
-            logStr += `&nbsp;&nbsp;Rolls: ${rolls.join('+')}${parsed.modifier > 0 ? '+'+parsed.modifier : ''}${bonusStr}<br>`;
-            logStr += `&nbsp;&nbsp;Total Damage: <b style="color:#ff3333;">${total}</b>`;
-            logToTerminal(logStr);
-            logToDiscord(`${activeThreat.name} dealt damage with ${weaponName}`, `**Total Damage: ${total}**\nDice: ${rolls.join('+')}${bonusStr}`);
+            let termLog = `> ${activeThreat.name} dealt damage with ${preset.name.toUpperCase()}<br>`;
+            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${parsed.modifier > 0 ? '+'+parsed.modifier : ''}${bonusStr}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
+            logToTerminal(termLog);
+
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${activeThreat.name} rolled damage with ${preset.name}`,
+                    description: `**Damage Total: ${total}**`,
+                    color: 0xff3333,
+                    fields: [
+                        { name: "Dice History", value: `${rolls.join(' + ')}`, inline: true }
+                    ]
+                };
+                if (parsed.modifier !== 0) embed.fields.push({ name: "Modifier", value: `${parsed.modifier > 0 ? '+' : ''}${parsed.modifier}`, inline: true });
+                if (addRaise) {
+                    embed.fields.push({ name: "Raise Bonus (+1d6)", value: `${bonusRolls.join(' + ')}`, inline: true });
+                    embed.description += `\n*(Includes +1d6 Raise Bonus)*`;
+                }
+
+                let imgUrl = preset.image || preset.icon || defaultWeaponIcon;
+                embed.thumbnail = { url: imgUrl };
+                embed.fields.push({
+                    name: "Weapon Specifications",
+                    value: `Range: ${preset.range}\nDamage: ${preset.damage}\nAP: ${preset.ap}\nRoF: ${preset.rof}\nShots: ${preset.shots}\nMin Str: ${preset.minStr}`
+                });
+
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) {}
+            }
         };
 
         function logToTerminal(html) {
@@ -693,15 +970,6 @@
             div.innerHTML = html;
             term.appendChild(div);
             term.scrollTop = term.scrollHeight;
-        }
-
-        async function logToDiscord(title, desc) {
-            if (globalState && globalState.webhook) {
-                const embed = { title: title, description: desc, color: 0xff3333 };
-                try {
-                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
-                } catch(e){}
-            }
         }
 
         // ==========================================
@@ -738,7 +1006,13 @@
 
             await set(ref(db, 'campaignState/combat/participants'), participants);
             logToTerminal(`> DEPLOYMENT SUCCESS: Deployed ${count} unit(s) of ${baseName} to Combat Monitor.`);
-            logToDiscord("REINFORCEMENTS HAVE ARRIVED", `${count} unit(s) of **${baseName}** spawned into the tactical net.`);
+            
+            if (globalState && globalState.webhook) {
+                const embed = { title: "REINFORCEMENTS HAVE ARRIVED", description: `${count} unit(s) of **${baseName}** spawned into the tactical net.`, color: 0xff3333 };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch(e){}
+            }
         };
 
     </script>
