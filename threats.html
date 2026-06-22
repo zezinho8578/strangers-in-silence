@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LambdaOS - Threat Registry</title>
+    <link rel="stylesheet" href="/style.css">
+    
+    <script>
+        let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+        if (currentUser !== "Administrator" && !window.location.pathname.includes("adminview")) {
+            window.location.replace("/dashboard.html");
+        }
+    </script>
+    <style>
+        #top-nav {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ff3333;
+            padding-bottom: 10px;
+            color: #ff3333;
+        }
+        .nav-link { color: #ff3333; text-decoration: none; cursor: pointer; }
+        .nav-link:hover { background: #ff3333; color: var(--bg-color); }
+
+        .threat-grid {
+            display: grid;
+            grid-template-columns: 250px 1fr 300px;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 1000px) { .threat-grid { grid-template-columns: 1fr; } }
+
+        .panel-box {
+            border: 1px solid var(--theme-color);
+            background: rgba(128, 128, 128, 0.1);
+            padding: 15px;
+            height: max-content;
+        }
+        .panel-box h3 { margin-top: 0; border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px; font-size: 1.1em; }
+
+        .list-item {
+            padding: 8px;
+            border-bottom: 1px dashed rgba(255,153,0,0.3);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+        .list-item:hover { background: rgba(255,153,0,0.2); }
+        .list-item.active { border-left: 3px solid var(--theme-color); background: rgba(255,153,0,0.1); font-weight: bold; }
+
+        .form-row { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; }
+        .form-input { background: var(--bg-color); color: var(--theme-color); border: 1px solid var(--theme-color); padding: 5px; font-family: inherit; }
+        .form-input.small { width: 50px; text-align: center; }
+
+        .die-btn {
+            background: transparent;
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            padding: 2px 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9em;
+            transition: 0.2s;
+        }
+        .die-btn:hover { background: var(--theme-color); color: var(--bg-color); }
+        .die-btn.danger { border-color: #ff3333; color: #ff3333; }
+        .die-btn.danger:hover { background: #ff3333; color: var(--bg-color); }
+
+        .weapon-card {
+            border: 1px solid var(--theme-color);
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            background: rgba(0,0,0,0.3);
+        }
+
+        #roll-terminal {
+            border: 1px solid #ff3333;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.5); 
+            color: #ff3333;
+        }
+    </style>
+</head>
+<body>
+
+    <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
+
+    <div id="top-nav">
+        <a href="/dashboard.html" class="nav-link">< RETURN TO DASHBOARD</a>
+        <div>OVERWATCH THREAT REGISTRY [ADMIN]</div>
+    </div>
+
+    <div class="threat-grid">
+        
+        <!-- COL 1: CODEX -->
+        <div class="panel-box">
+            <h3>THE CODEX</h3>
+            <div id="codex-list" style="margin-bottom: 15px; max-height: 400px; overflow-y: auto;"></div>
+            <button class="die-btn" style="width:100%;" onclick="createNewTemplate()">+ CREATE NEW TEMPLATE</button>
+        </div>
+
+        <!-- COL 2: EDITOR & ROLLER -->
+        <div class="panel-box" id="editor-panel" style="display:none;">
+            <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 15px; border-bottom: 1px dashed var(--theme-color); padding-bottom: 10px;">
+                <input type="text" id="edit-name" class="form-input" style="font-size: 1.2em; font-weight:bold; width: 60%;" onchange="updateActive()">
+                <label style="cursor:pointer;"><input type="checkbox" id="edit-wildcard" onchange="updateActive()"> Wild Card</label>
+            </div>
+
+            <div style="display:flex; gap: 20px; margin-bottom: 20px;">
+                <div class="form-row"><span>Parry: </span><input type="number" id="edit-parry" class="form-input small" onchange="updateActive()"></div>
+                <div class="form-row"><span>Toughness: </span><input type="number" id="edit-toughness" class="form-input small" onchange="updateActive()"></div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <!-- Attributes -->
+                <div>
+                    <h4 style="margin:0 0 10px 0; border-bottom: 1px solid var(--theme-color);">ATTRIBUTES</h4>
+                    <div id="attr-list"></div>
+                </div>
+                <!-- Skills -->
+                <div>
+                    <h4 style="margin:0 0 10px 0; border-bottom: 1px solid var(--theme-color);">SKILLS</h4>
+                    <div id="skill-list"></div>
+                    <div class="form-row" style="margin-top: 10px;">
+                        <input type="text" id="new-skill-name" class="form-input" placeholder="Skill Name" style="width:50%;">
+                        <input type="text" id="new-skill-die" class="form-input small" placeholder="d6">
+                        <button class="die-btn" onclick="addSkill()">ADD</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weapons -->
+            <div style="margin-top: 20px;">
+                <h4 style="margin:0 0 10px 0; border-bottom: 1px solid var(--theme-color);">ARMAMENT</h4>
+                <div id="weapon-list"></div>
+                <div class="form-row" style="margin-top: 10px;">
+                    <select id="preset-weapon-select" class="form-input" style="flex-grow:1; margin-right: 10px;"></select>
+                    <button class="die-btn" onclick="addWeapon()">EQUIP WEAPON</button>
+                </div>
+            </div>
+
+            <div style="margin-top: 25px; display: flex; justify-content: space-between;">
+                <button class="die-btn" onclick="saveTemplateToDB()">[ SAVE TEMPLATE TO CODEX ]</button>
+                <button class="die-btn danger" onclick="deleteTemplate()">[ DELETE ]</button>
+            </div>
+        </div>
+
+        <!-- COL 3: DEPLOYMENT -->
+        <div class="panel-box">
+            <h3>DEPLOY TO COMBAT</h3>
+            <p style="font-size: 0.85em; opacity: 0.8;">Spawn instances of the active template directly into the live Combat Tracker.</p>
+            
+            <div class="form-row">
+                <span>Unit Count:</span>
+                <input type="number" id="deploy-count" value="1" min="1" max="10" class="form-input small">
+            </div>
+            
+            <button class="die-btn" style="width:100%; border-color:#00ff00; color:#00ff00; margin-top: 10px;" onclick="deployToTracker()">EXECUTE DEPLOYMENT</button>
+
+            <h3 style="margin-top: 25px;">ACTIVE ON BOARD</h3>
+            <div id="active-tracker-list" style="font-size: 0.9em; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+
+    </div>
+
+    <!-- Live Roll Output -->
+    <div style="margin-bottom: 5px; color: #ff3333; font-weight: bold;">> TACTICAL TERMINAL</div>
+    <div id="roll-terminal">
+        <div>> TERMINAL READY. WAITING FOR INPUT...</div>
+    </div>
+
+    <script src="/settings.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBt1ymfsEvbO1X9eYDVf2ctotRcbFFOO44",
+            authDomain: "strangers-in-silence.firebaseapp.com",
+            databaseURL: "https://strangers-in-silence-default-rtdb.firebaseio.com",
+            projectId: "strangers-in-silence",
+            storageBucket: "strangers-in-silence.firebasestorage.app",
+            messagingSenderId: "62557473299",
+            appId: "1:62557473299:web:e2ebf2ee2520a9189e8de6"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let globalState = {};
+        let activeTemplateId = null;
+        let activeThreat = null;
+
+        const defaultAttributes = { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" };
+        const defaultSkills = { Fighting: "d6", Shooting: "d6", Notice: "d6" };
+
+        onValue(ref(db, 'campaignState'), (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                globalState = data;
+                if (!globalState.threatTemplates) globalState.threatTemplates = {};
+                if (!globalState.presets) globalState.presets = [];
+                
+                renderCodex();
+                populateWeaponDropdown();
+                renderDeployed();
+                
+                if (activeTemplateId && globalState.threatTemplates[activeTemplateId] && !activeThreat) {
+                    loadTemplate(activeTemplateId);
+                }
+            }
+        });
+
+        // ==========================================
+        // UI RENDERING
+        // ==========================================
+        function renderCodex() {
+            const list = document.getElementById('codex-list');
+            list.innerHTML = '';
+            for (let [id, t] of Object.entries(globalState.threatTemplates || {})) {
+                list.innerHTML += `
+                    <div class="list-item ${id === activeTemplateId ? 'active' : ''}" onclick="loadTemplate('${id}')">
+                        <span>${t.name}</span>
+                        <span style="opacity:0.5;">${t.isWildCard ? 'WC' : 'X'}</span>
+                    </div>`;
+            }
+        }
+
+        function populateWeaponDropdown() {
+            const select = document.getElementById('preset-weapon-select');
+            select.innerHTML = '<option value="">-- Select Preset --</option>';
+            globalState.presets.forEach(p => {
+                select.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+            });
+        }
+
+        function renderDeployed() {
+            const list = document.getElementById('active-tracker-list');
+            list.innerHTML = '';
+            if (globalState.combat && globalState.combat.participants) {
+                globalState.combat.participants.forEach(p => {
+                    if (!p.isPlayer) {
+                        list.innerHTML += `<div style="padding: 4px; border-bottom: 1px dashed var(--theme-color);">${p.name} [Wounds: ${p.wounds}]</div>`;
+                    }
+                });
+            } else {
+                list.innerHTML = '<div style="opacity: 0.5;">No active combat or NPCs on board.</div>';
+            }
+        }
+
+        // ==========================================
+        // EDITOR LOGIC
+        // ==========================================
+        window.createNewTemplate = function() {
+            let id = "threat_" + Date.now();
+            activeThreat = {
+                name: "New Threat", isWildCard: false, parry: 5, toughness: 5,
+                attributes: JSON.parse(JSON.stringify(defaultAttributes)),
+                skills: JSON.parse(JSON.stringify(defaultSkills)),
+                weapons: []
+            };
+            activeTemplateId = id;
+            renderEditor();
+            renderCodex();
+        };
+
+        window.loadTemplate = function(id) {
+            activeTemplateId = id;
+            activeThreat = JSON.parse(JSON.stringify(globalState.threatTemplates[id]));
+            if (!activeThreat.attributes) activeThreat.attributes = JSON.parse(JSON.stringify(defaultAttributes));
+            if (!activeThreat.skills) activeThreat.skills = JSON.parse(JSON.stringify(defaultSkills));
+            if (!activeThreat.weapons) activeThreat.weapons = [];
+            renderEditor();
+            renderCodex();
+        };
+
+        function renderEditor() {
+            if (!activeThreat) return;
+            document.getElementById('editor-panel').style.display = 'block';
+            document.getElementById('edit-name').value = activeThreat.name;
+            document.getElementById('edit-wildcard').checked = activeThreat.isWildCard;
+            document.getElementById('edit-parry').value = activeThreat.parry;
+            document.getElementById('edit-toughness').value = activeThreat.toughness;
+
+            // Attributes
+            let attrHtml = '';
+            for (let [k, v] of Object.entries(activeThreat.attributes)) {
+                attrHtml += `
+                    <div class="form-row">
+                        <span>${k}</span>
+                        <div>
+                            <input type="text" class="form-input small attr-input" data-key="${k}" value="${v}">
+                            <button class="die-btn" onclick="rollTrait('${k}', '${v}')">ROLL</button>
+                        </div>
+                    </div>`;
+            }
+            document.getElementById('attr-list').innerHTML = attrHtml;
+
+            // Skills
+            let skillHtml = '';
+            for (let [k, v] of Object.entries(activeThreat.skills)) {
+                skillHtml += `
+                    <div class="form-row">
+                        <span>${k}</span>
+                        <div>
+                            <input type="text" class="form-input small skill-input" data-key="${k}" value="${v}">
+                            <button class="die-btn" onclick="rollTrait('${k}', '${v}')">ROLL</button>
+                            <button class="die-btn danger" style="padding: 2px 5px;" onclick="removeSkill('${k}')">X</button>
+                        </div>
+                    </div>`;
+            }
+            document.getElementById('skill-list').innerHTML = skillHtml;
+
+            // Weapons
+            let wepHtml = '';
+            activeThreat.weapons.forEach((wId, index) => {
+                let preset = globalState.presets.find(p => p.id === wId);
+                if (preset) {
+                    wepHtml += `
+                        <div class="weapon-card">
+                            <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:5px;">
+                                <span>${preset.name.toUpperCase()}</span>
+                                <button class="die-btn danger" style="padding: 2px 5px;" onclick="removeWeapon(${index})">X</button>
+                            </div>
+                            <div>Range: ${preset.range} | Dmg: ${preset.damage} | AP: ${preset.ap} | RoF: ${preset.rof}</div>
+                            <div style="margin-top: 8px; display: flex; gap: 10px;">
+                                <button class="die-btn" onclick="rollAttack('${preset.name}', '${preset.range}')">ATTACK</button>
+                                <button class="die-btn" onclick="rollDamage('${preset.name}', '${preset.damage}')">DAMAGE</button>
+                                <button class="die-btn" style="border-color:#00ff00; color:#00ff00;" onclick="rollDamage('${preset.name}', '${preset.damage}', true)">+1d6 RAISE DMG</button>
+                            </div>
+                        </div>`;
+                }
+            });
+            document.getElementById('weapon-list').innerHTML = wepHtml;
+
+            attachEditorListeners();
+        }
+
+        window.updateActive = function() {
+            if (!activeThreat) return;
+            activeThreat.name = document.getElementById('edit-name').value;
+            activeThreat.isWildCard = document.getElementById('edit-wildcard').checked;
+            activeThreat.parry = parseInt(document.getElementById('edit-parry').value) || 5;
+            activeThreat.toughness = parseInt(document.getElementById('edit-toughness').value) || 5;
+        };
+
+        function attachEditorListeners() {
+            document.querySelectorAll('.attr-input').forEach(el => {
+                el.addEventListener('change', (e) => {
+                    activeThreat.attributes[e.target.dataset.key] = e.target.value;
+                });
+            });
+            document.querySelectorAll('.skill-input').forEach(el => {
+                el.addEventListener('change', (e) => {
+                    activeThreat.skills[e.target.dataset.key] = e.target.value;
+                });
+            });
+        }
+
+        window.addSkill = function() {
+            let name = document.getElementById('new-skill-name').value.trim();
+            let die = document.getElementById('new-skill-die').value.trim() || "d6";
+            if (name) {
+                activeThreat.skills[name] = die;
+                document.getElementById('new-skill-name').value = '';
+                renderEditor();
+            }
+        };
+
+        window.removeSkill = function(name) {
+            delete activeThreat.skills[name];
+            renderEditor();
+        };
+
+        window.addWeapon = function() {
+            let wId = document.getElementById('preset-weapon-select').value;
+            if (wId) {
+                activeThreat.weapons.push(wId);
+                renderEditor();
+            }
+        };
+
+        window.removeWeapon = function(index) {
+            activeThreat.weapons.splice(index, 1);
+            renderEditor();
+        };
+
+        window.saveTemplateToDB = async function() {
+            updateActive();
+            await set(ref(db, `campaignState/threatTemplates/${activeTemplateId}`), activeThreat);
+            logToTerminal(`> TEMPLATE SAVED: ${activeThreat.name}`);
+        };
+
+        window.deleteTemplate = async function() {
+            if (confirm("Delete this template?")) {
+                await set(ref(db, `campaignState/threatTemplates/${activeTemplateId}`), null);
+                document.getElementById('editor-panel').style.display = 'none';
+                activeTemplateId = null;
+                activeThreat = null;
+            }
+        };
+
+        // ==========================================
+        // ROLLING ENGINE
+        // ==========================================
+        function rollExploding(sides) {
+            let total = 0; let currentRoll; let history = [];
+            do {
+                currentRoll = Math.floor(Math.random() * sides) + 1;
+                total += currentRoll;
+                history.push(currentRoll);
+            } while (currentRoll === sides && sides > 1); 
+            return { total, history };
+        }
+
+        window.rollTrait = function(traitName, dieValue, modifier = 0) {
+            if (!activeThreat) return;
+            
+            let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
+            let sides = match ? parseInt(match[1]) : 4;
+            let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
+            let totalMod = modifier + intrinsicMod;
+
+            let tRoll = rollExploding(sides);
+            let wRoll = activeThreat.isWildCard ? rollExploding(6) : null;
+
+            let finalTotal = tRoll.total + totalMod;
+            if (wRoll) {
+                finalTotal = Math.max(tRoll.total, wRoll.total) + totalMod;
+            }
+
+            let tn = 4;
+            let isCritFail = wRoll ? (tRoll.history[0] === 1 && wRoll.history[0] === 1) : (tRoll.history[0] === 1);
+            
+            let outcome = "FAILURE";
+            let color = "#ff3333";
+            if (isCritFail) {
+                outcome = "CRITICAL FAILURE!";
+            } else if (finalTotal >= tn) {
+                let raises = Math.floor((finalTotal - tn) / 4);
+                outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                color = raises > 0 ? "#00ff00" : "#ff9900";
+            }
+
+            let logStr = `> ${activeThreat.name} rolled ${traitName} (${dieValue}):<br>`;
+            logStr += `&nbsp;&nbsp;Trait: ${tRoll.history.join('+')}`;
+            if (wRoll) logStr += ` | Wild: ${wRoll.history.join('+')}`;
+            if (totalMod !== 0) logStr += ` | Mod: ${totalMod > 0 ? '+'+totalMod : totalMod}`;
+            logStr += `<br>&nbsp;&nbsp;Result: <b style="color:${color};">${finalTotal}</b> -> ${outcome}`;
+            
+            logToTerminal(logStr);
+            logToDiscord(`${activeThreat.name} rolled ${traitName}`, `**Result: ${finalTotal}** -> ${outcome}\nTrait: ${tRoll.history.join('+')}${wRoll ? `\nWild: ${wRoll.history.join('+')}` : ''}`);
+        };
+
+        window.rollAttack = function(weaponName, rangeStr) {
+            let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
+            let skillName = isMelee ? "Fighting" : "Shooting";
+            
+            let dieValue = activeThreat.skills[skillName];
+            let mod = 0;
+            if (!dieValue) {
+                dieValue = "d4";
+                mod = -2; // Unskilled
+                logToTerminal(`> ${activeThreat.name} lacks ${skillName}. Rolling UNSKILLED (-2).`);
+            }
+            window.rollTrait(`Attack [${weaponName}] via ${skillName}`, dieValue, mod);
+        };
+
+        function parseDamage(damageStr) {
+            let cleaned = damageStr.replace(/\s+/g, '').toLowerCase();
+            let match = cleaned.match(/(\d+)d(\d+)(?:\+(\d+))?/);
+            if (match) return { count: parseInt(match[1]), sides: parseInt(match[2]), modifier: parseInt(match[3]) || 0 };
+            return null;
+        }
+
+        window.rollDamage = function(weaponName, damageStr, addRaise = false) {
+            let parsed = parseDamage(damageStr);
+            if (!parsed) { alert("Custom damage parsing required."); return; }
+
+            let total = 0;
+            let rolls = [];
+            for (let i = 0; i < parsed.count; i++) {
+                let r = rollExploding(parsed.sides);
+                total += r.total;
+                rolls.push(...r.history);
+            }
+            total += parsed.modifier;
+
+            let bonusStr = "";
+            if (addRaise) {
+                let raiseRoll = rollExploding(6);
+                total += raiseRoll.total;
+                bonusStr = ` + ${raiseRoll.history.join('+')} [Raise]`;
+            }
+
+            let logStr = `> ${activeThreat.name} rolled damage with ${weaponName} [${damageStr}]:<br>`;
+            logStr += `&nbsp;&nbsp;Rolls: ${rolls.join('+')}${parsed.modifier > 0 ? '+'+parsed.modifier : ''}${bonusStr}<br>`;
+            logStr += `&nbsp;&nbsp;Total Damage: <b style="color:#ff3333;">${total}</b>`;
+            logToTerminal(logStr);
+            logToDiscord(`${activeThreat.name} dealt damage with ${weaponName}`, `**Total Damage: ${total}**\nDice: ${rolls.join('+')}${bonusStr}`);
+        };
+
+        function logToTerminal(html) {
+            const term = document.getElementById('roll-terminal');
+            const div = document.createElement('div');
+            div.style.marginBottom = "8px";
+            div.innerHTML = html;
+            term.appendChild(div);
+            term.scrollTop = term.scrollHeight;
+        }
+
+        async function logToDiscord(title, desc) {
+            if (globalState && globalState.webhook) {
+                const embed = { title: title, description: desc, color: 0xff3333 };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch(e){}
+            }
+        }
+
+        // ==========================================
+        // DEPLOYMENT LOGIC
+        // ==========================================
+        window.deployToTracker = async function() {
+            if (!activeThreat) return alert("Select or create a template to deploy.");
+            if (!globalState.combatActive || !globalState.combat) return alert("Combat Tracker is not active! Initialize it from the Tracker view first.");
+            
+            let count = parseInt(document.getElementById('deploy-count').value) || 1;
+            let participants = globalState.combat.participants || [];
+            
+            let baseName = activeThreat.name;
+            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+            for (let i = 0; i < count; i++) {
+                let suffix = count > 1 ? ` ${letters[i % 26]}` : "";
+                let newNpc = {
+                    id: "npc_" + activeTemplateId + "_" + Date.now() + "_" + i,
+                    name: baseName + suffix,
+                    isPlayer: false,
+                    isWildCard: activeThreat.isWildCard,
+                    parry: activeThreat.parry,
+                    toughness: activeThreat.toughness,
+                    wounds: 0,
+                    fatigue: 0,
+                    shaken: false,
+                    distracted: false,
+                    vulnerable: false,
+                    card: null
+                };
+                participants.push(newNpc);
+            }
+
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+            logToTerminal(`> DEPLOYMENT SUCCESS: Deployed ${count} unit(s) of ${baseName} to Combat Monitor.`);
+            logToDiscord("REINFORCEMENTS HAVE ARRIVED", `${count} unit(s) of **${baseName}** spawned into the tactical net.`);
+        };
+
+    </script>
+</body>
+</html>
