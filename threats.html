@@ -213,12 +213,10 @@
     </div>
 
     <script src="/settings.js"></script>
-    <!-- Bestiary Seeder Script -->
-    <script src="https://strangers-in-silence.vercel.app/seedBestiary.js"></script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBt1ymfsEvbO1X9eYDVf2ctotRcbFFOO44",
@@ -692,7 +690,7 @@
                 
                 let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || defaultWeaponIcon;
                 embed.thumbnail = { url: imgUrl };
-                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${activeWeaponContext.range}\nDamage: ${activeWeaponContext.damage}\nAP: ${activeWeaponContext.ap}\nRoF: ${activeWeaponContext.rof}` });
+                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${activeWeaponContext.range}\nDamage: ${activeWeaponContext.damage}\nAP: ${activeWeaponContext.ap || 0}\nRoF: ${activeWeaponContext.rof}` });
                 fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => {});
             }
         }
@@ -700,6 +698,13 @@
         // ==========================================
         // WEAPON DAMAGE (Str+d6 Support)
         // ==========================================
+        function parseDamage(damageStr) {
+            let cleaned = damageStr.replace(/\s+/g, '').toLowerCase();
+            let match = cleaned.match(/(\d+)d(\d+)(?:\+(\d+))?/);
+            if (match) return { count: parseInt(match[1]), sides: parseInt(match[2]), modifier: parseInt(match[3]) || 0 };
+            return null;
+        }
+
         window.rollDamage = async function(wepIndex, addRaise = false) {
             let wep = activeThreat.weapons[wepIndex];
             let dmgStr = wep.damage.toLowerCase().replace(/\s/g, '');
@@ -749,7 +754,7 @@
 
                 let imgUrl = wep.image || wep.icon || defaultWeaponIcon;
                 embed.thumbnail = { url: imgUrl };
-                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${wep.range}\nDamage: ${wep.damage}\nAP: ${wep.ap}\nRoF: ${wep.rof}` });
+                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${wep.range}\nDamage: ${wep.damage}\nAP: ${wep.ap || 0}\nRoF: ${wep.rof}` });
                 fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => {});
             }
         };
