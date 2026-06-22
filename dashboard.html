@@ -28,7 +28,7 @@
             <span id="display-username">USER: UNKNOWN</span>
         </div>
         
-        <div class="panel-grid">
+        <div class="panel-grid" id="main-panel-grid">
             <a href="#" id="link-character" class="panel">MY CHARACTER SHEET</a>
             <a href="https://strangers-in-silence.vercel.app/tracker/combatview" class="panel">COMBAT TRACKER</a>
             <div class="panel locked">SETTLEMENT LEDGER</div>
@@ -61,6 +61,16 @@
         linkCharacter.href = getCharacterUrl(currentUser);
         if (currentUser === "Administrator") {
             linkCharacter.innerHTML = "VIEW PLAYER SHEETS";
+            
+            // Inject GM Threat Registry Button
+            const grid = document.getElementById('main-panel-grid');
+            const threatBtn = document.createElement('a');
+            threatBtn.href = "https://strangers-in-silence.vercel.app/threats/adminview";
+            threatBtn.className = "panel";
+            threatBtn.style.borderColor = "#ff3333";
+            threatBtn.style.color = "#ff3333";
+            threatBtn.innerHTML = "OVERWATCH THREAT REGISTRY [ADMIN]";
+            grid.appendChild(threatBtn);
         }
 
         let awaitingInput = false;
