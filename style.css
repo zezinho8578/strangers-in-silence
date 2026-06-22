@@ -88,6 +88,9 @@ body::after {
     display: none; 
     margin-top: 40px;
     max-width: 800px;
+    width: 100%; /* Added for mobile scaling */
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .system-header {
@@ -136,8 +139,6 @@ body::after {
     background-color: var(--bg-color);
     padding: 25px;
     z-index: 100;
-    
-    /* Fixed the modal width issue */
     width: max-content;
     min-width: 400px;
     max-width: 95vw;
@@ -159,12 +160,11 @@ body::after {
     gap: 20px; 
 }
 
-/* Styled Inputs & Buttons to match aesthetic */
 .setting-row select, #settings-modal button {
     background: transparent;
     color: var(--theme-color);
     border: 1px solid var(--theme-color);
-    font-family: inherit; /* Uses whatever font the user selected */
+    font-family: inherit;
     font-size: 1em;
     padding: 8px;
     cursor: pointer;
@@ -172,10 +172,8 @@ body::after {
     transition: 0.2s;
 }
 
-/* Dropdown options background (so they don't go transparent and unreadable) */
 .setting-row select option { background: var(--bg-color); }
 
-/* Hover effects for buttons/selects */
 .setting-row select:hover, #settings-modal button:hover {
     background: var(--theme-color);
     color: var(--bg-color);
@@ -187,3 +185,38 @@ body::after {
 
 .danger-btn { border-color: #ff3333 !important; color: #ff3333 !important; }
 .danger-btn:hover { background: #ff3333 !important; color: #000 !important; }
+
+/* =========================================
+   MOBILE COMPATIBILITY 
+   ========================================= */
+@media (max-width: 600px) {
+    :root {
+        --font-size: 18px; /* Slightly smaller text for small screens */
+    }
+    
+    body {
+        padding: 10px;
+    }
+
+    #bg-lambda {
+        width: 90%; /* Shrink background logo so it doesn't bleed off screen */
+        max-width: 400px;
+    }
+
+    #start-screen {
+        font-size: 22px !important;
+        padding: 0 20px;
+        text-align: center;
+    }
+
+    #settings-modal {
+        min-width: unset !important; /* Remove 400px forced width */
+        width: 90vw;
+        padding: 15px;
+    }
+
+    .panel {
+        font-size: 1em;
+        padding: 12px 15px;
+    }
+}
