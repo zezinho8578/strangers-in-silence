@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>LambdaOS - Node Terminal</title>
     <link rel="stylesheet" href="style.css">
     
@@ -26,6 +26,9 @@
         <div id="output-history"></div>
         <div><span id="input-line"></span><span class="cursor" id="cursor"></span></div>
     </div>
+
+    <!-- Hidden Input for Mobile Keyboard Support -->
+    <input type="password" id="hidden-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="position:absolute; top:-100px; left:0; width:1px; height:1px; opacity:0; border:none;">
 
     <!-- Audio Elements -->
     <audio id="audio-boot" src="boot.mp3"></audio>
@@ -51,6 +54,7 @@
         const terminal = document.getElementById('terminal');
         const outputHistory = document.getElementById('output-history');
         const inputLine = document.getElementById('input-line');
+        const hiddenInput = document.getElementById('hidden-input');
         const audioBoot = document.getElementById('audio-boot');
         const audioError = document.getElementById('audio-error');
 
@@ -134,9 +138,9 @@
             let selectionString = "> SELECT ACCOUNT: ";
             accounts.forEach((acc, index) => {
                 if (index === selectedIndex) {
-                    selectionString += `<span class="highlight">${acc}</span>`;
+                    selectionString += `<span class="highlight" style="cursor:pointer" onclick="selectAccount(${index})">${acc}</span>`;
                 } else {
-                    selectionString += acc;
+                    selectionString += `<span style="cursor:pointer" onclick="selectAccount(${index})">${acc}</span>`;
                 }
                 if (index < accounts.length - 1) selectionString += " / ";
             });
@@ -146,10 +150,53 @@
 
         function renderPasswordPrompt() {
             let maskedStr = "*".repeat(typedPassword.length);
-            inputLine.innerHTML = `> PASSWORD: ${maskedStr}`;
+            inputLine.innerHTML = `> PASSWORD: ${maskedStr} <span style="opacity:0.5; font-size:0.8em;">(tap to type)</span>`;
             scrollToBottom();
         }
 
+        // Allows clicking/tapping the password line to open the mobile keyboard
+        inputLine.addEventListener('click', () => {
+            if (currentMode === "password") {
+                hiddenInput.focus();
+            }
+        });
+
+        function selectAccount(index) {
+            if (currentMode !== "selecting") return;
+            selectedIndex = index;
+            finalizeInput();
+            currentMode = "password";
+            typedPassword = ""; 
+            renderPasswordPrompt();
+            // Trigger mobile keyboard by focusing hidden input
+            setTimeout(() => hiddenInput.focus(), 100);
+        }
+
+        function handlePasswordEnter() {
+            let selectedAccount = accounts[selectedIndex];
+            let correctPassword = passwords[selectedAccount];
+            
+            hiddenInput.value = '';
+            hiddenInput.blur();
+            finalizeInput(); 
+
+            if (typedPassword === correctPassword) {
+                currentMode = "loading";
+                sessionStorage.setItem('currentUser', selectedAccount);
+                finalizeRawText("> ACCESS GRANTED. WELCOME.");
+                finalizeRawText("> INITIALIZING DASHBOARD...");
+                
+                setTimeout(() => { window.location.href = "dashboard.html"; }, 2000);
+            } else {
+                playSound(audioError);
+                finalizeRawText("> ACCESS DENIED. TRY AGAIN.");
+                typedPassword = ""; 
+                renderPasswordPrompt();
+                setTimeout(() => hiddenInput.focus(), 100);
+            }
+        }
+
+        // Global keydown listener (handles physical keyboards for both account selection and passwords)
         document.addEventListener('keydown', (e) => {
             if (currentMode === "selecting") {
                 if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) e.preventDefault(); 
@@ -163,40 +210,24 @@
                     renderAccountSelection();
                 }
                 else if (e.key === "Enter") {
-                    finalizeInput(); 
-                    currentMode = "password";
-                    typedPassword = ""; 
-                    renderPasswordPrompt(); 
+                    selectAccount(selectedIndex);
                 }
-            } 
-            else if (currentMode === "password") {
-                if (e.key === "Enter") {
-                    let selectedAccount = accounts[selectedIndex];
-                    let correctPassword = passwords[selectedAccount];
-                    finalizeInput(); 
+            }
+            // Note: Password input on physical keyboards is also caught by the hiddenInput listener below
+        });
 
-                    if (typedPassword === correctPassword) {
-                        currentMode = "loading";
-                        sessionStorage.setItem('currentUser', selectedAccount);
-                        finalizeRawText("> ACCESS GRANTED. WELCOME.");
-                        finalizeRawText("> INITIALIZING DASHBOARD...");
-                        
-                        setTimeout(() => { window.location.href = "dashboard.html"; }, 2000);
-                    } else {
-                        playSound(audioError);
-                        finalizeRawText("> ACCESS DENIED. TRY AGAIN.");
-                        typedPassword = ""; 
-                        renderPasswordPrompt();
-                    }
-                } 
-                else if (e.key === "Backspace") {
-                    typedPassword = typedPassword.slice(0, -1);
-                    renderPasswordPrompt();
-                }
-                else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) { 
-                    typedPassword += e.key;
-                    renderPasswordPrompt();
-                }
+        // Listener specifically for the hidden input (catches mobile keyboard typing and physical keyboard typing when focused)
+        hiddenInput.addEventListener('input', (e) => {
+            if (currentMode === "password") {
+                typedPassword = e.target.value;
+                renderPasswordPrompt();
+            }
+        });
+
+        hiddenInput.addEventListener('keydown', (e) => {
+            if (currentMode === "password" && e.key === "Enter") {
+                e.preventDefault(); // Prevent form submission/refresh
+                handlePasswordEnter();
             }
         });
     </script>
