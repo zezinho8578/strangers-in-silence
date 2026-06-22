@@ -54,12 +54,23 @@
         .trait-row > span { white-space: nowrap; }
         .trait-row > div { display: flex; gap: 5px; align-items: center; }
 
-        .weapon-card { border: 1px solid var(--theme-color); padding: 10px; margin-bottom: 12px; font-size: 0.9em; background: rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 8px; }
-        .wep-edit-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .weapon-card { border: 1px solid var(--theme-color); padding: 0; margin-bottom: 12px; font-size: 0.9em; background: rgba(0,0,0,0.3); overflow: hidden; }
+        .weapon-card-header { display: flex; align-items: stretch; border-bottom: 1px solid rgba(255,153,0,0.3); }
+        .weapon-icon { width: 64px; height: 64px; border-right: 1px solid rgba(255,153,0,0.3); display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); flex-shrink: 0; overflow: hidden; }
+        .weapon-icon img { max-width: 90%; max-height: 90%; object-fit: contain; }
+        .weapon-info { flex-grow: 1; padding: 8px 10px; display: flex; flex-direction: column; justify-content: space-between; }
+        .weapon-info-top { display: flex; justify-content: space-between; align-items: center; }
+        .weapon-name { font-weight: bold; font-size: 1em; }
+        .weapon-remove-btn { background: transparent; color: #ff3333; border: 1px solid #ff3333; padding: 2px 6px; cursor: pointer; font-family: inherit; font-size: 0.85em; line-height: 1; }
+        .weapon-remove-btn:hover { background: #ff3333; color: var(--bg-color); }
+        .weapon-stats { font-size: 0.85em; opacity: 0.85; line-height: 1.5; }
+        .weapon-stats span { white-space: nowrap; margin-right: 5px; }
+        .weapon-actions { display: flex; gap: 8px; padding: 8px 10px; flex-wrap: wrap; }
+
+        .wep-edit-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 10px 0 10px; }
         .wep-edit-row span { font-size: 0.8em; opacity: 0.8; }
         .wep-input { background: transparent; color: var(--theme-color); border: none; border-bottom: 1px dashed var(--theme-color); font-family: inherit; width: 60px; text-align: center; outline: none; }
         .wep-input:focus { background: rgba(255,153,0,0.1); }
-        .weapon-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; border-top: 1px dashed rgba(255,153,0,0.3); padding-top: 8px; }
 
         .edit-area { width: 100%; min-height: 80px; background: rgba(0,0,0,0.5); color: var(--theme-color); border: 1px solid var(--theme-color); font-family: inherit; font-size: 0.9em; resize: vertical; padding: 5px; box-sizing: border-box; margin-bottom: 15px; }
 
@@ -80,7 +91,7 @@
 
     <div id="top-nav">
         <a href="/dashboard.html" class="nav-link">< RETURN TO DASHBOARD</a>
-        <div></div>
+        <div>OVERWATCH THREAT REGISTRY [ADMIN]</div>
     </div>
 
     <div class="threat-grid">
@@ -239,7 +250,9 @@
 
         const defaultAttributes = { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" };
         const defaultSkills = { Athletics: "d6", Fighting: "d6", Notice: "d6" };
-        const defaultWeaponIcon = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="%23ff9900" opacity="0.5"><circle cx="32" cy="32" r="20" fill="none" stroke="%23ff9900" stroke-width="2"/><circle cx="32" cy="32" r="3"/><line x1="32" y1="6" x2="32" y2="18" stroke="%23ff9900" stroke-width="2"/><line x1="32" y1="46" x2="32" y2="58" stroke="%23ff9900" stroke-width="2"/><line x1="6" y1="32" x2="18" y2="32" stroke="%23ff9900" stroke-width="2"/><line x1="46" y1="32" x2="58" y2="32" stroke="%23ff9900" stroke-width="2"/></svg>`;
+        
+        // This MUST be a valid https URL for Discord Embed Thumbnails to accept it. Data URIs cause silent rejection.
+        const defaultWeaponIcon = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png";
 
         onValue(ref(db, 'campaignState'), (snapshot) => {
             const data = snapshot.val();
@@ -354,17 +367,25 @@
 
             let wepHtml = '';
             activeThreat.weapons.forEach((w, index) => {
+                let imgUrl = w.image || w.icon || defaultWeaponIcon;
                 wepHtml += `
                     <div class="weapon-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,153,0,0.3); padding-bottom:5px; margin-bottom:5px;">
-                            <input type="text" class="form-input" value="${w.name}" style="font-weight:bold; width: 60%;" onchange="updateWep(${index}, 'name', this.value)">
-                            <button class="die-btn danger" style="padding: 2px 6px;" onclick="removeWeapon(${index})">X</button>
-                        </div>
-                        <div class="wep-edit-row">
-                            <span>Rng:</span><input type="text" class="wep-input" style="width:70px;" value="${w.range}" onchange="updateWep(${index}, 'range', this.value)">
-                            <span>Dmg:</span><input type="text" class="wep-input" style="width:70px;" value="${w.damage}" onchange="updateWep(${index}, 'damage', this.value)">
-                            <span>AP:</span><input type="number" class="wep-input" style="width:40px;" value="${w.ap}" onchange="updateWep(${index}, 'ap', this.value)">
-                            <span>RoF:</span><input type="number" class="wep-input" style="width:40px;" value="${w.rof}" onchange="updateWep(${index}, 'rof', this.value)">
+                        <div class="weapon-card-header">
+                            <div class="weapon-icon">
+                                <img src="${imgUrl}" alt="${w.name}">
+                            </div>
+                            <div class="weapon-info">
+                                <div class="weapon-info-top">
+                                    <input type="text" class="form-input" value="${w.name}" style="font-weight:bold; width: 60%; background:transparent; border:none; border-bottom:1px dashed var(--theme-color); padding:2px;" onchange="updateWep(${index}, 'name', this.value)">
+                                    <button class="weapon-remove-btn" onclick="removeWeapon(${index})">X</button>
+                                </div>
+                                <div class="wep-edit-row">
+                                    <span>Rng:</span><input type="text" class="wep-input" style="width:60px;" value="${w.range}" onchange="updateWep(${index}, 'range', this.value)">
+                                    <span>Dmg:</span><input type="text" class="wep-input" style="width:60px;" value="${w.damage}" onchange="updateWep(${index}, 'damage', this.value)">
+                                    <span>AP:</span><input type="number" class="wep-input" style="width:30px;" value="${w.ap}" onchange="updateWep(${index}, 'ap', this.value)">
+                                    <span>RoF:</span><input type="number" class="wep-input" style="width:30px;" value="${w.rof}" onchange="updateWep(${index}, 'rof', this.value)">
+                                </div>
+                            </div>
                         </div>
                         <div class="weapon-actions">
                             <button class="die-btn" onclick="prepareAttack(${index})">ATTACK</button>
@@ -392,6 +413,7 @@
 
         window.updateWep = function(index, field, val) {
             activeThreat.weapons[index][field] = val;
+            saveTemplateToDB(true);
         };
 
         function attachEditorListeners() {
@@ -410,22 +432,23 @@
             let wId = document.getElementById('preset-weapon-select').value;
             let preset = globalState.presets.find(p => p.id === wId);
             if (preset) {
-                activeThreat.weapons.push({ name: preset.name, range: preset.range, damage: preset.damage, ap: preset.ap, rof: preset.rof, icon: preset.icon });
+                // Creates a clean, unlinked clone of the preset specifically for this enemy
+                activeThreat.weapons.push(JSON.parse(JSON.stringify(preset)));
                 renderEditor();
             }
         };
 
         window.addCustomWeapon = function() {
-            activeThreat.weapons.push({ name: "New Attack", range: "Melee", damage: "Str+d6", ap: 0, rof: 1 });
+            activeThreat.weapons.push({ name: "Intrinsic Attack", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon });
             renderEditor();
         };
 
         window.removeWeapon = function(index) { activeThreat.weapons.splice(index, 1); renderEditor(); };
 
-        window.saveTemplateToDB = async function() {
+        window.saveTemplateToDB = async function(silent = false) {
             updateActive();
             await set(ref(db, `campaignState/threatTemplates/${activeTemplateId}`), activeThreat);
-            logToTerminal(`> TEMPLATE SAVED: ${activeThreat.name}`);
+            if (!silent) logToTerminal(`> TEMPLATE SAVED: ${activeThreat.name}`);
         };
         window.deleteTemplate = async function() {
             if (confirm("Delete this template?")) {
@@ -439,28 +462,28 @@
         // BESTIARY SEEDER (Half-Life 2 Integration)
         // ==========================================
         window.seedBestiary = async function() {
-            if(!confirm("Initialize Master HL2 Bestiary? This will add 19 pre-configured templates to the Codex.")) return;
+            if(!confirm("Initialize Master HL2 Bestiary? This will overwrite standard templates with 19 pre-configured threats.")) return;
             
             const hl2Threats = {
-                "hl2_headcrab": { name: "Headcrab", isWildCard: false, pace: 6, parry: 5, toughness: 4, armor: 0, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d6", Notice: "d6", Stealth: "d8" }, abilities: "Leap: Jumps 6\" ignoring elevation.\nLatch: Raise on Fighting roll latches onto head. Victim rolls Vigor or becomes Shaken and starts transforming.", weapons: [ { name: "Latch/Bite", range: "Melee", damage: "Str+d4", ap: 0, rof: 1 } ] },
-                "hl2_headcrab_fast": { name: "Fast Headcrab", isWildCard: false, pace: 8, parry: 5, toughness: 3, armor: 0, scale: -2, attributes: { Agility: "d10", Smarts: "d4", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Athletics: "d10", Fighting: "d6", Notice: "d8", Stealth: "d10" }, abilities: "Leap & Latch.", weapons: [ { name: "Bite", range: "Melee", damage: "Str+d4", ap: 0, rof: 1 } ] },
-                "hl2_headcrab_poison": { name: "Poison Headcrab", isWildCard: false, pace: 6, parry: 6, toughness: 5, armor: 0, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8", Intimidation: "d10" }, abilities: "Leap & Latch.\nToxic Bite: Hit requires Vigor roll. Fail = Fatigue. Success = Shaken with pain (no Spirit recovery next round).", weapons: [ { name: "Toxic Bite", range: "Melee", damage: "Str", ap: 0, rof: 1 } ] },
-                "hl2_zombie": { name: "Zombie", isWildCard: false, pace: 4, parry: 5, toughness: 7, armor: 0, scale: 0, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d8", Vigor: "d8" }, skills: { Fighting: "d6", Intimidation: "d6", Notice: "d6", Throwing: "d6", Athletics: "d6" }, abilities: "Undead: +2 recover Shaken, no Called Shot dmg, immune poison/disease.\nHeadcrab Survivor: Destroying body drops 1-Wound Headcrab.", weapons: [ { name: "Claws", range: "Melee", damage: "Str+d6", ap: 0, rof: 1 }, { name: "Swat Object", range: "3/6/12", damage: "Str+d6", ap: 0, rof: 1 } ] },
-                "hl2_zombie_fast": { name: "Fast Zombie", isWildCard: false, pace: 8, parry: 6, toughness: 5, armor: 0, scale: 0, attributes: { Agility: "d10", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d6" }, abilities: "Undead.\nWall Crawler: Climb verticals at Pace 8.", weapons: [ { name: "Claws", range: "Melee", damage: "Str+d6", ap: 0, rof: 1 } ] },
-                "hl2_zombie_poison": { name: "Poison Zombie", isWildCard: false, pace: 4, parry: 6, toughness: 8, armor: 0, scale: 0, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Undead.\nToxic Aura: Start turn in melee = Vigor roll or Fatigue.\nHive: Can throw 2-3 Poison Headcrabs.", weapons: [ { name: "Claws", range: "Melee", damage: "Str+d6", ap: 0, rof: 1 }, { name: "Throw Headcrab", range: "4/8/16", damage: "Special", ap: 0, rof: 1 } ] },
-                "hl2_antlion": { name: "Antlion", isWildCard: false, pace: 8, parry: 6, toughness: 6, armor: 1, scale: 0, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Flight: Winged flight at Pace 8.\nBurrower: Hides underground, pops out as action.", weapons: [ { name: "Bite/Claws", range: "Melee", damage: "Str+d6", ap: 1, rof: 1 } ] },
-                "hl2_antlion_guard": { name: "Antlion Guard", isWildCard: true, pace: 8, parry: 6, toughness: 12, armor: 2, scale: 2, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d12+2", Vigor: "d12" }, skills: { Athletics: "d8", Fighting: "d8", Intimidation: "d10", Notice: "d6" }, abilities: "Charge: +4 Dmg and +2 Athletics pushback if runs 6\" straight line.\nCarapace: +2 Armor.\nSize +2: Large.", weapons: [ { name: "Ram/Gore", range: "Melee", damage: "Str+d8", ap: 2, rof: 1 } ] },
+                "hl2_headcrab": { name: "Headcrab", isWildCard: false, pace: 6, parry: 5, toughness: 4, armor: 0, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d6", Notice: "d6", Stealth: "d8" }, abilities: "Leap: Jumps 6\" ignoring elevation.\nLatch: Raise on Fighting roll latches onto head. Victim rolls Vigor or becomes Shaken and starts transforming.", weapons: [ { name: "Latch/Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_headcrab_fast": { name: "Fast Headcrab", isWildCard: false, pace: 8, parry: 5, toughness: 3, armor: 0, scale: -2, attributes: { Agility: "d10", Smarts: "d4", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Athletics: "d10", Fighting: "d6", Notice: "d8", Stealth: "d10" }, abilities: "Leap & Latch.", weapons: [ { name: "Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_headcrab_poison": { name: "Poison Headcrab", isWildCard: false, pace: 6, parry: 6, toughness: 5, armor: 0, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8", Intimidation: "d10" }, abilities: "Leap & Latch.\nToxic Bite: Hit requires Vigor roll. Fail = Fatigue. Success = Shaken with pain (no Spirit recovery next round).", weapons: [ { name: "Toxic Bite", range: "Melee", damage: "Str", ap: "0", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_zombie": { name: "Zombie", isWildCard: false, pace: 4, parry: 5, toughness: 7, armor: 0, scale: 0, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d8", Vigor: "d8" }, skills: { Fighting: "d6", Intimidation: "d6", Notice: "d6", Throwing: "d6", Athletics: "d6" }, abilities: "Undead: +2 recover Shaken, no Called Shot dmg, immune poison/disease.\nHeadcrab Survivor: Destroying body drops 1-Wound Headcrab.", weapons: [ { name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon }, { name: "Swat Object", range: "3/6/12", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_zombie_fast": { name: "Fast Zombie", isWildCard: false, pace: 8, parry: 6, toughness: 5, armor: 0, scale: 0, attributes: { Agility: "d10", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d6" }, abilities: "Undead.\nWall Crawler: Climb verticals at Pace 8.", weapons: [ { name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_zombie_poison": { name: "Poison Zombie", isWildCard: false, pace: 4, parry: 6, toughness: 8, armor: 0, scale: 0, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Undead.\nToxic Aura: Start turn in melee = Vigor roll or Fatigue.\nHive: Can throw 2-3 Poison Headcrabs.", weapons: [ { name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon }, { name: "Throw Headcrab", range: "4/8/16", damage: "Special", ap: "0", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_antlion": { name: "Antlion", isWildCard: false, pace: 8, parry: 6, toughness: 6, armor: 1, scale: 0, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Flight: Winged flight at Pace 8.\nBurrower: Hides underground, pops out as action.", weapons: [ { name: "Bite/Claws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_antlion_guard": { name: "Antlion Guard", isWildCard: true, pace: 8, parry: 6, toughness: 12, armor: 2, scale: 2, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d12+2", Vigor: "d12" }, skills: { Athletics: "d8", Fighting: "d8", Intimidation: "d10", Notice: "d6" }, abilities: "Charge: +4 Dmg and +2 Athletics pushback if runs 6\" straight line.\nCarapace: +2 Armor.\nSize +2: Large.", weapons: [ { name: "Ram/Gore", range: "Melee", damage: "Str+d8", ap: "2", rof: "1", icon: defaultWeaponIcon } ] },
                 "hl2_scanner": { name: "City Scanner", isWildCard: false, pace: 10, parry: 4, toughness: 6, armor: 2, scale: -2, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Driving: "d8", Notice: "d10", Taunt: "d6" }, abilities: "Construct: +2 recover Shaken, immune poison/disease, no Called Shot dmg.\nMark Target: Grants Combine +1 hit vs target.\nFlashbulb: Small Burst, Vigor or Distracted 1d4 rnds.", weapons: [] },
-                "hl2_manhack": { name: "Manhack", isWildCard: false, pace: 8, parry: 6, toughness: 5, armor: 2, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d6" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Construct.\nSmall: Attackers -2 to hit.", weapons: [ { name: "Buzzsaw", range: "Melee", damage: "Str+d6", ap: 1, rof: 1 } ] },
-                "hl2_rollermine": { name: "Rollermine", isWildCard: false, pace: 8, parry: 4, toughness: 8, armor: 2, scale: -1, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d8", Notice: "d8" }, abilities: "Construct.\nEMP Burst: Explodes Small Burst 2d6 electrical damage when destroyed.", weapons: [ { name: "Electric Shock", range: "Melee", damage: "2d6", ap: 2, rof: 1 } ] },
-                "hl2_metrocop": { name: "Civil Protection (Metrocop)", isWildCard: false, pace: 6, parry: 4, toughness: 6, armor: 1, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Driving: "d6", Fighting: "d6", Intimidation: "d6", Notice: "d6", Shooting: "d6", Taunt: "d6", Athletics: "d6" }, abilities: "Tactical Doctrine: +1 recover Shaken near command.", weapons: [ { name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: 0, rof: 1 }, { name: "Stunstick", range: "Melee", damage: "Str+d4", ap: 1, rof: 1 } ] },
-                "hl2_combine_soldier": { name: "Combine Soldier", isWildCard: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8", Stealth: "d6", Throwing: "d6" }, abilities: "Edges: Steady Hands.", weapons: [ { name: "Pulse Rifle (SMG)", range: "24/48/96", damage: "2d6", ap: 1, rof: 3 }, { name: "Frag Grenade", range: "5/10/20", damage: "3d6", ap: 2, rof: 1 } ] },
-                "hl2_combine_shotgunner": { name: "Combine Shotgunner", isWildCard: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8" }, abilities: "Edges: Sweep.", weapons: [ { name: "SPAS-12", range: "12/24/48", damage: "3d6", ap: 0, rof: 2 }, { name: "SPAS Double", range: "12/24/48", damage: "5d6", ap: 0, rof: 1 } ] },
-                "hl2_combine_elite": { name: "Combine Elite", isWildCard: true, pace: 6, parry: 6, toughness: 9, armor: 3, scale: 0, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d8", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Shooting: "d10", Stealth: "d8" }, abilities: "Edges: Rock and Roll!", weapons: [ { name: "AR2 Pulse Rifle", range: "24/48/96", damage: "2d8", ap: 2, rof: 3 }, { name: "AR2 Energy Orb", range: "24/48/96", damage: "3d10", ap: 4, rof: 1 } ] },
-                "hl2_gunship": { name: "Combine Gunship", isWildCard: true, pace: 15, parry: 7, toughness: 17, armor: 4, scale: 4, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: "Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms).\nPoint Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.", weapons: [ { name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: 2, rof: 4 } ] },
-                "hl2_strider": { name: "Strider", isWildCard: true, pace: 12, parry: 7, toughness: 28, armor: 6, scale: 8, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: "Construct. Massive (+8 Tgh, -8 to be hit by small arms).\nImpale: Legs deal Str+d10 AP4 in melee.\nCrouch: Can lower body to enter buildings.", weapons: [ { name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: 2, rof: 4 }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: 10, rof: 1 } ] },
-                "hl2_barnacle": { name: "Barnacle", isWildCard: false, pace: 0, parry: 2, toughness: 6, armor: 0, scale: 0, attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: "Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3\" up per round.\nWeak Point: Tongue is Toughness 5 to sever.", weapons: [ { name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: 0, rof: 1 } ] },
-                "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, armor: 1, scale: 0, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Aquatic: Pace 10 in water.\nDrag: Raise on bite pulls target underwater (hold breath).", weapons: [ { name: "Jaws", range: "Melee", damage: "Str+d6", ap: 1, rof: 1 } ] }
+                "hl2_manhack": { name: "Manhack", isWildCard: false, pace: 8, parry: 6, toughness: 5, armor: 2, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d6" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Construct.\nSmall: Attackers -2 to hit.", weapons: [ { name: "Buzzsaw", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_rollermine": { name: "Rollermine", isWildCard: false, pace: 8, parry: 4, toughness: 8, armor: 2, scale: -1, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d8", Notice: "d8" }, abilities: "Construct.\nEMP Burst: Explodes Small Burst 2d6 electrical damage when destroyed.", weapons: [ { name: "Electric Shock", range: "Melee", damage: "2d6", ap: "2", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_metrocop": { name: "Civil Protection (Metrocop)", isWildCard: false, pace: 6, parry: 4, toughness: 6, armor: 1, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Driving: "d6", Fighting: "d6", Intimidation: "d6", Notice: "d6", Shooting: "d6", Taunt: "d6", Athletics: "d6" }, abilities: "Tactical Doctrine: +1 recover Shaken near command.", weapons: [ { name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", icon: "https://i.imgur.com/sAz8rBR.png" }, { name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", icon: "https://i.imgur.com/oAbqfGW.png" }, { name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", icon: "https://i.imgur.com/pMPZprv.png" } ] },
+                "hl2_combine_soldier": { name: "Combine Soldier", isWildCard: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8", Stealth: "d6", Throwing: "d6" }, abilities: "Edges: Steady Hands.", weapons: [ { name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", icon: "https://i.imgur.com/oAbqfGW.png" }, { name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", icon: "https://i.imgur.com/3rgRKGo.png" }, { name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "1", icon: "https://i.imgur.com/9a4Uprg.png" } ] },
+                "hl2_combine_shotgunner": { name: "Combine Shotgunner", isWildCard: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8" }, abilities: "Edges: Sweep.", weapons: [ { name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", icon: "https://i.imgur.com/8ewEl7D.png" }, { name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", icon: "https://i.imgur.com/8ewEl7D.png" } ] },
+                "hl2_combine_elite": { name: "Combine Elite", isWildCard: true, pace: 6, parry: 6, toughness: 9, armor: 3, scale: 0, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d8", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Shooting: "d10", Stealth: "d8" }, abilities: "Edges: Rock and Roll!", weapons: [ { name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", icon: "https://i.imgur.com/3rgRKGo.png" }, { name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", icon: "https://i.imgur.com/4lFt2CC.png" } ] },
+                "hl2_gunship": { name: "Combine Gunship", isWildCard: true, pace: 15, parry: 7, toughness: 17, armor: 4, scale: 4, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: "Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms).\nPoint Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.", weapons: [ { name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", icon: defaultWeaponIcon } ] },
+                "hl2_strider": { name: "Strider", isWildCard: true, pace: 12, parry: 7, toughness: 28, armor: 6, scale: 8, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: "Construct. Massive (+8 Tgh, -8 to be hit by small arms).\nImpale: Legs deal Str+d10 AP4 in melee.\nCrouch: Can lower body to enter buildings.", weapons: [ { name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", icon: defaultWeaponIcon }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: "10", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_barnacle": { name: "Barnacle", isWildCard: false, pace: 0, parry: 2, toughness: 6, armor: 0, scale: 0, attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: "Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3\" up per round.\nWeak Point: Tongue is Toughness 5 to sever.", weapons: [ { name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", icon: defaultWeaponIcon } ] },
+                "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, armor: 1, scale: 0, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Aquatic: Pace 10 in water.\nDrag: Raise on bite pulls target underwater (hold breath).", weapons: [ { name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", icon: defaultWeaponIcon } ] }
             };
 
             await update(ref(db, 'campaignState/threatTemplates'), hl2Threats);
@@ -690,7 +713,7 @@
                 
                 let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || defaultWeaponIcon;
                 embed.thumbnail = { url: imgUrl };
-                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${activeWeaponContext.range}\nDamage: ${activeWeaponContext.damage}\nAP: ${activeWeaponContext.ap || 0}\nRoF: ${activeWeaponContext.rof}` });
+                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${activeWeaponContext.range || "—"}\nDamage: ${activeWeaponContext.damage || "—"}\nAP: ${activeWeaponContext.ap || "0"}\nRoF: ${activeWeaponContext.rof || "1"}` });
                 fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => {});
             }
         }
@@ -754,7 +777,7 @@
 
                 let imgUrl = wep.image || wep.icon || defaultWeaponIcon;
                 embed.thumbnail = { url: imgUrl };
-                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${wep.range}\nDamage: ${wep.damage}\nAP: ${wep.ap || 0}\nRoF: ${wep.rof}` });
+                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${wep.range || "—"}\nDamage: ${wep.damage || "—"}\nAP: ${wep.ap || "0"}\nRoF: ${wep.rof || "1"}` });
                 fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => {});
             }
         };
