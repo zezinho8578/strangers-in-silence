@@ -1,0 +1,715 @@
+--- START OF FILE tracker.html ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LambdaOS - Combat Tracker</title>
+    <link rel="stylesheet" href="/style.css">
+    
+    <script>
+        // Security Check
+        let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+        if (!currentUser) window.location.replace("/");
+    </script>
+    <style>
+        #top-nav {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--theme-color);
+            padding-bottom: 10px;
+            margin-right: 180px; 
+            align-items: flex-end;
+        }
+        .nav-link { color: var(--theme-color); text-decoration: none; cursor: pointer; }
+        .nav-link:hover { background: var(--theme-color); color: var(--bg-color); }
+
+        /* Gatekeeper Overlay */
+        #gatekeeper-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+        .warning-text { color: #ff3333; animation: pulse 2s infinite; text-shadow: 0 0 10px #ff3333; margin-bottom: 20px; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* Combat Layout */
+        #combat-ui { display: none; }
+        .tracker-header {
+            display: flex;
+            justify-content: space-between;
+            background: rgba(128, 128, 128, 0.1);
+            border: 1px solid var(--theme-color);
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .tracker-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 800px) { .tracker-grid { grid-template-columns: 1fr; } }
+
+        /* Turn Order List */
+        .turn-list {
+            border: 1px solid var(--theme-color);
+            min-height: 300px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+        }
+        .participant-row {
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            border: 1px solid transparent;
+            border-bottom: 1px dashed rgba(255, 153, 0, 0.3);
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .participant-row:hover { background: rgba(255, 153, 0, 0.1); border-color: var(--theme-color); }
+        .participant-row.active-turn { border: 1px solid var(--theme-color); background: rgba(255, 153, 0, 0.2); }
+        .participant-row.selected { border-left: 4px solid var(--theme-color); }
+        .card-display { font-size: 0.9em; opacity: 0.8; margin-top: 5px; }
+        
+        .joker-text { color: #ffff00; font-weight: bold; text-shadow: 0 0 5px #ffff00; animation: pulse 1.5s infinite; }
+        
+        /* Status Badges */
+        .badge {
+            display: inline-block;
+            font-size: 0.75em;
+            padding: 2px 5px;
+            margin-right: 5px;
+            border: 1px solid;
+            margin-top: 5px;
+        }
+        .badge.shaken { border-color: #ff9900; color: #ff9900; }
+        .badge.distracted { border-color: #ff3333; color: #ff3333; }
+        .badge.vulnerable { border-color: #00ff00; color: #00ff00; }
+
+        /* Detail Panel */
+        .detail-panel {
+            border: 1px solid var(--theme-color);
+            padding: 15px;
+            background: rgba(128, 128, 128, 0.1);
+        }
+        .detail-header { font-size: 1.2em; border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px; margin-bottom: 15px; }
+        
+        .stat-control {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .die-btn {
+            background: transparent;
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            padding: 4px 10px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9em;
+            transition: 0.2s;
+            outline: none;
+        }
+        .die-btn:hover { background: var(--theme-color); color: var(--bg-color); text-shadow: none; }
+        .die-btn.active-toggle { background: var(--theme-color); color: var(--bg-color); }
+        .die-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .target-calc {
+            margin-top: 20px;
+            border-top: 1px dashed var(--theme-color);
+            padding-top: 15px;
+        }
+        .calc-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .calc-input { background: var(--bg-color); color: var(--theme-color); border: 1px solid var(--theme-color); padding: 5px; font-family: inherit; width: 60px; text-align: center; }
+        .calc-select { background: var(--bg-color); color: var(--theme-color); border: 1px solid var(--theme-color); padding: 5px; font-family: inherit; flex-grow: 1; }
+        #calc-result { margin-top: 10px; font-weight: bold; padding: 10px; border: 1px solid transparent; text-align: center; }
+
+        .gm-controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+
+    <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
+
+    <!-- GATEKEEPER SCREEN -->
+    <div id="gatekeeper-screen">
+        <h1 class="warning-text">> WARNING: TACTICAL ENGAGEMENT NETWORK OFFLINE.</h1>
+        <p>> NO ACTIVE COMBAT ENVELOPE DETECTED ON NODE_04.</p>
+        <div id="countdown-text" style="margin-top: 20px; font-size: 1.2em;"></div>
+        
+        <div id="admin-init-btn" style="display: none; margin-top: 30px;">
+            <p style="color: var(--theme-color);">> ADMIN PRIVILEGES RECOGNIZED.</p>
+            <button class="die-btn" style="font-size: 1.5em; padding: 10px 20px;" onclick="initializeCombat()">INITIALIZE COMBAT PROTOCOL</button>
+        </div>
+    </div>
+
+    <!-- MAIN UI -->
+    <div id="combat-ui">
+        <div id="top-nav">
+            <a href="/dashboard.html" class="nav-link">< RETURN TO DASHBOARD</a>
+            <div>TACTICAL ENGAGEMENT MONITOR</div>
+        </div>
+
+        <div class="tracker-header">
+            <span id="round-display">ROUND: --</span>
+            <span id="deck-display">ACTIVE DECK: --/54 CARDS</span>
+        </div>
+
+        <div class="tracker-grid">
+            <!-- LEFT: TURN ORDER -->
+            <div class="turn-list">
+                <div style="border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px; margin-bottom: 10px;">
+                    > TURN ORDER
+                </div>
+                <div id="participants-container">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <!-- RIGHT: TACTICAL DETAILS & CALCULATOR -->
+            <div>
+                <div class="detail-panel" id="detail-panel" style="display: none;">
+                    <div class="detail-header" id="detail-name">SELECT TARGET</div>
+                    
+                    <div class="stat-control">
+                        <span>Bennies:</span>
+                        <div>
+                            <button class="die-btn" onclick="adjustStat('bennies', -1)">-</button>
+                            <span id="detail-bennies" style="display:inline-block; width: 30px; text-align: center;">0</span>
+                            <button class="die-btn" onclick="adjustStat('bennies', 1)">+</button>
+                        </div>
+                    </div>
+                    <div class="stat-control">
+                        <span>Wounds:</span>
+                        <div>
+                            <button class="die-btn" onclick="adjustStat('wounds', -1)">-</button>
+                            <span id="detail-wounds" style="display:inline-block; width: 30px; text-align: center;">0</span>
+                            <button class="die-btn" onclick="adjustStat('wounds', 1)">+</button>
+                        </div>
+                    </div>
+                    <div class="stat-control">
+                        <span>Fatigue:</span>
+                        <div>
+                            <button class="die-btn" onclick="adjustStat('fatigue', -1)">-</button>
+                            <span id="detail-fatigue" style="display:inline-block; width: 30px; text-align: center;">0</span>
+                            <button class="die-btn" onclick="adjustStat('fatigue', 1)">+</button>
+                        </div>
+                    </div>
+                    
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-bottom: 15px; text-align: right;" id="detail-penalty">
+                        Penalty: -0 to Trait Rolls
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button id="btn-shaken" class="die-btn" style="flex-grow: 1;" onclick="toggleStatus('shaken')">SHAKEN</button>
+                        <button id="btn-distracted" class="die-btn" style="flex-grow: 1;" onclick="toggleStatus('distracted')">DISTRACTED</button>
+                        <button id="btn-vulnerable" class="die-btn" style="flex-grow: 1;" onclick="toggleStatus('vulnerable')">VULNERABLE</button>
+                    </div>
+
+                    <div style="font-size: 0.9em; opacity: 0.8;">
+                        Parry: <span id="detail-parry">--</span> | Toughness: <span id="detail-toughness">--</span>
+                    </div>
+                </div>
+
+                <!-- TARGET CALCULATOR (GM/All visible) -->
+                <div class="target-calc" id="target-calc-container">
+                    <div style="margin-bottom: 10px;">> QUICK TARGET CALCULATOR</div>
+                    <div class="calc-row">
+                        <select id="calc-target" class="calc-select">
+                            <option value="">-- Select Target --</option>
+                        </select>
+                    </div>
+                    <div class="calc-row">
+                        <span style="width: 80px;">Attack Roll:</span>
+                        <input type="number" id="calc-attack" class="calc-input">
+                        <button class="die-btn" onclick="calcAttack()">COMPARE PARRY</button>
+                    </div>
+                    <div class="calc-row">
+                        <span style="width: 80px;">Dmg Roll:</span>
+                        <input type="number" id="calc-damage" class="calc-input">
+                        <button class="die-btn" onclick="calcDamage()">COMPARE TOUGHNESS</button>
+                    </div>
+                    <div id="calc-result">> WAITING FOR INPUT...</div>
+                </div>
+
+                <!-- GM CONTROLS -->
+                <div class="gm-controls" id="gm-controls" style="display: none;">
+                    <button class="die-btn" onclick="dealInitiative()">DEAL INITIATIVE</button>
+                    <button class="die-btn" onclick="nextTurn()">NEXT TURN ></button>
+                    <button class="die-btn" onclick="addNpc()">+ ADD EXTRA</button>
+                    <button class="die-btn" onclick="endCombat()" style="border-color: #ff3333; color: #ff3333;">END COMBAT</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/settings.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // ==========================================
+        // 1. CONFIGURATION & AUTH
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBt1ymfsEvbO1X9eYDVf2ctotRcbFFOO44",
+            authDomain: "strangers-in-silence.firebaseapp.com",
+            databaseURL: "https://strangers-in-silence-default-rtdb.firebaseio.com",
+            projectId: "strangers-in-silence",
+            storageBucket: "strangers-in-silence.firebasestorage.app",
+            messagingSenderId: "62557473299",
+            appId: "1:62557473299:web:e2ebf2ee2520a9189e8de6"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const isAdmin = (currentUser === "Administrator") || window.location.pathname.includes("adminview");
+        
+        let globalState = null;
+        let selectedParticipantId = null;
+        let countdownTimer = null;
+
+        // Display GM controls if Admin
+        if (isAdmin) {
+            document.getElementById('gm-controls').style.display = 'flex';
+        }
+
+        // ==========================================
+        // 2. FIREBASE SYNC & GATEKEEPER
+        // ==========================================
+        onValue(ref(db, 'campaignState'), (snapshot) => {
+            globalState = snapshot.val();
+            if (!globalState) return;
+
+            checkGatekeeper();
+            if (globalState.combatActive && globalState.combat) {
+                renderCombatUI();
+            }
+        });
+
+        function checkGatekeeper() {
+            const screen = document.getElementById('gatekeeper-screen');
+            const ui = document.getElementById('combat-ui');
+            const countdownEl = document.getElementById('countdown-text');
+
+            if (globalState.combatActive) {
+                // Combat is ON
+                screen.style.display = 'none';
+                ui.style.display = 'block';
+                if (countdownTimer) clearInterval(countdownTimer);
+            } else {
+                // Combat is OFF
+                ui.style.display = 'none';
+                screen.style.display = 'flex';
+                
+                if (isAdmin) {
+                    document.getElementById('admin-init-btn').style.display = 'block';
+                    countdownEl.style.display = 'none';
+                } else {
+                    document.getElementById('admin-init-btn').style.display = 'none';
+                    if (!countdownTimer) {
+                        let count = 5;
+                        countdownEl.innerText = `> REDIRECTING IN ${count}...`;
+                        countdownTimer = setInterval(() => {
+                            count--;
+                            countdownEl.innerText = `> REDIRECTING IN ${count}...`;
+                            if (count <= 0) {
+                                clearInterval(countdownTimer);
+                                window.location.href = "/dashboard.html";
+                            }
+                        }, 1000);
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // 3. DECK GENERATION LOGIC
+        // ==========================================
+        function createDeck() {
+            const suits = [
+                { name: 'Spades', val: 4, symbol: '♠' },
+                { name: 'Hearts', val: 3, symbol: '♥' },
+                { name: 'Diamonds', val: 2, symbol: '♦' },
+                { name: 'Clubs', val: 1, symbol: '♣' }
+            ];
+            const ranks = [
+                { name: '2', val: 2 }, { name: '3', val: 3 }, { name: '4', val: 4 },
+                { name: '5', val: 5 }, { name: '6', val: 6 }, { name: '7', val: 7 },
+                { name: '8', val: 8 }, { name: '9', val: 9 }, { name: '10', val: 10 },
+                { name: 'Jack', val: 11 }, { name: 'Queen', val: 12 }, { name: 'King', val: 13 }, { name: 'Ace', val: 14 }
+            ];
+
+            let deck = [];
+            suits.forEach(suit => {
+                ranks.forEach(rank => {
+                    deck.push({
+                        label: `${rank.name} of ${suit.name} ${suit.symbol}`,
+                        rank: rank.val,
+                        suit: suit.val,
+                        isJoker: false
+                    });
+                });
+            });
+            // Add Jokers
+            deck.push({ label: `Red Joker 🃏`, rank: 15, suit: 5, isJoker: true });
+            deck.push({ label: `Black Joker 🃏`, rank: 15, suit: 5, isJoker: true });
+
+            // Fisher-Yates Shuffle
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+            return deck;
+        }
+
+        // ==========================================
+        // 4. COMBAT INITIALIZATION & ACTIONS
+        // ==========================================
+        window.initializeCombat = async function() {
+            let participants = [];
+            
+            // Pull players from global characters
+            if (globalState.characters) {
+                for (const [id, data] of Object.entries(globalState.characters)) {
+                    participants.push({
+                        id: id,
+                        name: data.name,
+                        isPlayer: true,
+                        bennies: data.bennies || 0,
+                        parry: parseInt(data.derived?.parry) || 4,
+                        toughness: parseInt(data.derived?.toughness) || 4,
+                        wounds: 0,
+                        fatigue: 0,
+                        shaken: false,
+                        distracted: false,
+                        vulnerable: false,
+                        card: null
+                    });
+                }
+            }
+
+            const initialCombatState = {
+                round: 1,
+                activeTurnIndex: 0,
+                deck: createDeck(),
+                needsReshuffle: false,
+                participants: participants
+            };
+
+            await update(ref(db, 'campaignState'), {
+                combatActive: true,
+                combat: initialCombatState
+            });
+            logToWebhook("TACTICAL ENGAGEMENT INITIATED", "Combat has begun.");
+        };
+
+        window.endCombat = async function() {
+            if (confirm("End combat? This will wipe the tracker and return players to dashboard.")) {
+                await set(ref(db, 'campaignState/combatActive'), false);
+                await set(ref(db, 'campaignState/combat'), null);
+                logToWebhook("COMBAT ENDED", "Tactical engagement concluded.");
+            }
+        };
+
+        window.dealInitiative = async function() {
+            let combat = globalState.combat;
+            
+            if (combat.needsReshuffle || !combat.deck || combat.deck.length < combat.participants.length) {
+                combat.deck = createDeck();
+                combat.needsReshuffle = false;
+                logToWebhook("DECK RESHUFFLED", "A new 54-card deck was initialized.");
+            }
+
+            let jokerDrawnBy = [];
+
+            // Deal cards
+            combat.participants.forEach(p => {
+                let drawn = combat.deck.pop();
+                p.card = drawn;
+                if (drawn.isJoker) {
+                    combat.needsReshuffle = true;
+                    jokerDrawnBy.push(p.name);
+                }
+            });
+
+            // Sort participants by Card SWADE Rules
+            combat.participants.sort((a, b) => {
+                if (b.card.rank !== a.card.rank) {
+                    return b.card.rank - a.card.rank; // Highest rank first
+                } else {
+                    return b.card.suit - a.card.suit; // Tie-breaker by suit
+                }
+            });
+
+            combat.activeTurnIndex = 0;
+            if (combat.round === undefined) combat.round = 1;
+            else combat.round += 1;
+
+            await set(ref(db, 'campaignState/combat'), combat);
+            
+            let desc = `Round ${combat.round} turn order established.`;
+            if (jokerDrawnBy.length > 0) desc += `\n**JOKER DRAWN BY: ${jokerDrawnBy.join(', ')}! (+2 to all rolls)**`;
+            logToWebhook(`ROUND ${combat.round} INITIATIVE`, desc);
+        };
+
+        window.nextTurn = async function() {
+            let combat = globalState.combat;
+            combat.activeTurnIndex++;
+            if (combat.activeTurnIndex >= combat.participants.length) {
+                alert("Round Complete! Deal initiative for the next round.");
+                combat.activeTurnIndex = combat.participants.length - 1; // Cap it
+            }
+            await set(ref(db, 'campaignState/combat/activeTurnIndex'), combat.activeTurnIndex);
+        };
+
+        window.addNpc = async function() {
+            let name = prompt("Enter NPC/Group Name:");
+            if (!name) return;
+            let parry = parseInt(prompt("Enter Parry:", "5")) || 5;
+            let toughness = parseInt(prompt("Enter Toughness:", "6")) || 6;
+
+            let newNpc = {
+                id: "npc_" + Date.now(),
+                name: name,
+                isPlayer: false,
+                bennies: 0,
+                parry: parry,
+                toughness: toughness,
+                wounds: 0,
+                fatigue: 0,
+                shaken: false,
+                distracted: false,
+                vulnerable: false,
+                card: null
+            };
+
+            let participants = globalState.combat.participants || [];
+            participants.push(newNpc);
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+        };
+
+        // ==========================================
+        // 5. UI RENDERING
+        // ==========================================
+        function renderCombatUI() {
+            let combat = globalState.combat;
+            document.getElementById('round-display').innerText = `ROUND: ${combat.round || 1}`;
+            document.getElementById('deck-display').innerText = `ACTIVE DECK: ${combat.deck ? combat.deck.length : 0}/54 CARDS${combat.needsReshuffle ? ' [RESHUFFLE PENDING]' : ''}`;
+
+            const container = document.getElementById('participants-container');
+            const targetSelect = document.getElementById('calc-target');
+            
+            // Preserve target select value if it exists
+            let prevTarget = targetSelect.value;
+            container.innerHTML = '';
+            targetSelect.innerHTML = '<option value="">-- Select Target --</option>';
+
+            if (!combat.participants) return;
+
+            combat.participants.forEach((p, index) => {
+                // Populate Turn Order
+                let isTurn = index === combat.activeTurnIndex;
+                let isSelected = p.id === selectedParticipantId;
+                
+                let cardHtml = p.card ? `<div class="card-display ${p.card.isJoker ? 'joker-text' : ''}">${p.card.label} ${p.card.isJoker ? '[+2 ALL ROLLS]' : ''}</div>` : `<div class="card-display">Waiting for card...</div>`;
+                
+                let badges = "";
+                if (p.shaken) badges += `<span class="badge shaken">SHAKEN</span>`;
+                if (p.distracted) badges += `<span class="badge distracted">DISTRACTED [-2]</span>`;
+                if (p.vulnerable) badges += `<span class="badge vulnerable">VULNERABLE [+2 to be hit]</span>`;
+                let totalPenalty = (p.wounds || 0) + (p.fatigue || 0);
+                if (totalPenalty > 0) badges += `<span class="badge" style="border-color:#ff3333;">W/F PENALTY: -${totalPenalty}</span>`;
+
+                container.innerHTML += `
+                    <div class="participant-row ${isTurn ? 'active-turn' : ''} ${isSelected ? 'selected' : ''}" onclick="selectParticipant('${p.id}')">
+                        <div style="font-weight: bold;">
+                            ${isTurn ? '[>] ' : ''}${index + 1}. ${p.name.toUpperCase()}
+                        </div>
+                        ${cardHtml}
+                        <div>${badges}</div>
+                    </div>`;
+
+                // Populate Target Select
+                targetSelect.innerHTML += `<option value="${p.id}" ${prevTarget === p.id ? 'selected' : ''}>${p.name}</option>`;
+            });
+
+            updateDetailPanel();
+        }
+
+        window.selectParticipant = function(id) {
+            selectedParticipantId = id;
+            renderCombatUI();
+        };
+
+        function updateDetailPanel() {
+            if (!selectedParticipantId || !globalState.combat.participants) {
+                document.getElementById('detail-panel').style.display = 'none';
+                return;
+            }
+
+            const p = globalState.combat.participants.find(x => x.id === selectedParticipantId);
+            if (!p) return;
+
+            document.getElementById('detail-panel').style.display = 'block';
+            document.getElementById('detail-name').innerText = p.name.toUpperCase();
+            
+            document.getElementById('detail-bennies').innerText = p.bennies || 0;
+            document.getElementById('detail-wounds').innerText = p.wounds || 0;
+            document.getElementById('detail-fatigue').innerText = p.fatigue || 0;
+            
+            let penalty = (p.wounds || 0) + (p.fatigue || 0);
+            document.getElementById('detail-penalty').innerText = `Penalty: -${penalty} to Trait Rolls`;
+
+            document.getElementById('detail-parry').innerText = p.parry;
+            document.getElementById('detail-toughness').innerText = p.toughness;
+
+            document.getElementById('btn-shaken').className = `die-btn ${p.shaken ? 'active-toggle' : ''}`;
+            document.getElementById('btn-distracted').className = `die-btn ${p.distracted ? 'active-toggle' : ''}`;
+            document.getElementById('btn-vulnerable').className = `die-btn ${p.vulnerable ? 'active-toggle' : ''}`;
+        }
+
+        // ==========================================
+        // 6. STATUS ADJUSTMENTS
+        // ==========================================
+        window.adjustStat = async function(stat, amount) {
+            if (!selectedParticipantId) return;
+            let participants = globalState.combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+
+            let p = participants[idx];
+            let newVal = (p[stat] || 0) + amount;
+            if (newVal < 0) newVal = 0;
+            
+            // SWADE Limits
+            if (stat === 'wounds' && newVal > 3 && p.isPlayer) newVal = 3; // Wildcards cap at 3 before Incapacitated
+            if (stat === 'fatigue' && newVal > 2) newVal = 2; // Cap at 2 before Incapacitated
+
+            p[stat] = newVal;
+
+            // If modifying bennies for a player, sync back to character sheet
+            if (stat === 'bennies' && p.isPlayer) {
+                await set(ref(db, `campaignState/characters/${p.id}/bennies`), newVal);
+            }
+
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+        };
+
+        window.toggleStatus = async function(status) {
+            if (!selectedParticipantId) return;
+            let participants = globalState.combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+
+            participants[idx][status] = !participants[idx][status];
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+            
+            if (participants[idx][status]) {
+                logToWebhook("STATUS UPDATE", `${participants[idx].name} is now **${status.toUpperCase()}**.`);
+            }
+        };
+
+        // ==========================================
+        // 7. TARGET CALCULATOR (GM ASSIST)
+        // ==========================================
+        window.calcAttack = function() {
+            let targetId = document.getElementById('calc-target').value;
+            let roll = parseInt(document.getElementById('calc-attack').value);
+            let resultBox = document.getElementById('calc-result');
+
+            if (!targetId || isNaN(roll)) {
+                resultBox.innerHTML = "<span style='color:#ff3333;'>ERROR: SELECT TARGET AND ENTER ROLL.</span>";
+                return;
+            }
+
+            let target = globalState.combat.participants.find(x => x.id === targetId);
+            let parry = parseInt(target.parry);
+            if (target.vulnerable) parry -= 2; // Being vulnerable adds +2 to hit, meaning parry is effectively 2 lower for math. Or we just add 2 to the roll.
+            
+            let effectiveRoll = target.vulnerable ? roll + 2 : roll;
+
+            resultBox.style.borderColor = "var(--theme-color)";
+            
+            if (effectiveRoll < parry) {
+                resultBox.innerHTML = `FAILURE against ${target.name}'s Parry (${target.parry}).`;
+                resultBox.style.color = "var(--theme-color)";
+            } else {
+                let raises = Math.floor((effectiveRoll - parry) / 4);
+                if (raises > 0) {
+                    resultBox.innerHTML = `HIT WITH ${raises} RAISE(S)! (+1d6 Dmg)`;
+                    resultBox.style.color = "#00ff00";
+                } else {
+                    resultBox.innerHTML = `SUCCESS! Hit against ${target.name}.`;
+                    resultBox.style.color = "#00ff00";
+                }
+            }
+        };
+
+        window.calcDamage = function() {
+            let targetId = document.getElementById('calc-target').value;
+            let roll = parseInt(document.getElementById('calc-damage').value);
+            let resultBox = document.getElementById('calc-result');
+
+            if (!targetId || isNaN(roll)) {
+                resultBox.innerHTML = "<span style='color:#ff3333;'>ERROR: SELECT TARGET AND ENTER ROLL.</span>";
+                return;
+            }
+
+            let target = globalState.combat.participants.find(x => x.id === targetId);
+            let toughness = parseInt(target.toughness);
+
+            resultBox.style.borderColor = "var(--theme-color)";
+
+            if (roll < toughness) {
+                resultBox.innerHTML = `NO EFFECT. Armor/Toughness holds.`;
+                resultBox.style.color = "var(--theme-color)";
+            } else {
+                let extra = roll - toughness;
+                let wounds = Math.floor(extra / 4);
+
+                let output = "";
+                if (wounds === 0) {
+                    output = `Target is **SHAKEN**. (If already shaken, causes 1 Wound).`;
+                } else {
+                    output = `Target is **SHAKEN** and takes **${wounds} WOUND(S)**!`;
+                }
+                
+                resultBox.innerHTML = output;
+                resultBox.style.color = "#ff9900";
+            }
+        };
+
+        // ==========================================
+        // 8. DISCORD LOGGING
+        // ==========================================
+        async function logToWebhook(title, desc) {
+            if (globalState && globalState.webhook) {
+                const embed = { title: title, description: desc, color: 0xff9900 };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) { console.warn("Webhook failed", e); }
+            }
+        }
+
+    </script>
+</body>
+</html>
+--- END OF FILE tracker.html ---
