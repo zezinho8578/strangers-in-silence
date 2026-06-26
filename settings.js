@@ -11,6 +11,20 @@ const themeData = {
 
 // Run immediately to prevent style flickering on load
 (function initializeSettings() {
+    // --- SET UNIVERSAL FAVICON ---
+    // You can replace this URL with a local path like "/favicon.ico" or "/favicon.png"
+    const faviconUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png"; 
+    
+    let link = document.querySelector("link[rel~='icon']");
+    if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        link.type = 'image/png'; // Change to 'image/x-icon' if utilizing a .ico file
+        document.head.appendChild(link);
+    }
+    link.href = faviconUrl;
+    // -----------------------------
+
     // Load saved data
     const savedThemeId = localStorage.getItem('lambdaTheme') || 'lambda';
     const savedSize = localStorage.getItem('lambdaSize') || '22px';
