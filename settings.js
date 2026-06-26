@@ -100,6 +100,14 @@ function injectSettingsModal() {
                 </select>
             </div>
 
+            <div class="setting-row">
+                <span>SYNC NOTIFICATIONS:</span>
+                <select id="set-sync-notif">
+                    <option value="off">Disabled</option>
+                    <option value="on">Enabled</option>
+                </select>
+            </div>
+
             <button id="logout-btn" class="danger-btn">[ TERMINATE SESSION ]</button>
             <button id="close-settings">[ CLOSE ]</button>
         </div>
@@ -122,6 +130,7 @@ function injectSettingsModal() {
     document.getElementById('set-size').value = localStorage.getItem('lambdaSize') || '22px';
     document.getElementById('set-scanlines').value = localStorage.getItem('lambdaScanlines') || 'block';
     document.getElementById('set-audio').value = localStorage.getItem('lambdaAudio') || 'on';
+    document.getElementById('set-sync-notif').value = localStorage.getItem('lambdaSyncNotif') || 'off';
 
     // Event Listeners for Opening/Closing
     btnOpen.addEventListener('click', () => modal.style.display = 'block');
@@ -156,6 +165,10 @@ function injectSettingsModal() {
 
     document.getElementById('set-audio').addEventListener('change', (e) => {
         localStorage.setItem('lambdaAudio', e.target.value);
+    });
+
+    document.getElementById('set-sync-notif').addEventListener('change', (e) => {
+        localStorage.setItem('lambdaSyncNotif', e.target.value);
     });
 
     // Logout Logic
