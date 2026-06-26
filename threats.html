@@ -208,10 +208,21 @@
             <div class="setting-row">
                 <span>Shots Fired (RoF):</span>
                 <select id="rof-select" class="admin-input" style="width:180px;" onchange="updateRecoilPenalty()">
-                    <option value="1">Single Shot (1 Die)</option>
+                    <option value="1">Single Shot (1 Bullet)</option>
                 </select>
             </div>
-            <div id="recoil-warning" style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">* RoF > 1 incurs a -2 Recoil penalty.</div>
+            <div class="setting-row">
+                <span>Fire Mode:</span>
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
+                        <input type="checkbox" id="suppressive-checkbox" onchange="updateRecoilPenalty()"> Suppressive (x3 Ammo)
+                    </label>
+                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
+                        <input type="checkbox" id="3rb-checkbox" onchange="updateRecoilPenalty()"> 3-Round Burst (+1 Hit/Dmg)
+                    </label>
+                </div>
+            </div>
+            <div id="recoil-warning" style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">* Firing at RoF > 1 incurs a -2 Recoil penalty.</div>
         </div>
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Modifier Adjust:</span>
@@ -389,7 +400,7 @@
                         </div>
                         <div class="weapon-actions">
                             <button class="die-btn" onclick="prepareAttack(${index})">ATTACK</button>
-                            <button class="die-btn" onclick="rollDamage(${index}, false)">DAMAGE</button>
+                            <button class="die-btn" onclick="rollDamage(${index})">DAMAGE</button>
                             <button class="die-btn" style="border-color:#00ff00; color:#00ff00;" onclick="rollDamage(${index}, true)">+1d6 RAISE</button>
                         </div>
                     </div>`;
@@ -569,15 +580,27 @@
             document.getElementById('scope-checkbox').checked = false;
 
             if (!isMelee) {
-                rangedOpts.style.display = "block"; scopeRow.style.display = "flex";
+                rangedOpts.style.display = "block"; 
+                scopeRow.style.display = "flex";
+                rofOpts.style.display = "block";
+                
                 let rofVal = parseInt(wep.rof) || 1;
-                if (rofVal > 1) {
-                    rofOpts.style.display = "block";
-                    const rofSelect = document.getElementById('rof-select');
-                    rofSelect.innerHTML = `<option value="1">Single Shot (1 Die)</option>`;
-                    for (let r = 2; r <= rofVal; r++) { rofSelect.innerHTML += `<option value="${r}">Burst - ${r} Shots (${r} Dice)</option>`; }
-                } else { rofOpts.style.display = "none"; }
-            } else { rangedOpts.style.display = "none"; rofOpts.style.display = "none"; }
+                const rofSelect = document.getElementById('rof-select');
+                rofSelect.innerHTML = `<option value="1">Single Shot (1 Bullet)</option>`;
+                const costMap = {2:5, 3:10, 4:20, 5:40, 6:50};
+                for (let r = 2; r <= Math.min(rofVal, 6); r++) { 
+                    rofSelect.innerHTML += `<option value="${r}">RoF ${r} (${costMap[r]} Bullets)</option>`; 
+                }
+                
+                document.getElementById('suppressive-checkbox').checked = false;
+                document.getElementById('3rb-checkbox').checked = false;
+                document.getElementById('rof-select').disabled = false;
+                document.getElementById('suppressive-checkbox').disabled = false;
+                document.getElementById('3rb-checkbox').disabled = false;
+            } else { 
+                rangedOpts.style.display = "none"; 
+                rofOpts.style.display = "none"; 
+            }
 
             document.getElementById('tn-modal').style.display = 'block';
         };
@@ -592,24 +615,53 @@
 
         window.updateRecoilPenalty = function() {
             if (!activeWeaponContext) return;
-            let shots = parseInt(document.getElementById('rof-select').value) || 1;
-            let recoilPenalty = (shots > 1) ? -2 : 0;
+            
+            let is3RB = document.getElementById('3rb-checkbox').checked;
+            let isSupp = document.getElementById('suppressive-checkbox').checked;
+            let rofSelect = document.getElementById('rof-select');
+            
+            if (is3RB) {
+                rofSelect.disabled = true;
+                document.getElementById('suppressive-checkbox').disabled = true;
+            } else if (isSupp) {
+                rofSelect.disabled = false;
+                document.getElementById('3rb-checkbox').disabled = true;
+            } else {
+                rofSelect.disabled = false;
+                document.getElementById('suppressive-checkbox').disabled = false;
+                document.getElementById('3rb-checkbox').disabled = false;
+            }
+            
+            let shots = parseInt(rofSelect.value) || 1;
+            let recoilPenalty = (!is3RB && shots > 1) ? -2 : 0;
+            let trbBonus = is3RB ? 1 : 0;
+            
             let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
             let isScoped = document.getElementById('scope-checkbox').checked;
             if (rangePenalty === -8 && isScoped) rangePenalty = -6;
 
             const warning = document.getElementById('recoil-warning');
             if (warning) warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none';
-            document.getElementById('mod-override-input').value = rangePenalty + recoilPenalty;
+            document.getElementById('mod-override-input').value = rangePenalty + recoilPenalty + trbBonus;
         };
 
         window.confirmRoll = function() {
             let tn = parseInt(document.getElementById('tn-input').value) || 4;
+            
+            let is3RB = false;
             let shotsFired = 1;
-            if (activeWeaponContext && parseInt(activeWeaponContext.rof) > 1 && document.getElementById('rof-options-container').style.display !== 'none') {
-                shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
+            
+            if (activeWeaponContext && document.getElementById('rof-options-container').style.display !== 'none') {
+                is3RB = document.getElementById('3rb-checkbox').checked;
+                if (is3RB) {
+                    shotsFired = 1;
+                } else {
+                    shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
+                }
             }
             document.getElementById('tn-modal').style.display = 'none';
+            
+            pendingRoll.is3RB = is3RB;
             executeThreatRoll(pendingRoll.skill, tn, shotsFired);
         };
 
@@ -678,6 +730,15 @@
                     outcome: outcome, hasRaise: hasRaise, isSingle: true, traitHistory: traitRoll.history, wildHistory: wildRoll ? wildRoll.history : null
                 });
             }
+            
+            let hit = results.some(r => r.outcome.includes("SUCCESS"));
+            if (activeWeaponContext && hit && pendingRoll.is3RB) {
+                localStorage.setItem(`3rb_bonus_${activeWeaponContext.name}`, "true");
+                logToTerminal(`> [!] 3-ROUND BURST: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +1 damage bonus.`);
+            } else if (activeWeaponContext) {
+                localStorage.removeItem(`3rb_bonus_${activeWeaponContext.name}`);
+            }
+            
             renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail);
         }
 
@@ -735,6 +796,13 @@
             let total = 0; let rolls = []; let flatMod = 0;
             let parts = dmgStr.split('+');
             
+            // Extract 3RB Bonus flag
+            let has3RBBonus = localStorage.getItem(`3rb_bonus_${wep.name}`) === "true";
+            if (has3RBBonus) {
+                flatMod += 1;
+                localStorage.removeItem(`3rb_bonus_${wep.name}`);
+            }
+            
             parts.forEach(part => {
                 if (part === 'str') {
                     let strVal = activeThreat.attributes.Strength || "d6";
@@ -760,7 +828,8 @@
                 bonusStr = ` + ${rRoll.history.join('+')} [Raise]`;
             }
 
-            let termLog = `> ${activeThreat.name} dealt damage with ${wep.name.toUpperCase()}<br>&nbsp;&nbsp;Dmg Roll [${wep.damage}]: ${rolls.join(' + ')}${flatMod!==0?'+'+flatMod:''}${bonusStr}<br>&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
+            let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
+            let termLog = `> ${activeThreat.name} dealt damage with ${wep.name.toUpperCase()}<br>&nbsp;&nbsp;Dmg Roll [${wep.damage}]: ${rolls.join(' + ')}${flatMod!==0?(flatMod>0?'+'+flatMod:flatMod):''}${trbStr}${bonusStr}<br>&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
             logToTerminal(termLog);
 
             if (globalState && globalState.webhook) {
@@ -769,10 +838,14 @@
                     description: `**Damage Total: ${total}**`, color: 0xff3333,
                     fields: [ { name: "Dice History", value: rolls.join('\n'), inline: true } ]
                 };
-                if (flatMod !== 0) embed.fields.push({ name: "Modifier", value: `+${flatMod}`, inline: true });
+                if (flatMod !== 0) embed.fields.push({ name: "Modifier", value: flatMod > 0 ? `+${flatMod}` : `${flatMod}`, inline: true });
                 if (addRaise) {
                     embed.fields.push({ name: "Raise Bonus (+1d6)", value: `${bonusRolls.join(' + ')}`, inline: true });
                     embed.description += `\n*(Includes +1d6 Raise Bonus)*`;
+                }
+                if (has3RBBonus) {
+                    embed.fields.push({ name: "Three-Round Burst", value: "+1 Damage", inline: true });
+                    embed.description += `\n*(Includes +1 Damage from 3-Round Burst)*`;
                 }
 
                 let imgUrl = wep.image || wep.icon || defaultWeaponIcon;
