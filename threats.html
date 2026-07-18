@@ -215,7 +215,7 @@
                 <span>Fire Mode:</span>
                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
                     <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
-                        <input type="checkbox" id="suppressive-checkbox" onchange="updateRecoilPenalty()"> Suppressive (x3 Ammo)
+                        <input type="checkbox" id="suppressive-checkbox" onchange="updateRecoilPenalty()"> Suppressive (x5 Ammo)
                     </label>
                     <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
                         <input type="checkbox" id="3rb-checkbox" onchange="updateRecoilPenalty()"> 3-Round Burst (+1 Hit/Dmg)
@@ -597,6 +597,10 @@
                 document.getElementById('rof-select').disabled = false;
                 document.getElementById('suppressive-checkbox').disabled = false;
                 document.getElementById('3rb-checkbox').disabled = false;
+                
+                // Clear warning if any
+                const warning = document.getElementById('recoil-warning');
+                if (warning) warning.style.display = 'none';
             } else { 
                 rangedOpts.style.display = "none"; 
                 rofOpts.style.display = "none"; 
@@ -624,7 +628,7 @@
                 rofSelect.disabled = true;
                 document.getElementById('suppressive-checkbox').disabled = true;
             } else if (isSupp) {
-                rofSelect.disabled = false;
+                rofSelect.disabled = true; // SWADE Suppressive uses max RoF automatically, resolves in 1 roll
                 document.getElementById('3rb-checkbox').disabled = true;
             } else {
                 rofSelect.disabled = false;
@@ -633,7 +637,8 @@
             }
             
             let shots = parseInt(rofSelect.value) || 1;
-            let recoilPenalty = (!is3RB && shots > 1) ? -2 : 0;
+            // Suppressive fire automatically incurs standard -2 Recoil, RoF > 1 incurs -2 Recoil
+            let recoilPenalty = (!is3RB && (shots > 1 || isSupp)) ? -2 : 0;
             let trbBonus = is3RB ? 1 : 0;
             
             let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
@@ -641,7 +646,11 @@
             if (rangePenalty === -8 && isScoped) rangePenalty = -6;
 
             const warning = document.getElementById('recoil-warning');
-            if (warning) warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none';
+            if (warning) {
+                if (isSupp) warning.innerHTML = "* Suppressive Fire incurs a -2 Recoil penalty (uses 3x RoF Ammo).";
+                else warning.innerHTML = "* Firing at RoF > 1 incurs a -2 Recoil penalty.";
+                warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none';
+            }
             document.getElementById('mod-override-input').value = rangePenalty + recoilPenalty + trbBonus;
         };
 
@@ -649,12 +658,15 @@
             let tn = parseInt(document.getElementById('tn-input').value) || 4;
             
             let is3RB = false;
+            let isSuppressive = false;
             let shotsFired = 1;
             
             if (activeWeaponContext && document.getElementById('rof-options-container').style.display !== 'none') {
                 is3RB = document.getElementById('3rb-checkbox').checked;
-                if (is3RB) {
-                    shotsFired = 1;
+                isSuppressive = document.getElementById('suppressive-checkbox').checked;
+                
+                if (is3RB || isSuppressive) {
+                    shotsFired = 1; // Both resolve as a single skill roll mathematically
                 } else {
                     shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
                 }
@@ -662,6 +674,7 @@
             document.getElementById('tn-modal').style.display = 'none';
             
             pendingRoll.is3RB = is3RB;
+            pendingRoll.isSuppressive = isSuppressive;
             executeThreatRoll(pendingRoll.skill, tn, shotsFired);
         };
 
@@ -678,10 +691,17 @@
             let totalModifier = intrinsicMod + unskilledMod + customMod;
 
             let results = []; let isCritFail = false;
+            let isShotgun = activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun");
+            let isRanged = activeWeaponContext && !activeWeaponContext.range.toLowerCase().includes("melee") && !activeWeaponContext.range.toLowerCase().includes("contact");
+            let isSuppressive = pendingRoll.isSuppressive;
 
             if (shotsFired > 1) {
                 let traitRolls = [];
-                for (let i = 0; i < shotsFired; i++) traitRolls.push(rollExploding(sides));
+                for (let i = 0; i < shotsFired; i++) {
+                    let r = rollExploding(sides);
+                    r.originalTraitFirstDie = r.history[0]; // Track natural roll for bystander logic
+                    traitRolls.push(r);
+                }
                 let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
 
                 let onesCount = 0;
@@ -692,13 +712,24 @@
 
                 let minVal = Math.min(...traitRolls.map(r => r.total));
                 let minIdx = traitRolls.findIndex(r => r.total === minVal);
-                if (wildRoll && wildRoll.total > minVal) traitRolls[minIdx] = wildRoll;
+                if (wildRoll && wildRoll.total > minVal) {
+                    wildRoll.originalTraitFirstDie = traitRolls[minIdx].originalTraitFirstDie;
+                    traitRolls[minIdx] = wildRoll;
+                }
 
                 traitRolls.forEach((r, idx) => {
                     let score = r.total + totalModifier;
                     let outcome = ""; let hasRaise = false;
+                    let naturalDie = r.originalTraitFirstDie || r.history[0];
+
                     if (isCritFail) outcome = "CRITICAL FAILURE!";
-                    else if (score < targetNumber) outcome = "FAILURE.";
+                    else if (score < targetNumber) {
+                        outcome = "FAILURE.";
+                        // Innocent Bystander Check (RoF > 1 has threshold of 2)
+                        if (isRanged && !isSuppressive && naturalDie <= 2) {
+                            outcome += " ⚠️ INNOCENT BYSTANDER HIT!";
+                        }
+                    }
                     else {
                         let raises = Math.floor((score - targetNumber) / 4);
                         outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
@@ -710,6 +741,8 @@
                 let traitRoll = rollExploding(sides);
                 let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
 
+                let naturalDie = traitRoll.history[0];
+
                 let bestTotal = traitRoll.total;
                 if (wildRoll) {
                     bestTotal = Math.max(traitRoll.total, wildRoll.total);
@@ -718,13 +751,38 @@
                 bestTotal += totalModifier;
 
                 let outcome = ""; let hasRaise = false;
-                if (isCritFail) outcome = "CRITICAL FAILURE!";
-                else if (bestTotal < targetNumber) outcome = "FAILURE.";
-                else {
-                    let raises = Math.floor((bestTotal - targetNumber) / 4);
-                    outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
-                    if (raises > 0) hasRaise = true;
+                
+                if (isSuppressive) {
+                    if (isCritFail) outcome = "CRITICAL FAILURE!";
+                    else if (bestTotal < targetNumber) outcome = "SUPPRESSION FAILED.";
+                    else {
+                        let raises = Math.floor((bestTotal - targetNumber) / 4);
+                        if (raises > 0) {
+                            outcome = `🎯 SUPPRESSIVE SUCCESS (Raise)! Targets in MBT roll Spirit at -2.`;
+                            hasRaise = true;
+                        } else {
+                            outcome = `🎯 SUPPRESSIVE SUCCESS! Targets in MBT roll Spirit.`;
+                        }
+                    }
+                } else {
+                    if (isCritFail) outcome = "CRITICAL FAILURE!";
+                    else if (bestTotal < targetNumber) {
+                        outcome = "FAILURE.";
+                        if (isRanged) {
+                            // Innocent Bystander Check
+                            let bystanderThreshold = isShotgun ? 2 : 1;
+                            if (naturalDie <= bystanderThreshold) {
+                                outcome += " ⚠️ INNOCENT BYSTANDER HIT!";
+                            }
+                        }
+                    }
+                    else {
+                        let raises = Math.floor((bestTotal - targetNumber) / 4);
+                        outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                        if (raises > 0) hasRaise = true;
+                    }
                 }
+
                 results.push({
                     shotIndex: 1, total: bestTotal, history: wildRoll && wildRoll.total > traitRoll.total ? wildRoll.history : traitRoll.history,
                     outcome: outcome, hasRaise: hasRaise, isSingle: true, traitHistory: traitRoll.history, wildHistory: wildRoll ? wildRoll.history : null
@@ -735,7 +793,7 @@
             if (activeWeaponContext && hit && pendingRoll.is3RB) {
                 localStorage.setItem(`3rb_bonus_${activeWeaponContext.name}`, "true");
                 logToTerminal(`> [!] 3-ROUND BURST: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +1 damage bonus.`);
-            } else if (activeWeaponContext) {
+            } else if (activeWeaponContext && !pendingRoll.is3RB) {
                 localStorage.removeItem(`3rb_bonus_${activeWeaponContext.name}`);
             }
             
@@ -744,6 +802,8 @@
 
         async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail) {
             let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
+            if (results.some(r => r.outcome.includes("INNOCENT BYSTANDER"))) color = 0xff0000;
+            
             let modStrDisplay = totalModifier !== 0 ? ` (${totalModifier > 0 ? '+' : ''}${totalModifier})` : "";
             let title = `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
             let termLog = `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
