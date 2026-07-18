@@ -281,6 +281,11 @@
                     </div>
                 </div>
 
+                <div class="section" id="combat-hud" style="display:none; margin-bottom: 20px; border-color: #ff3333;">
+                    <h3 style="color:#ff3333;">TACTICAL STATUS</h3>
+                    <div id="hud-stats" style="font-weight:bold; color:#ff9900;"></div>
+                </div>
+
                 <div class="section" style="margin-bottom: 20px;">
                     <h3>ATTRIBUTES</h3>
                     <div id="attributes-container"></div>
@@ -301,8 +306,20 @@
                 <div class="section" style="margin-bottom: 20px;">
                     <h3>DERIVED STATS</h3>
                     <div class="stat-row"><span>Pace:</span> <span class="editable" id="der-pace" contenteditable="true"></span></div>
-                    <div class="stat-row"><span>Parry:</span> <span class="editable" id="der-parry" contenteditable="true"></span></div>
-                    <div class="stat-row"><span>Toughness:</span> <span class="editable" id="der-toughness" contenteditable="true"></span></div>
+                    <div class="stat-row">
+                        <span>Parry:</span>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <span id="der-parry-calc" style="border-bottom: 1px dashed var(--theme-color); padding: 2px 5px;"></span>
+                            <input type="number" id="der-parry-override" class="mod-input" value="0" style="width: 40px;">
+                        </div>
+                    </div>
+                    <div class="stat-row">
+                        <span>Toughness:</span>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <span id="der-toughness-calc" style="border-bottom: 1px dashed var(--theme-color); padding: 2px 5px;"></span>
+                            <input type="number" id="der-toughness-override" class="mod-input" value="0" style="width: 40px;">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="section" style="margin-bottom: 20px;">
@@ -415,6 +432,22 @@
             </div>
         </div>
 
+        <div class="setting-row" id="map-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Actions this Turn:</span>
+            <select id="map-select" class="admin-input" style="width:180px; pointer-events: auto !important;">
+                <option value="0">1 Action (No Penalty)</option>
+                <option value="-2">2 Actions (-2 MAP)</option>
+                <option value="-4">3 Actions (-4 MAP)</option>
+            </select>
+        </div>
+
+        <div class="setting-row" id="wild-attack-row" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Wild Attack:</span>
+            <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                <input type="checkbox" id="wild-attack-checkbox"> Wild Attack (+2 Hit/Dmg, Vulnerable)
+            </label>
+        </div>
+
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Modifier Adjust:</span>
             <input type="number" id="mod-override-input" value="0" class="admin-input" style="width:80px; text-align:center; pointer-events: auto !important;">
@@ -508,7 +541,7 @@
                 name: "Katey Commons", bennies: 3, weapons: [],
                 attributes: { Agility: {die:"6", mod:"+0"}, Smarts: {die:"8", mod:"+0"}, Spirit: {die:"8", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"8", mod:"+0"} },
                 skills: { Athletics: {die:"6", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Electronics: {die:"8", mod:"+0"}, Fighting: {die:"6", mod:"+0"}, Hacking: {die:"6", mod:"+0"}, Healing: {die:"8", mod:"+0"}, Notice: {die:"6", mod:"+0"}, Persuasion: {die:"6", mod:"+0"}, Repair: {die:"8", mod:"+0"}, Shooting: {die:"4", mod:"+0"}, Stealth: {die:"6", mod:"+0"} },
-                derived: { pace: "6", parry: "5", toughness: "5" },
+                derived: { pace: "6", parryOverride: 0, toughnessOverride: 0 },
                 edges: "Hindrances:\n- Ex-Drone (Major)\n- Heroic (Major)\n- Pacifist (Minor)\n- Vulnerability (Minor -- electrosensitivity)\n\nEdges:\n- Cyborg (Ex-Drone)\n- Healer\n- Mr. Fix It",
                 gear: "Cyberware [$20000/20000, Strain 6/8]:\n- Data Jack [$5000, 1]\n- Enhanced Hearing [$5000, 1]\n- Extra Limbs x2 [$10000, 4]\n\nAdvance History:\n1. Mr. Fix It\n2. Spirit d8\n3. Healer\n4. Vigor d8"
             },
@@ -516,7 +549,7 @@
                 name: "Vesa Novik", bennies: 3, weapons: [],
                 attributes: { Agility: {die:"12", mod:"+0"}, Smarts: {die:"6", mod:"+0"}, Spirit: {die:"4", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"6", mod:"+0"} },
                 skills: { Athletics: {die:"6", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Stealth: {die:"8", mod:"+0"}, Notice: {die:"8", mod:"+0"}, Persuasion: {die:"4", mod:"+0"}, Healing: {die:"6", mod:"+0"}, Driving: {die:"8", mod:"+0"}, Shooting: {die:"10", mod:"+0"}, Survival: {die:"6", mod:"+0"} },
-                derived: { pace: "8", parry: "2", toughness: "5" },
+                derived: { pace: "8", parryOverride: 0, toughnessOverride: 0 },
                 edges: "Hindrances:\n- Yellow (Major)\n- Hesitant (Minor)\n- Cautious (Minor)\n\nEdges:\n- Double-Tap\n- Fleet-Footed\n- Free-Runner",
                 gear: "Advance History:\n1. Agility +1 [To 4]\n2. Skill increase: Shooting [3 to 4], Driving [2 to 3]\n3. Edge: Fleet-Footed\n4. Edge: Free-Runner"
             },
@@ -524,7 +557,7 @@
                 name: "Trombley Hicks", bennies: 3, weapons: [],
                 attributes: { Agility: {die:"10", mod:"+0"}, Smarts: {die:"6", mod:"+0"}, Spirit: {die:"6", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"8", mod:"+0"} },
                 skills: { Athletics: {die:"10", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Fighting: {die:"8", mod:"+0"}, Notice: {die:"6", mod:"+0"}, Persuasion: {die:"4", mod:"+0"}, Research: {die:"4", mod:"+0"}, Stealth: {die:"10", mod:"+0"}, Survival: {die:"6", mod:"+0"}, Thievery: {die:"8", mod:"+0"} },
-                derived: { pace: "6", parry: "6", toughness: "6" },
+                derived: { pace: "6", parryOverride: 0, toughnessOverride: 0 },
                 edges: "Hindrances:\n- Mute (Major)\n- Can't Swim (Minor)\n- Mild Mannered (Minor)\n- Quirk (Minor - tooth rattle)\n\nEdges:\n- Dodge\n- Extraction\n- Thief",
                 gear: "Special Notes:\n- Mute: Cannot speak.\n- Thief: +1 Athletics climb urban, +1 Stealth urban, +1 Thievery.\n- Extraction: One opponent doesn't get free attack on move.\n- Dodge: Ranged attacks suffer -2."
             }
@@ -543,6 +576,8 @@
         let activeWeaponContext = null;
         let isEditing = false; 
         let pendingMinStrPenalty = 0; // Auto-applied min-str penalty tracked here
+        let combatParticipant = null;
+        let isJoker = false;
 
         let db;
         if (isFirebaseConfigured) {
@@ -631,6 +666,9 @@
             
             if (charData.bennies === undefined) charData.bennies = 3;
             if (!charData.weapons) charData.weapons = [];
+            if (!charData.derived) charData.derived = { pace: "6", parryOverride: 0, toughnessOverride: 0 };
+            if (charData.derived.parryOverride === undefined) charData.derived.parryOverride = 0;
+            if (charData.derived.toughnessOverride === undefined) charData.derived.toughnessOverride = 0;
 
             // Normalize ammo data on all weapons
             charData.weapons.forEach(w => normalizeWeaponAmmo(w));
@@ -639,6 +677,30 @@
             if (isAdmin && globalState.webhook) {
                 document.getElementById('discord-webhook').value = globalState.webhook;
             }
+            
+            // Combat HUD Integration
+            combatParticipant = null;
+            isJoker = false;
+            let hudEl = document.getElementById('combat-hud');
+            if (globalState.combatActive && globalState.combat?.participants) {
+                combatParticipant = globalState.combat.participants.find(p => p.id === activeCharId);
+            }
+            
+            if (combatParticipant) {
+                hudEl.style.display = 'block';
+                let statusHtml = `Wounds: ${combatParticipant.wounds || 0} | Fatigue: ${combatParticipant.fatigue || 0}`;
+                if (combatParticipant.shaken) statusHtml += ` <br><span style="color:#ff9900;">[ SHAKEN ]</span>`;
+                if (combatParticipant.distracted) statusHtml += ` <span style="color:#ff3333;">[ DISTRACTED ]</span>`;
+                if (combatParticipant.vulnerable) statusHtml += ` <span style="color:#00ff00;">[ VULNERABLE ]</span>`;
+                if (combatParticipant.card && combatParticipant.card.isJoker) {
+                    statusHtml += ` <br><span style="color:#ffff00; text-shadow: 0 0 5px #ffff00;">[ JOKER'S WILD: +2 APPLIED! ]</span>`;
+                    isJoker = true;
+                }
+                document.getElementById('hud-stats').innerHTML = statusHtml;
+            } else {
+                hudEl.style.display = 'none';
+            }
+
             renderSheet();
             renderWeapons();
         }
@@ -685,7 +747,19 @@
             if (val < 0) val = 0;
             charData.bennies = val;
             document.getElementById('benny-count').innerText = val;
+            
+            // Push to personal sheet
             await saveCharacter();
+
+            // Push to Combat Tracker if active
+            if (globalState.combatActive && globalState.combat && globalState.combat.participants) {
+                let participants = globalState.combat.participants;
+                let pIdx = participants.findIndex(p => p.id === activeCharId);
+                if (pIdx !== -1) {
+                    participants[pIdx].bennies = val;
+                    await set(ref(db, 'campaignState/combat/participants'), participants);
+                }
+            }
         }
 
         function evaluateMinStr(weaponMinStr) {
@@ -781,9 +855,22 @@
                     </div>`;
             }
 
+            // Derived Stats Auto-Calc
+            let fightDie = charData.skills["Fighting"] ? parseInt(charData.skills["Fighting"].die) : 4;
+            let parryOverride = parseInt(charData.derived.parryOverride) || 0;
+            let calcParry = 2 + (fightDie / 2) + parryOverride;
+            charData.derived.parry = calcParry;
+            document.getElementById('der-parry-calc').innerText = calcParry;
+            document.getElementById('der-parry-override').value = parryOverride;
+
+            let vigorDie = charData.attributes["Vigor"] ? parseInt(charData.attributes["Vigor"].die) : 4;
+            let toughOverride = parseInt(charData.derived.toughnessOverride) || 0;
+            let calcToughness = 2 + (vigorDie / 2) + toughOverride;
+            charData.derived.toughness = calcToughness;
+            document.getElementById('der-toughness-calc').innerText = calcToughness;
+            document.getElementById('der-toughness-override').value = toughOverride;
+
             document.getElementById('der-pace').innerText = charData.derived.pace;
-            document.getElementById('der-parry').innerText = charData.derived.parry;
-            document.getElementById('der-toughness').innerText = charData.derived.toughness;
             document.getElementById('notes-edges').value = charData.edges;
             document.getElementById('notes-gear').value = charData.gear;
 
@@ -791,9 +878,21 @@
         }
 
         function attachEditListeners() {
-            ['pace', 'parry', 'toughness'].forEach(stat => {
+            ['pace'].forEach(stat => {
                 document.getElementById(`der-${stat}`).addEventListener('blur', (e) => { charData.derived[stat] = e.target.innerText; saveCharacter(); });
             });
+            
+            document.getElementById('der-parry-override').addEventListener('blur', (e) => {
+                charData.derived.parryOverride = parseInt(e.target.value) || 0;
+                saveCharacter();
+                renderSheet();
+            });
+            document.getElementById('der-toughness-override').addEventListener('blur', (e) => {
+                charData.derived.toughnessOverride = parseInt(e.target.value) || 0;
+                saveCharacter();
+                renderSheet();
+            });
+
             document.getElementById('notes-edges').addEventListener('blur', (e) => { charData.edges = e.target.value; saveCharacter(); });
             document.getElementById('notes-gear').addEventListener('blur', (e) => { charData.gear = e.target.value; saveCharacter(); });
 
@@ -808,6 +907,7 @@
                         charData[cat][key].die = e.target.innerText;
                     }
                     saveCharacter();
+                    renderSheet();
                 });
             });
 
@@ -1321,6 +1421,12 @@
                 total += strMod;
             }
 
+            // Joker & Wild Attack Bonus
+            let jokerBonus = isJoker ? 2 : 0;
+            let wildAttackDmgBonus = localStorage.getItem(`wild_attack_dmg_Unarmed`) === "true" ? 2 : 0;
+            if (wildAttackDmgBonus) localStorage.removeItem(`wild_attack_dmg_Unarmed`);
+            total += jokerBonus + wildAttackDmgBonus;
+
             // Check for raise bonus
             let hasRaiseBonus = localStorage.getItem(`raise_bonus_Unarmed`) === "true";
             let bonusRolls = [];
@@ -1333,10 +1439,18 @@
 
             let modStr = strMod > 0 ? ` + ${strMod}` : (strMod < 0 ? ` - ${Math.abs(strMod)}` : "");
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
+            let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
+            let waStr = wildAttackDmgBonus > 0 ? ` + ${wildAttackDmgBonus} (Wild Attack)` : "";
 
             let termLog = `> ${charData.name} dealt damage with UNARMED STRIKE<br>`;
-            termLog += `&nbsp;&nbsp;Dmg Roll [${unarmedDamage}]: ${rolls.join(' + ')}${modStr}${bonusStr}<br>`;
+            termLog += `&nbsp;&nbsp;Dmg Roll [${unarmedDamage}]: ${rolls.join(' + ')}${modStr}${bonusStr}${jokerStr}${waStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
+            if (jokerBonus > 0 || wildAttackDmgBonus > 0) {
+                let bonuses = [];
+                if (jokerBonus > 0) bonuses.push("Joker's Wild (+2)");
+                if (wildAttackDmgBonus > 0) bonuses.push("Wild Attack (+2)");
+                termLog += `<br>&nbsp;&nbsp;[ INCLUDES: ${bonuses.join(' & ')} ]`;
+            }
             logToTerminal(termLog);
 
             if (globalState && globalState.webhook) {
@@ -1353,6 +1467,14 @@
                 if (hasRaiseBonus) {
                     embed.fields.push({ name: "Raise Bonus (+1d6)", value: `${bonusRolls.join(' + ')}`, inline: true });
                     embed.description += `\n*(Includes +1d6 Raise Bonus)*`;
+                }
+                if (jokerBonus > 0) {
+                    embed.fields.push({ name: "Joker's Wild (+2)", value: "+2", inline: true });
+                    embed.description += `\n*(Includes +2 Joker Bonus)*`;
+                }
+                if (wildAttackDmgBonus > 0) {
+                    embed.fields.push({ name: "Wild Attack (+2)", value: "+2", inline: true });
+                    embed.description += `\n*(Includes +2 Wild Attack Bonus)*`;
                 }
 
                 try {
@@ -1433,14 +1555,28 @@
                 localStorage.removeItem(`raise_bonus_${weaponName}`);
             }
 
+            // Joker & Wild Attack Bonus
+            let jokerBonus = isJoker ? 2 : 0;
+            let wildAttackDmgBonus = localStorage.getItem(`wild_attack_dmg_${weaponName}`) === "true" ? 2 : 0;
+            if (wildAttackDmgBonus) localStorage.removeItem(`wild_attack_dmg_${weaponName}`);
+            total += jokerBonus + wildAttackDmgBonus;
+
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
             let dtStr = hasDTBonus ? ` (Includes +1 from Double Tap)` : "";
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
+            let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
+            let waStr = wildAttackDmgBonus > 0 ? ` + ${wildAttackDmgBonus} (Wild Attack)` : "";
 
             let termLog = `> ${charData.name} dealt damage with ${weaponName.toUpperCase()}<br>`;
-            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}${trbStr}${dtStr}${bonusStr}<br>`;
+            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}${trbStr}${dtStr}${bonusStr}${jokerStr}${waStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
+            if (jokerBonus > 0 || wildAttackDmgBonus > 0) {
+                let bonuses = [];
+                if (jokerBonus > 0) bonuses.push("Joker's Wild (+2)");
+                if (wildAttackDmgBonus > 0) bonuses.push("Wild Attack (+2)");
+                termLog += `<br>&nbsp;&nbsp;[ INCLUDES: ${bonuses.join(' & ')} ]`;
+            }
             logToTerminal(termLog);
 
             if (globalState && globalState.webhook) {
@@ -1464,6 +1600,14 @@
                 if (hasDTBonus) {
                     embed.fields.push({ name: "Double Tap", value: "+1 Damage", inline: true });
                     embed.description += `\n*(Includes +1 Damage from Double Tap)*`;
+                }
+                if (jokerBonus > 0) {
+                    embed.fields.push({ name: "Joker's Wild (+2)", value: "+2", inline: true });
+                    embed.description += `\n*(Includes +2 Joker Bonus)*`;
+                }
+                if (wildAttackDmgBonus > 0) {
+                    embed.fields.push({ name: "Wild Attack (+2)", value: "+2", inline: true });
+                    embed.description += `\n*(Includes +2 Wild Attack Bonus)*`;
                 }
 
                 let weapon = charData.weapons.find(w => w.name === weaponName);
@@ -1515,8 +1659,35 @@
                 traitModifier = parseInt(data.mod) || 0;
             }
 
-            let customModifier = parseInt(document.getElementById('mod-override-input').value) || 0;
-            let totalModifier = traitModifier + customModifier;
+            // Status & Combat Penalties/Bonuses
+            let statusPenalty = 0;
+            if (combatParticipant) {
+                let woundPen = Math.min(combatParticipant.wounds || 0, 3);
+                let fatiguePen = Math.min(combatParticipant.fatigue || 0, 2);
+                let distPen = combatParticipant.distracted ? 2 : 0;
+                statusPenalty = -(woundPen + fatiguePen + distPen);
+            }
+
+            let jokerBonus = isJoker ? 2 : 0;
+            let wildAttackBonus = 0;
+            if (activeWeaponContext && document.getElementById('wild-attack-checkbox').checked) {
+                wildAttackBonus = 2;
+                localStorage.setItem(`wild_attack_dmg_${activeWeaponContext.name}`, "true");
+                if (combatParticipant) {
+                    let participants = globalState.combat.participants;
+                    let pIdx = participants.findIndex(p => p.id === activeCharId);
+                    if (pIdx !== -1) {
+                        participants[pIdx].vulnerable = true;
+                        set(ref(db, 'campaignState/combat/participants'), participants);
+                    }
+                }
+            }
+
+            let baseMod = parseInt(document.getElementById('mod-override-input').value) || 0;
+            let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
+            let customModifier = baseMod + mapPenalty;
+
+            let totalModifier = traitModifier + customModifier + statusPenalty + jokerBonus + wildAttackBonus;
 
             let is3RB = pendingRoll && pendingRoll.is3RB;
             let isDoubleTap = pendingRoll && pendingRoll.isDoubleTap;
@@ -1532,6 +1703,16 @@
 
             let results = [];
             let isCritFail = false;
+            let bystanderHit = false;
+            let bystanderDieVal = 0;
+            let bystanderThreshold = 1;
+            let isRanged = activeWeaponContext && !activeWeaponContext.range.toLowerCase().includes("melee") && !activeWeaponContext.range.toLowerCase().includes("contact");
+
+            if (isRanged) {
+                if (shotsFired > 1 || (activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun"))) {
+                    bystanderThreshold = 2;
+                }
+            }
 
             if (shotsFired > 1) {
                 let traitRolls = [];
@@ -1541,7 +1722,13 @@
                 let wildRoll = rollExploding(6);
 
                 let onesCount = 0;
-                traitRolls.forEach(r => { if (r.history[0] === 1) onesCount++; });
+                traitRolls.forEach(r => { 
+                    if (r.history[0] === 1) onesCount++;
+                    if (isRanged && r.history[0] <= bystanderThreshold) {
+                        bystanderHit = true;
+                        bystanderDieVal = r.history[0];
+                    }
+                });
                 if (wildRoll.history[0] === 1) onesCount++;
 
                 let totalDice = shotsFired + 1;
@@ -1584,6 +1771,11 @@
 
                 let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalModifier;
                 isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
+                
+                if (isRanged && traitRoll.history[0] <= bystanderThreshold) {
+                    bystanderHit = true;
+                    bystanderDieVal = traitRoll.history[0];
+                }
 
                 let outcome = "";
                 let hasRaise = false;
@@ -1636,15 +1828,18 @@
                 }
             }
 
-            renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail);
+            renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail, bystanderHit, bystanderDieVal);
         }
 
-        async function renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail) {
+        async function renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail, bystanderHit, bystanderDieVal) {
             let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
             let displayMod = totalModifier !== 0 ? (totalModifier > 0 ? `+${totalModifier}` : `${totalModifier}`) : "";
             let modStrDisplay = totalModifier !== 0 ? ` (${displayMod})` : "";
 
             let termLog = `> ${charData.name} rolled ${name.toUpperCase()} vs TN ${targetNumber}${modStrDisplay}<br>`;
+            if (isJoker) {
+                termLog += `&nbsp;&nbsp;<span style="color:#ffff00; text-shadow: 0 0 5px #ffff00;">[ JOKER'S WILD: +2 APPLIED! ]</span><br>`;
+            }
 
             results.forEach(r => {
                 if (r.isSingle) {
@@ -1655,6 +1850,10 @@
                     termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
                 }
             });
+
+            if (bystanderHit) {
+                termLog += `<br><span style="color:#ff3333;">⚠️ INNOCENT BYSTANDER HIT! (Trait die rolled ${bystanderDieVal})</span>`;
+            }
 
             logToTerminal(termLog);
 
@@ -1667,6 +1866,10 @@
                         desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
                     }
                 });
+                if (bystanderHit) {
+                    desc += `\n⚠️ **INNOCENT BYSTANDER HIT!** (Trait die rolled ${bystanderDieVal})`;
+                    color = 0xff3333;
+                }
 
                 const embed = {
                     title: `${charData.name} rolled ${name}`,
@@ -1722,6 +1925,7 @@
 
             document.getElementById('tn-input').value = "4"; 
             document.getElementById('mod-override-input').value = "0";
+            document.getElementById('map-select').value = "0";
 
             // Apply auto min-str penalty if applicable (set by checkMinStr before this call)
             if (weaponObj && pendingMinStrPenalty !== 0) {
@@ -1733,15 +1937,22 @@
             const rangedOpts = document.getElementById('ranged-options-container');
             const rofOpts = document.getElementById('rof-options-container');
             const scopeRow = document.getElementById('scope-row');
+            const wildAttackRow = document.getElementById('wild-attack-row');
             
             document.getElementById('range-select').value = "0";
             document.getElementById('scope-checkbox').checked = false;
+            document.getElementById('wild-attack-checkbox').checked = false;
 
             if (weaponObj) {
                 let isMelee = weaponObj.range.toLowerCase().includes("melee") || weaponObj.range.toLowerCase().includes("contact");
-                if (!isMelee) {
+                if (isMelee) {
+                    rangedOpts.style.display = "none";
+                    rofOpts.style.display = "none";
+                    wildAttackRow.style.display = "flex";
+                } else {
                     rangedOpts.style.display = "block";
                     scopeRow.style.display = "flex";
+                    wildAttackRow.style.display = "none";
 
                     let ammoType = getAmmoType(weaponObj);
                     if (ammoType === 'ballistic') {
@@ -1766,13 +1977,11 @@
                     } else {
                         rofOpts.style.display = "none";
                     }
-                } else {
-                    rangedOpts.style.display = "none";
-                    rofOpts.style.display = "none";
                 }
             } else {
                 rangedOpts.style.display = "none";
                 rofOpts.style.display = "none";
+                wildAttackRow.style.display = "none";
             }
 
             document.getElementById('tn-modal').style.display = 'block';
