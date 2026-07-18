@@ -224,6 +224,10 @@
                     <div style="font-size: 0.9em; opacity: 0.8;">
                         Parry: <span id="detail-parry">--</span> | Toughness: <span id="detail-toughness">--</span>
                     </div>
+
+                    <div id="remove-btn-container" style="margin-top: 15px; display: none;">
+                        <button class="die-btn danger" style="width: 100%; border-color: #ff3333; color: #ff3333;" onclick="removeParticipant()">REMOVE FROM TRACKER</button>
+                    </div>
                 </div>
 
                 <!-- TARGET CALCULATOR (GM/All visible) -->
@@ -583,6 +587,11 @@
             document.getElementById('btn-shaken').className = `die-btn ${p.shaken ? 'active-toggle' : ''}`;
             document.getElementById('btn-distracted').className = `die-btn ${p.distracted ? 'active-toggle' : ''}`;
             document.getElementById('btn-vulnerable').className = `die-btn ${p.vulnerable ? 'active-toggle' : ''}`;
+
+            const removeContainer = document.getElementById('remove-btn-container');
+            if (removeContainer) {
+                removeContainer.style.display = isAdmin ? 'block' : 'none';
+            }
         }
 
         // ==========================================
@@ -598,9 +607,10 @@
             let newVal = (p[stat] || 0) + amount;
             if (newVal < 0) newVal = 0;
             
-            // SWADE Limits
-            if (stat === 'wounds' && newVal > 3 && p.isPlayer) newVal = 3; // Wildcards cap at 3 before Incapacitated
-            if (stat === 'fatigue' && newVal > 2) newVal = 2; // Cap at 2 before Incapacitated
+            // SWADE Limits: Wildcards natively support Edges like Tough as Nails (up to 5 wounds)
+            // and 3 Fatigue points representing the Incapacitated state.
+            if (stat === 'wounds' && newVal > 5) newVal = 5; 
+            if (stat === 'fatigue' && newVal > 3) newVal = 3; 
 
             p[stat] = newVal;
 
@@ -626,6 +636,28 @@
             }
         };
 
+        window.removeParticipant = async function() {
+            if (!selectedParticipantId) return;
+            if (!confirm("Remove this combatant from the tracker?")) return;
+            
+            let participants = globalState.combat.participants || [];
+            let removedIndex = participants.findIndex(x => x.id === selectedParticipantId);
+            if (removedIndex === -1) return;
+            
+            participants = participants.filter(x => x.id !== selectedParticipantId);
+            
+            let turnIndex = globalState.combat.activeTurnIndex || 0;
+            if (removedIndex < turnIndex) {
+                await set(ref(db, 'campaignState/combat/activeTurnIndex'), turnIndex - 1);
+            } else if (removedIndex === turnIndex && participants.length <= turnIndex) {
+                await set(ref(db, 'campaignState/combat/activeTurnIndex'), 0);
+            }
+            
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+            selectedParticipantId = null;
+            document.getElementById('detail-panel').style.display = 'none';
+        };
+
         // ==========================================
         // 7. TARGET CALCULATOR (GM ASSIST)
         // ==========================================
@@ -641,8 +673,8 @@
 
             let target = globalState.combat.participants.find(x => x.id === targetId);
             let parry = parseInt(target.parry);
-            if (target.vulnerable) parry -= 2; // Being vulnerable adds +2 to hit, meaning parry is effectively 2 lower for math. Or we just add 2 to the roll.
             
+            // Being vulnerable adds +2 to actions/attacks against the target (SWADE p.100)
             let effectiveRoll = target.vulnerable ? roll + 2 : roll;
 
             resultBox.style.borderColor = "var(--theme-color)";
