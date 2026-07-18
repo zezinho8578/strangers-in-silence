@@ -509,8 +509,8 @@
         // 2. DEFAULT WEAPON PRESETS DATABASE
         // ==========================================
         const defaultPresets = [
-            { id: "crowbar", name: "Crowbar", range: "Melee", damage: "2d6", ap: "0", rof: "1", shots: "—", minStr: "d4", icon: "https://i.imgur.com/niLzrfW.png" },
-            { id: "stunstick", name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", shots: "Charge 20", minStr: "d4", icon: "https://i.imgur.com/pMPZprv.png" },
+            { id: "crowbar", name: "Crowbar", range: "Melee", damage: "Str+d4", ap: "1", rof: "1", shots: "—", minStr: "d4", icon: "https://i.imgur.com/niLzrfW.png" },
+            { id: "stunstick", name: "Stunstick", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", shots: "Charge 20", minStr: "d4", icon: "https://i.imgur.com/pMPZprv.png" },
             { id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", shots: "18", minStr: "d4", icon: "https://i.imgur.com/sAz8rBR.png" },
             { id: "magnum-357", name: "357 Magnum", range: "15/30/60", damage: "2d10", ap: "2", rof: "1", shots: "6", minStr: "d6", icon: "https://i.imgur.com/cLsJTiP.png" },
             { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", shots: "30", minStr: "d6", icon: "https://i.imgur.com/oAbqfGW.png" },
@@ -625,6 +625,73 @@
             let cleaned = dieStr.toString().toLowerCase().replace(/d/g, '');
             let parsed = parseInt(cleaned);
             return isNaN(parsed) ? 4 : parsed;
+        }
+
+        // Universal damage formula parser
+        function parseDamageFormula(formulaStr) {
+            if (!formulaStr) return { dice: [], modifier: 0 };
+            
+            // Replace "Str" with the actual strength die and modifier
+            let strDieRaw = charData.attributes?.Strength?.die || "4";
+            let strDie = strDieRaw.toString().toLowerCase().startsWith('d') ? strDieRaw : `d${strDieRaw}`;
+            let strModStr = charData.attributes?.Strength?.mod || "+0";
+            let strModVal = parseInt(strModStr.replace('+', '')) || 0;
+            
+            let strReplacement = strDie;
+            if (strModVal > 0) strReplacement += `+${strModVal}`;
+            else if (strModVal < 0) strReplacement += `${strModVal}`;
+            
+            let processedFormula = formulaStr.toString().replace(/Str/i, strReplacement);
+            
+            // Tokenize the formula into dice (e.g., 2d6, d4) and modifiers (e.g., +2, -1)
+            let tokens = processedFormula.match(/[+-]?\s*\d*d\d+|[+-]?\s*\d+/gi) || [];
+            let dice = [];
+            let modifier = 0;
+            
+            tokens.forEach(token => {
+                token = token.replace(/\s/g, '');
+                let sign = token.startsWith('-') ? -1 : 1;
+                token = token.replace(/^[+-]/, '');
+                
+                let match = token.match(/^(\d*)d(\d+)$/i);
+                if (match) {
+                    let count = parseInt(match[1]) || 1;
+                    let sides = parseInt(match[2]);
+                    for (let i = 0; i < count; i++) {
+                        dice.push({ sides: sides, sign: sign });
+                    }
+                } else {
+                    let val = parseInt(token);
+                    if (!isNaN(val)) modifier += val * sign;
+                }
+            });
+            
+            return { dice: dice, modifier: modifier };
+        }
+
+        function parseDamage(damageStr) {
+            let parsed = parseDamageFormula(damageStr);
+            // If it's "Special", "Varies", or empty, return null to trigger prompt
+            if (parsed.dice.length === 0 && parsed.modifier === 0 && !damageStr.toString().match(/\d/)) {
+                return null;
+            }
+            return parsed;
+        }
+
+        // Build dynamic unarmed formula display (e.g., d6+1+d4)
+        function getUnarmedDamageDisplay() {
+            let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
+            let strDieRaw = charData.attributes?.Strength?.die || "4";
+            let strDie = strDieRaw.toString().toLowerCase().startsWith('d') ? strDieRaw : `d${strDieRaw}`;
+            
+            let strModStr = charData.attributes?.Strength?.mod || "+0";
+            let strModVal = parseInt(strModStr.replace('+', '')) || 0;
+            
+            let baseStrFormula = strDie;
+            if (strModVal > 0) baseStrFormula += `+${strModVal}`;
+            else if (strModVal < 0) baseStrFormula += `${strModVal}`;
+            
+            return hasMA ? `${baseStrFormula}+d4` : baseStrFormula;
         }
 
         // ==========================================
@@ -960,8 +1027,7 @@
             container.innerHTML = '';
 
             // --- Inject Unarmed Strike card at the top ---
-            let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
-            let unarmedDamage = hasMA ? "Str+d4" : "Str";
+            let unarmedDamage = getUnarmedDamageDisplay();
             let unarmedIcon = "https://i.imgur.com/TimqS8i.png";
 
             container.innerHTML += `
@@ -1384,8 +1450,7 @@
 
         // Unarmed Attack — bypasses charData.weapons lookup
         function unarmedAttack() {
-            let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
-            let unarmedDamage = hasMA ? "Str+d4" : "Str";
+            let unarmedDamage = getUnarmedDamageDisplay();
             let unarmedIcon = "https://i.imgur.com/TimqS8i.png";
 
             let unarmedWeapon = {
@@ -1409,34 +1474,22 @@
             });
         }
 
-        // Unarmed Damage — handles Str notation natively
+        // Unarmed Damage — handles dynamic formula parsing universally
         async function rollUnarmedDamage() {
-            let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
-            let unarmedDamage = hasMA ? "Str+d4" : "Str";
+            let unarmedDamageFormula = getUnarmedDamageDisplay();
+            let parsed = parseDamageFormula(unarmedDamageFormula);
             
-            // FIX: Safely parse the Strength die and modifier to prevent "NaN" returning a 1
-            let strDie = getDieStep(charData.attributes?.Strength?.die || "4");
-            let strModStr = charData.attributes?.Strength?.mod || "0";
-            let strMod = parseInt(strModStr.replace('+', '')) || 0;
-
             let rolls = [];
             let total = 0;
 
-            // Roll Strength die (exploding)
-            let strRoll = rollExploding(strDie);
-            total += strRoll.total;
-            rolls.push(...strRoll.history);
+            parsed.dice.forEach(d => {
+                let r = rollExploding(d.sides);
+                total += (r.total * d.sign);
+                rolls.push(...r.history);
+            });
 
-            // If Martial Artist, add +d4 (exploding)
-            if (hasMA) {
-                let maRoll = rollExploding(4);
-                total += maRoll.total;
-                rolls.push(...maRoll.history);
-            }
-
-            // Add Str modifier
-            if (strMod !== 0) {
-                total += strMod;
+            if (parsed.modifier !== 0) {
+                total += parsed.modifier;
             }
 
             // Joker & Wild Attack Bonus
@@ -1455,13 +1508,13 @@
                 localStorage.removeItem(`raise_bonus_Unarmed`);
             }
 
-            let modStr = strMod > 0 ? ` + ${strMod}` : (strMod < 0 ? ` - ${Math.abs(strMod)}` : "");
+            let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
             let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
             let waStr = wildAttackDmgBonus > 0 ? ` + ${wildAttackDmgBonus} (Wild Attack)` : "";
 
             let termLog = `> ${charData.name} dealt damage with UNARMED STRIKE<br>`;
-            termLog += `&nbsp;&nbsp;Dmg Roll [${unarmedDamage}]: ${rolls.join(' + ')}${modStr}${bonusStr}${jokerStr}${waStr}<br>`;
+            termLog += `&nbsp;&nbsp;Dmg Roll [${unarmedDamageFormula}]: ${rolls.join(' + ')}${modStr}${bonusStr}${jokerStr}${waStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
             if (jokerBonus > 0 || wildAttackDmgBonus > 0) {
                 let bonuses = [];
@@ -1478,11 +1531,11 @@
                     color: 0xff3333,
                     fields: [
                         { name: "Dice History", value: `${rolls.join(' + ')}`, inline: true },
-                        { name: "Damage Formula", value: unarmedDamage, inline: true }
+                        { name: "Damage Formula", value: unarmedDamageFormula, inline: true }
                     ],
-                    thumbnail: { url: "https://i.imgur.com/TimqS8i.png" } // ADDED THE EMBED IMAGE
+                    thumbnail: { url: "https://i.imgur.com/TimqS8i.png" }
                 };
-                if (strMod !== 0) embed.fields.push({ name: "Str Modifier", value: `${strMod > 0 ? '+' : ''}${strMod}`, inline: true });
+                if (parsed.modifier !== 0) embed.fields.push({ name: "Modifier", value: `${parsed.modifier > 0 ? '+' : ''}${parsed.modifier}`, inline: true });
                 if (hasRaiseBonus) {
                     embed.fields.push({ name: "Raise Bonus (+1d6)", value: `${bonusRolls.join(' + ')}`, inline: true });
                     embed.description += `\n*(Includes +1d6 Raise Bonus)*`;
@@ -1500,19 +1553,6 @@
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
-        }
-
-        function parseDamage(damageStr) {
-            let cleaned = damageStr.replace(/\s+/g, '').toLowerCase();
-            let match = cleaned.match(/(\d+)d(\d+)(?:\+(\d+))?/);
-            if (match) {
-                return {
-                    count: parseInt(match[1]),
-                    sides: parseInt(match[2]),
-                    modifier: parseInt(match[3]) || 0
-                };
-            }
-            return null;
         }
 
         async function rollWeaponDamage(weaponName, damageStr) {
@@ -1558,11 +1598,15 @@
                 localStorage.removeItem(`dt_bonus_${weaponName}`);
             }
 
-            for (let i = 0; i < parsed.count; i++) {
-                let r = rollExploding(parsed.sides);
-                total += r.total;
-                rolls.push(...r.history);
-            }
+            parsed.dice.forEach(d => {
+                let r = rollExploding(d.sides);
+                total += (r.total * d.sign);
+                if (d.sign > 0) {
+                    rolls.push(...r.history);
+                } else {
+                    r.history.forEach(roll => rolls.push(`-${roll}`));
+                }
+            });
             total += parsed.modifier;
 
             let hasRaiseBonus = localStorage.getItem(`raise_bonus_${weaponName}`) === "true";
