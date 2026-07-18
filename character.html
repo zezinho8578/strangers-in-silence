@@ -384,7 +384,7 @@
                 </select>
             </div>
             <div class="setting-row" id="scope-row" style="display:none;">
-                <span>Scoped Sight Mounted?</span>
+                <span>Is Aiming? (Ignores up to 4 points of penalties)</span>
                 <input type="checkbox" id="scope-checkbox" onchange="updateRangePenalty()" style="width: 20px; height: 20px; pointer-events: auto !important;">
             </div>
         </div>
@@ -404,6 +404,9 @@
                     </label>
                     <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
                         <input type="checkbox" id="3rb-checkbox" onchange="updateRecoilPenalty()"> 3-Round Burst (+1 Hit/Dmg)
+                    </label>
+                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                        <input type="checkbox" id="doubletap-checkbox" onchange="updateRecoilPenalty()"> Double Tap (+1 Hit/Dmg)
                     </label>
                 </div>
             </div>
@@ -437,7 +440,7 @@
     <!-- Minimum Strength Warning Modal -->
     <div id="min-str-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid #ff3333; background: var(--bg-color); padding: 25px; z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(255,0,0,0.9); width: max-content; min-width: 350px; pointer-events: auto !important;">
         <h3 style="color:#ff3333; margin-top:0; border-bottom: 1px solid #ff3333; padding-bottom: 10px;">STRENGTH REQUIREMENT NOT MET</h3>
-        <p>You do not meet the minimum strength requirement for this weapon.<br>Firing it will incur penalties to your trait roll.</p>
+        <p>You do not meet the minimum strength requirement for this weapon.<br>Firing it will incur <b>automatic penalties</b> to your trait roll (-1 per die step below requirement).</p>
         <label style="display:inline-flex; align-items:center; gap:8px; margin: 15px 0; font-size: 0.9em; cursor:pointer; pointer-events: auto !important;">
             <input type="checkbox" id="never-show-min-str" style="width:16px; height:16px;"> Never show me again for future weapons
         </label>
@@ -539,6 +542,7 @@
         let pendingRoll = null;
         let activeWeaponContext = null;
         let isEditing = false; 
+        let pendingMinStrPenalty = 0; // Auto-applied min-str penalty tracked here
 
         let db;
         if (isFirebaseConfigured) {
@@ -576,6 +580,16 @@
             if (w.magAmmo === undefined) w.magAmmo = maxAmmo;
             if (ammoType === 'ballistic' && !w.ammoTier) w.ammoTier = "Full";
             if (ammoType === 'projectile' && w.projectileCount === undefined) w.projectileCount = maxAmmo;
+        }
+
+        // ==========================================
+        // DIE STEP HELPER (for Min Str penalties)
+        // ==========================================
+        function getDieStep(dieStr) {
+            if (!dieStr) return 4;
+            let cleaned = dieStr.toString().toLowerCase().replace(/d/g, '');
+            let parsed = parseInt(cleaned);
+            return isNaN(parsed) ? 4 : parsed;
         }
 
         // ==========================================
@@ -678,20 +692,34 @@
             if (!weaponMinStr || weaponMinStr === "—" || weaponMinStr === "-") return false;
             let currentStrStr = charData.attributes.Strength ? charData.attributes.Strength.die : "4";
             let currentStrVal = parseInt(currentStrStr) || 4;
-            let reqStrMatch = weaponMinStr.match(/d(\d+)/i);
+            let reqStrMatch = weaponMinStr.match(/d?(\d+)/i);
             if (!reqStrMatch) return false;
             let reqStrVal = parseInt(reqStrMatch[1]);
             return currentStrVal < reqStrVal;
         }
 
         // ==========================================
-        // STRENGTH WARNING MODAL LOGIC
+        // STRENGTH WARNING MODAL LOGIC (with auto-penalty)
         // ==========================================
         let pendingMinStrCallback = null;
         function checkMinStr(weapon, callback) {
+            pendingMinStrPenalty = 0;
+
             if (!evaluateMinStr(weapon.minStr)) {
                 return callback(); 
             }
+
+            // Calculate auto penalty: -1 per die step below requirement
+            let currentStr = getDieStep(charData.attributes.Strength.die);
+            let reqStr = getDieStep(weapon.minStr);
+            const dice = [4, 6, 8, 10, 12];
+            let currIdx = dice.indexOf(currentStr);
+            let reqIdx = dice.indexOf(reqStr);
+
+            if (reqIdx > currIdx) {
+                pendingMinStrPenalty = -(reqIdx - currIdx); // e.g. -2 for two steps below
+            }
+
             if (localStorage.getItem('ignoreMinStrWarning') === 'true') {
                 return callback(); 
             }
@@ -715,6 +743,7 @@
         function cancelMinStr() {
             document.getElementById('min-str-modal').style.display = 'none';
             pendingMinStrCallback = null;
+            pendingMinStrPenalty = 0;
         }
 
         // ==========================================
@@ -815,8 +844,27 @@
             const container = document.getElementById('weapons-list-container');
             container.innerHTML = '';
 
+            // --- Inject Unarmed Strike card at the top ---
+            let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
+            let unarmedDamage = hasMA ? "Str+d4" : "Str";
+            let unarmedIcon = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png";
+
+            container.innerHTML += `
+                <div class="weapon-card">
+                    <img class="weapon-icon" src="${unarmedIcon}" alt="Unarmed">
+                    <div class="weapon-details">
+                        <div><b>UNARMED STRIKE</b></div>
+                        <div>Range: <i>Melee</i></div>
+                        <div>Damage: <b>${unarmedDamage}</b></div>
+                    </div>
+                    <div class="weapon-actions">
+                        <button class="die-btn" onclick="unarmedAttack()">ATTACK</button>
+                        <button class="die-btn" onclick="rollUnarmedDamage()">DAMAGE</button>
+                    </div>
+                </div>`;
+
             if (charData.weapons.length === 0) {
-                container.innerHTML = `<div style="text-align: center; font-style: italic; opacity: 0.6; padding: 20px;">[ NO ARMAMENT MOUNTED TO SYSTEM ]</div>`;
+                container.innerHTML += `<div style="text-align: center; font-style: italic; opacity: 0.6; padding: 20px;">[ NO ADDITIONAL ARMAMENT MOUNTED TO SYSTEM ]</div>`;
                 return;
             }
 
@@ -1006,7 +1054,7 @@
             renderWeapons();
         }
 
-                async function gmAmmoCheck(index) {
+        async function gmAmmoCheck(index) {
             const weapon = charData.weapons[index];
             if (!weapon) return;
             const ammoType = getAmmoType(weapon);
@@ -1072,7 +1120,7 @@
                 const embed = {
                     title: `Ammo Check: ${charData.name}'s ${weapon.name}`,
                     description: `Rolled ${skillName} (d${sides})${modDisplay}\n**Result: ${bestTotal}** → ${outcome}\n\n**Ammo Tier: ${oldTier} → ${newTier}**${!tierChanged ? ' (unchanged)' : ''}`,
-                    color: tierChanged ? 0xff6600 : 0x00ff00, // Green if safe, Orange if ammo was wasted
+                    color: tierChanged ? 0xff6600 : 0x00ff00,
                     thumbnail: { url: weapon.icon },
                     fields: [
                         { name: `Trait (d${sides})`, value: traitRoll.history.join(' + '), inline: true },
@@ -1114,7 +1162,7 @@
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name}'s magazine is empty!`,
-                    description: `${weapon.name}'s magazine is depleted. Reload required to continue firing.`,
+                    description: `${charData.name}'s magazine is depleted. Reload required to continue firing.`,
                     color: 0xff9900,
                     thumbnail: { url: weapon.icon }
                 };
@@ -1219,6 +1267,100 @@
             });
         }
 
+        // Unarmed Attack — bypasses charData.weapons lookup
+        function unarmedAttack() {
+            let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
+            let unarmedDamage = hasMA ? "Str+d4" : "Str";
+            let unarmedIcon = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png";
+
+            let unarmedWeapon = {
+                name: 'Unarmed',
+                range: 'Melee',
+                damage: unarmedDamage,
+                ap: '0',
+                rof: '1',
+                shots: '—',
+                minStr: '—',
+                icon: unarmedIcon
+            };
+
+            checkMinStr(unarmedWeapon, () => {
+                if (charData.skills['Fighting']) {
+                    prepareRoll('Fighting', 'skills', unarmedWeapon);
+                } else {
+                    logToTerminal('> SKILL [FIGHTING] UNAVAILABLE. CONVERTING TO UNSKILLED ACTION...');
+                    prepareRoll('Unskilled Attempt', null, unarmedWeapon);
+                }
+            });
+        }
+
+        // Unarmed Damage — handles Str notation natively
+        async function rollUnarmedDamage() {
+            let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
+            let unarmedDamage = hasMA ? "Str+d4" : "Str";
+            let strDie = charData.attributes.Strength ? parseInt(charData.attributes.Strength.die) : 4;
+            let strMod = charData.attributes.Strength ? (parseInt(charData.attributes.Strength.mod) || 0) : 0;
+
+            let rolls = [];
+            let total = 0;
+
+            // Roll Strength die (exploding)
+            let strRoll = rollExploding(strDie);
+            total += strRoll.total;
+            rolls.push(...strRoll.history);
+
+            // If Martial Artist, add +d4 (exploding)
+            if (hasMA) {
+                let maRoll = rollExploding(4);
+                total += maRoll.total;
+                rolls.push(...maRoll.history);
+            }
+
+            // Add Str modifier
+            if (strMod !== 0) {
+                total += strMod;
+            }
+
+            // Check for raise bonus
+            let hasRaiseBonus = localStorage.getItem(`raise_bonus_Unarmed`) === "true";
+            let bonusRolls = [];
+            if (hasRaiseBonus) {
+                let bRoll = rollExploding(6);
+                total += bRoll.total;
+                bonusRolls = bRoll.history;
+                localStorage.removeItem(`raise_bonus_Unarmed`);
+            }
+
+            let modStr = strMod > 0 ? ` + ${strMod}` : (strMod < 0 ? ` - ${Math.abs(strMod)}` : "");
+            let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
+
+            let termLog = `> ${charData.name} dealt damage with UNARMED STRIKE<br>`;
+            termLog += `&nbsp;&nbsp;Dmg Roll [${unarmedDamage}]: ${rolls.join(' + ')}${modStr}${bonusStr}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
+            logToTerminal(termLog);
+
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} rolled damage with Unarmed Strike`,
+                    description: `**Damage Total: ${total}**`,
+                    color: 0xff3333,
+                    fields: [
+                        { name: "Dice History", value: `${rolls.join(' + ')}`, inline: true },
+                        { name: "Damage Formula", value: unarmedDamage, inline: true }
+                    ]
+                };
+                if (strMod !== 0) embed.fields.push({ name: "Str Modifier", value: `${strMod > 0 ? '+' : ''}${strMod}`, inline: true });
+                if (hasRaiseBonus) {
+                    embed.fields.push({ name: "Raise Bonus (+1d6)", value: `${bonusRolls.join(' + ')}`, inline: true });
+                    embed.description += `\n*(Includes +1d6 Raise Bonus)*`;
+                }
+
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
+            }
+        }
+
         function parseDamage(damageStr) {
             let cleaned = damageStr.replace(/\s+/g, '').toLowerCase();
             let match = cleaned.match(/(\d+)d(\d+)(?:\+(\d+))?/);
@@ -1268,6 +1410,13 @@
                 localStorage.removeItem(`3rb_bonus_${weaponName}`);
             }
 
+            // Add Double Tap modifier +1 before calculating
+            let hasDTBonus = localStorage.getItem(`dt_bonus_${weaponName}`) === "true";
+            if (hasDTBonus) {
+                parsed.modifier += 1;
+                localStorage.removeItem(`dt_bonus_${weaponName}`);
+            }
+
             for (let i = 0; i < parsed.count; i++) {
                 let r = rollExploding(parsed.sides);
                 total += r.total;
@@ -1286,10 +1435,11 @@
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
+            let dtStr = hasDTBonus ? ` (Includes +1 from Double Tap)` : "";
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
 
             let termLog = `> ${charData.name} dealt damage with ${weaponName.toUpperCase()}<br>`;
-            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}${trbStr}${bonusStr}<br>`;
+            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}${trbStr}${dtStr}${bonusStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
             logToTerminal(termLog);
 
@@ -1310,6 +1460,10 @@
                 if (has3RBBonus) {
                     embed.fields.push({ name: "Three-Round Burst", value: "+1 Damage", inline: true });
                     embed.description += `\n*(Includes +1 Damage from 3-Round Burst)*`;
+                }
+                if (hasDTBonus) {
+                    embed.fields.push({ name: "Double Tap", value: "+1 Damage", inline: true });
+                    embed.description += `\n*(Includes +1 Damage from Double Tap)*`;
                 }
 
                 let weapon = charData.weapons.find(w => w.name === weaponName);
@@ -1365,11 +1519,12 @@
             let totalModifier = traitModifier + customModifier;
 
             let is3RB = pendingRoll && pendingRoll.is3RB;
+            let isDoubleTap = pendingRoll && pendingRoll.isDoubleTap;
             let shotsFired = 1;
 
             if (activeWeaponContext && document.getElementById('rof-options-container').style.display !== 'none') {
-                if (is3RB) {
-                    shotsFired = 1; // 3RB resolves with a single shooting die (+wild die)
+                if (is3RB || isDoubleTap) {
+                    shotsFired = 1; // 3RB and DT both resolve with a single shooting die (+wild die)
                 } else {
                     shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
                 }
@@ -1472,6 +1627,13 @@
                 } else {
                     localStorage.removeItem(`3rb_bonus_${activeWeaponContext.name}`);
                 }
+
+                if (hit && isDoubleTap) {
+                    localStorage.setItem(`dt_bonus_${activeWeaponContext.name}`, "true");
+                    logToTerminal(`> [!] DOUBLE TAP: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +1 damage bonus.`);
+                } else {
+                    localStorage.removeItem(`dt_bonus_${activeWeaponContext.name}`);
+                }
             }
 
             renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail);
@@ -1550,11 +1712,23 @@
         }
 
         function prepareRoll(name, cat, weaponObj = null) {
+            // Reset min-str penalty for non-weapon rolls
+            if (!weaponObj) {
+                pendingMinStrPenalty = 0;
+            }
+
             pendingRoll = { name, cat };
             activeWeaponContext = weaponObj;
 
             document.getElementById('tn-input').value = "4"; 
             document.getElementById('mod-override-input').value = "0";
+
+            // Apply auto min-str penalty if applicable (set by checkMinStr before this call)
+            if (weaponObj && pendingMinStrPenalty !== 0) {
+                let currentMod = parseInt(document.getElementById('mod-override-input').value) || 0;
+                document.getElementById('mod-override-input').value = currentMod + pendingMinStrPenalty;
+                logToTerminal(`> [!] STRENGTH REQUIREMENT NOT MET: Auto-applied ${pendingMinStrPenalty} penalty to attack roll.`);
+            }
 
             const rangedOpts = document.getElementById('ranged-options-container');
             const rofOpts = document.getElementById('rof-options-container');
@@ -1584,9 +1758,11 @@
 
                         document.getElementById('suppressive-checkbox').checked = false;
                         document.getElementById('3rb-checkbox').checked = false;
+                        document.getElementById('doubletap-checkbox').checked = false;
                         document.getElementById('rof-select').disabled = false;
                         document.getElementById('suppressive-checkbox').disabled = false;
                         document.getElementById('3rb-checkbox').disabled = false;
+                        document.getElementById('doubletap-checkbox').disabled = false;
                     } else {
                         rofOpts.style.display = "none";
                     }
@@ -1605,11 +1781,15 @@
         function updateRangePenalty() {
             if (!activeWeaponContext) return;
             let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
-            let isScoped = document.getElementById('scope-checkbox').checked;
-            if (rangePenalty === -8 && isScoped) {
-                rangePenalty = -6;
+            let isAiming = document.getElementById('scope-checkbox').checked;
+
+            // SWADE: Aiming with a scope cancels up to 4 points of range penalties
+            // (2 for Aiming + 2 additional for Scope)
+            if (isAiming) {
+                rangePenalty = Math.min(0, rangePenalty + 4);
             }
-            applyComputedModifiers(rangePenalty);
+
+            applyComputedModifiers(rangePenalty + pendingMinStrPenalty);
         }
 
         function updateRecoilPenalty() {
@@ -1617,30 +1797,42 @@
             
             let is3RB = document.getElementById('3rb-checkbox').checked;
             let isSupp = document.getElementById('suppressive-checkbox').checked;
+            let isDT = document.getElementById('doubletap-checkbox')?.checked || false;
             let rofSelect = document.getElementById('rof-select');
             let suppCheck = document.getElementById('suppressive-checkbox');
             let trbCheck = document.getElementById('3rb-checkbox');
+            let dtCheck = document.getElementById('doubletap-checkbox');
             
             // Mutual exclusivity enforcement
             if (is3RB) {
                 rofSelect.disabled = true;
                 suppCheck.disabled = true;
+                dtCheck.disabled = true;
             } else if (isSupp) {
                 rofSelect.disabled = false;
+                trbCheck.disabled = true;
+                dtCheck.disabled = true;
+            } else if (isDT) {
+                rofSelect.disabled = true;
+                suppCheck.disabled = true;
                 trbCheck.disabled = true;
             } else {
                 rofSelect.disabled = false;
                 suppCheck.disabled = false;
                 trbCheck.disabled = false;
+                dtCheck.disabled = false;
             }
 
             let shots = parseInt(rofSelect.value) || 1;
-            let recoilPenalty = (!is3RB && shots > 1) ? -2 : 0;
+            // Recoil penalty only applies to actual multi-shot RoF (not 3RB, not DT)
+            let recoilPenalty = (!is3RB && !isDT && shots > 1) ? -2 : 0;
             let trbBonus = is3RB ? 1 : 0;
+            let dtBonus = isDT ? 1 : 0;
 
+            // Recalculate range penalty with aiming logic
             let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
-            let isScoped = document.getElementById('scope-checkbox').checked;
-            if (rangePenalty === -8 && isScoped) rangePenalty = -6;
+            let isAiming = document.getElementById('scope-checkbox').checked;
+            if (isAiming) rangePenalty = Math.min(0, rangePenalty + 4);
 
             const warning = document.getElementById('recoil-warning');
             if (recoilPenalty !== 0) {
@@ -1649,7 +1841,7 @@
                 warning.style.display = 'none';
             }
 
-            applyComputedModifiers(rangePenalty + recoilPenalty + trbBonus);
+            applyComputedModifiers(rangePenalty + recoilPenalty + trbBonus + dtBonus + pendingMinStrPenalty);
         }
 
         function applyComputedModifiers(computedVal) {
@@ -1666,22 +1858,33 @@
 
             let is3RB = false;
             let isSupp = false;
+            let isDoubleTap = false;
             let shotsFired = 1;
             let bulletsExpended = 1;
 
             if (activeWeaponContext && document.getElementById('rof-options-container').style.display !== 'none') {
                 is3RB = document.getElementById('3rb-checkbox').checked;
                 isSupp = document.getElementById('suppressive-checkbox').checked;
+                isDoubleTap = document.getElementById('doubletap-checkbox')?.checked || false;
 
                 if (is3RB) {
+                    // 3-Round Burst: single roll, 3 bullets
                     shotsFired = 1;
                     bulletsExpended = 3;
+                } else if (isDoubleTap) {
+                    // Double Tap: single roll, 2 bullets, +1 to hit already in mod
+                    shotsFired = 1;
+                    bulletsExpended = 2;
                 } else {
                     shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
                     const costMap = {1:1, 2:5, 3:10, 4:20, 5:40, 6:50};
                     bulletsExpended = costMap[shotsFired] || (shotsFired * 10);
+                    
                     if (isSupp) {
+                        // SWADE p.107: Suppressive Fire uses 3x the RoF ammo
+                        // but attacker makes a SINGLE Shooting roll regardless of RoF
                         bulletsExpended *= 3;
+                        shotsFired = 1; // Force single roll for Suppressive Fire
                     }
                 }
             }
@@ -1707,12 +1910,14 @@
             }
 
             pendingRoll.is3RB = is3RB;
+            pendingRoll.isDoubleTap = isDoubleTap;
             executeRoll(pendingRoll.name, pendingRoll.cat, tn);
         }
 
         function cancelRoll() {
             document.getElementById('tn-modal').style.display = 'none';
             pendingRoll = null;
+            pendingMinStrPenalty = 0;
         }
 
         function confirmEquip() {
@@ -1773,6 +1978,8 @@
         window.addCustomPreset = addCustomPreset;
         window.rollWeaponAttack = rollWeaponAttack;
         window.rollWeaponDamage = rollWeaponDamage;
+        window.unarmedAttack = unarmedAttack;
+        window.rollUnarmedDamage = rollUnarmedDamage;
         window.confirmRoll = confirmRoll;
         window.cancelRoll = cancelRoll;
         window.confirmEquip = confirmEquip;
