@@ -1754,11 +1754,12 @@
 
             let is3RB = pendingRoll && pendingRoll.is3RB;
             let isDoubleTap = pendingRoll && pendingRoll.isDoubleTap;
+            let isSupp = pendingRoll && pendingRoll.isSupp; // Retrieve Suppressive Fire state
             let shotsFired = 1;
 
             if (activeWeaponContext && document.getElementById('rof-options-container').style.display !== 'none') {
-                if (is3RB || isDoubleTap) {
-                    shotsFired = 1; // 3RB and DT both resolve with a single shooting die (+wild die)
+                if (is3RB || isDoubleTap || isSupp) {
+                    shotsFired = 1; // 3RB, DT, and Suppressive Fire all resolve with a single shooting die (+wild die)
                 } else {
                     shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
                 }
@@ -2183,6 +2184,7 @@
 
             pendingRoll.is3RB = is3RB;
             pendingRoll.isDoubleTap = isDoubleTap;
+            pendingRoll.isSupp = isSupp; // Pass the Suppressive Fire state
             executeRoll(pendingRoll.name, pendingRoll.cat, tn);
         }
 
