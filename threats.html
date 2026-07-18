@@ -229,7 +229,8 @@
         
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Actions this Turn:</span>
-            <select id="map-select" class="admin-input" style="width:180px;" onchange="updateModifierAdjust()">
+            <!-- FIX 1: Removed onchange="updateModifierAdjust()" to mirror character.html -->
+            <select id="map-select" class="admin-input" style="width:180px;">
                 <option value="0">1 Action (No Penalty)</option>
                 <option value="-2">2 Actions (-2 Penalty)</option>
                 <option value="-4">3 Actions (-4 Penalty)</option>
@@ -623,7 +624,6 @@
             
             let rangePenalty = 0;
             let recoilPenalty = 0;
-            let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
             let trbBonus = 0;
             
             if (isRanged) {
@@ -646,26 +646,29 @@
                 }
                 
                 let shots = parseInt(rofSelect.value) || 1;
-                recoilPenalty = (!is3RB && shots > 1) ? -2 : 0;
+                
+                // FIX 2: Mirror character.html - Suppressive Fire always applies the -2 max RoF penalty
+                if (isSupp) {
+                    recoilPenalty = -2;
+                } else if (!is3RB && shots > 1) {
+                    recoilPenalty = -2;
+                } else {
+                    recoilPenalty = 0;
+                }
+                
                 trbBonus = is3RB ? 1 : 0;
                 
                 const warning = document.getElementById('recoil-warning');
                 if (warning) warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none';
             }
             
-            // Gather all negative penalties to see what Aiming might mitigate
-            let totalPenalties = 0;
-            if (rangePenalty < 0) totalPenalties += rangePenalty;
-            if (recoilPenalty < 0) totalPenalties += recoilPenalty;
-            if (mapPenalty < 0) totalPenalties += mapPenalty;
-            
-            // Mitigate up to 4 points of negative penalties if Aiming
+            // FIX 3: Mirror character.html - Aiming only mitigates range penalties, not total penalties
+            let computedRangePenalty = rangePenalty;
             if (isRanged && document.getElementById('aim-checkbox').checked) {
-                let ignored = Math.min(4, Math.abs(totalPenalties));
-                totalPenalties += ignored;
+                computedRangePenalty = Math.min(0, rangePenalty + 4);
             }
             
-            document.getElementById('mod-override-input').value = totalPenalties + trbBonus;
+            document.getElementById('mod-override-input').value = computedRangePenalty + recoilPenalty + trbBonus;
         };
 
         window.confirmRoll = function() {
@@ -706,7 +709,10 @@
             
             let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
             let customMod = parseInt(document.getElementById('mod-override-input').value) || 0;
-            let totalModifier = intrinsicMod + unskilledMod + customMod;
+            
+            // FIX 1: Mirror character.html - MAP penalty is not applied live to the input box, but rather silently added here
+            let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
+            let totalModifier = intrinsicMod + unskilledMod + customMod + mapPenalty;
 
             let results = []; let isCritFail = false;
             
