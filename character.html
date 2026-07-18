@@ -1476,7 +1476,7 @@
                     prepareRoll('Fighting', 'skills', unarmedWeapon, -1);
                 } else {
                     logToTerminal('> SKILL [FIGHTING] UNAVAILABLE. CONVERTING TO UNSKILLED ACTION...');
-                    prepareRoll('Unskilled Attempt', null, unarmedWeapon, -1);
+                    prepareRoll("Unskilled Attempt", null, unarmedWeapon, -1);
                 }
             });
         }
@@ -1936,6 +1936,10 @@
                 termLog += `<br><span style="color:#ff9900;">${suppText}</span>`;
             }
 
+            if (pendingRoll && pendingRoll.is3RB) {
+                termLog += `<br><span style="color:#00aaff;">🟦 <b>3-ROUND BURST:</b> +1 Hit/Dmg (Damage bonus applied to next damage roll)</span>`;
+            }
+
             if (bystanderHit) {
                 termLog += `<br><span style="color:#ff3333;">⚠️ INNOCENT BYSTANDER HIT! (Trait die rolled ${bystanderDieVal})</span>`;
             }
@@ -1954,6 +1958,10 @@
                 
                 if (pendingRoll && pendingRoll.isSupp) {
                     desc += `\n🟧 **SUPPRESSIVE FIRE:** Success = Distracted, Raise = Hit! (Max targets = weapon RoF)`;
+                }
+
+                if (pendingRoll && pendingRoll.is3RB) {
+                    desc += `\n🟦 **3-ROUND BURST:** +1 Hit/Dmg (Damage bonus applied to next damage roll).`;
                 }
 
                 if (bystanderHit) {
