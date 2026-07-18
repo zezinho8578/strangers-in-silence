@@ -310,14 +310,16 @@
                         <span>Parry:</span>
                         <div style="display:flex; align-items:center; gap:5px;">
                             <span id="der-parry-calc" style="border-bottom: 1px dashed var(--theme-color); padding: 2px 5px;"></span>
-                            <input type="number" id="der-parry-override" class="mod-input" value="0" style="width: 40px;">
+                            <input type="number" id="der-parry-override" class="admin-input" value="0" style="width: 50px; padding: 2px; text-align: center;">
+                            <button id="reset-parry-btn" class="die-btn" style="padding: 2px 6px;" onclick="resetDerived('parry')" title="Reset Override">↺</button>
                         </div>
                     </div>
                     <div class="stat-row">
                         <span>Toughness:</span>
                         <div style="display:flex; align-items:center; gap:5px;">
                             <span id="der-toughness-calc" style="border-bottom: 1px dashed var(--theme-color); padding: 2px 5px;"></span>
-                            <input type="number" id="der-toughness-override" class="mod-input" value="0" style="width: 40px;">
+                            <input type="number" id="der-toughness-override" class="admin-input" value="0" style="width: 50px; padding: 2px; text-align: center;">
+                            <button id="reset-toughness-btn" class="die-btn" style="padding: 2px 6px;" onclick="resetDerived('toughness')" title="Reset Override">↺</button>
                         </div>
                     </div>
                 </div>
@@ -1106,9 +1108,8 @@
                     reloadBtn = `<button class="die-btn" onclick="reloadWeapon(${index})">RELOAD</button>`;
                 }
 
-                // Damage button state
-                const damageDisabled = isOutOfAmmo ? 'disabled' : '';
-                const damageOnclick = isOutOfAmmo ? '' : `onclick="rollWeaponDamage('${w.name}', '${w.damage}')"`;
+                // Damage button is always enabled so final shots can be resolved
+                const damageOnclick = `onclick="rollWeaponDamage('${w.name}', '${w.damage}')"`;
 
                 container.innerHTML += `
                     <div class="${cardClass}">
@@ -1125,7 +1126,7 @@
                         </div>
                         <div class="weapon-actions">
                             <button class="die-btn" onclick="rollWeaponAttack('${w.name}', '${w.range}')">ATTACK</button>
-                            <button class="die-btn" ${damageDisabled} ${damageOnclick}>DAMAGE</button>
+                            <button class="die-btn" ${damageOnclick}>DAMAGE</button>
                             ${reloadBtn}
                             <button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
                         </div>
@@ -1412,30 +1413,33 @@
             if (!weaponObj) return;
 
             checkMinStr(weaponObj, () => {
-                const ammoType = getAmmoType(weaponObj);
-
-                // Ammo checks before allowing attack
-                if (ammoType === 'ballistic') {
-                    if (weaponObj.ammoTier === 'Out') {
-                        postOutofAmmoEmbed(weaponObj, "total ammo depleted");
-                        return;
-                    }
-                    if ((weaponObj.magAmmo || 0) <= 0) {
-                        postEmptyMagEmbed(weaponObj);
-                        return;
-                    }
-                } else if (ammoType === 'projectile') {
-                    if ((weaponObj.projectileCount || 0) <= 0 && (weaponObj.magAmmo || 0) <= 0) {
-                        postOutofAmmoEmbed(weaponObj, "no projectiles remaining");
-                        return;
-                    }
-                    if ((weaponObj.magAmmo || 0) <= 0) {
-                        postEmptyMagEmbed(weaponObj);
-                        return;
+                // Ensure no blocks if using a melee weapon
+                let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
+                
+                if (!isMelee) {
+                    const ammoType = getAmmoType(weaponObj);
+                    // Ammo checks before allowing ranged attack
+                    if (ammoType === 'ballistic') {
+                        if (weaponObj.ammoTier === 'Out') {
+                            postOutofAmmoEmbed(weaponObj, "total ammo depleted");
+                            return;
+                        }
+                        if ((weaponObj.magAmmo || 0) <= 0) {
+                            postEmptyMagEmbed(weaponObj);
+                            return;
+                        }
+                    } else if (ammoType === 'projectile') {
+                        if ((weaponObj.projectileCount || 0) <= 0 && (weaponObj.magAmmo || 0) <= 0) {
+                            postOutofAmmoEmbed(weaponObj, "no projectiles remaining");
+                            return;
+                        }
+                        if ((weaponObj.magAmmo || 0) <= 0) {
+                            postEmptyMagEmbed(weaponObj);
+                            return;
+                        }
                     }
                 }
 
-                let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
                 let isThrown = rangeStr.toLowerCase().includes("throw") || weaponName.toLowerCase().includes("grenade");
                 let skillNeeded = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
 
@@ -1556,20 +1560,6 @@
         }
 
         async function rollWeaponDamage(weaponName, damageStr) {
-            // Check if weapon is out of ammo — lock damage
-            let weaponObj = charData.weapons.find(w => w.name === weaponName);
-            if (weaponObj) {
-                const ammoType = getAmmoType(weaponObj);
-                if (ammoType === 'ballistic' && weaponObj.ammoTier === 'Out') {
-                    logToTerminal(`> [!] Cannot roll damage for ${weaponName.toUpperCase()} — OUT OF AMMO!`);
-                    return;
-                }
-                if (ammoType === 'projectile' && (weaponObj.projectileCount || 0) <= 0 && (weaponObj.magAmmo || 0) <= 0) {
-                    logToTerminal(`> [!] Cannot roll damage for ${weaponName.toUpperCase()} — OUT OF AMMO!`);
-                    return;
-                }
-            }
-
             let parsed = parseDamage(damageStr);
             let total = 0;
             let rolls = [];
@@ -1773,7 +1763,7 @@
             let isRanged = activeWeaponContext && !activeWeaponContext.range.toLowerCase().includes("melee") && !activeWeaponContext.range.toLowerCase().includes("contact");
 
             if (isRanged) {
-                if (shotsFired > 1 || (activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun"))) {
+                if (shotsFired > 1 || isSupp || (activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun"))) {
                     bystanderThreshold = 2;
                 }
             }
@@ -1915,6 +1905,11 @@
                 }
             });
 
+            if (pendingRoll && pendingRoll.isSupp) {
+                let suppText = "[ SUPPRESSIVE FIRE: Success = Distracted, Raise = Hit! (Max targets = weapon RoF) ]";
+                termLog += `<br><span style="color:#ff9900;">${suppText}</span>`;
+            }
+
             if (bystanderHit) {
                 termLog += `<br><span style="color:#ff3333;">⚠️ INNOCENT BYSTANDER HIT! (Trait die rolled ${bystanderDieVal})</span>`;
             }
@@ -1930,6 +1925,11 @@
                         desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
                     }
                 });
+                
+                if (pendingRoll && pendingRoll.isSupp) {
+                    desc += `\n🟧 **SUPPRESSIVE FIRE:** Success = Distracted, Raise = Hit! (Max targets = weapon RoF)`;
+                }
+
                 if (bystanderHit) {
                     desc += `\n⚠️ **INNOCENT BYSTANDER HIT!** (Trait die rolled ${bystanderDieVal})`;
                     color = 0xff3333;
@@ -2038,6 +2038,9 @@
                         document.getElementById('suppressive-checkbox').disabled = false;
                         document.getElementById('3rb-checkbox').disabled = false;
                         document.getElementById('doubletap-checkbox').disabled = false;
+                        
+                        const warning = document.getElementById('recoil-warning');
+                        warning.style.display = 'none'; // reset visibility
                     } else {
                         rofOpts.style.display = "none";
                     }
@@ -2082,7 +2085,7 @@
                 suppCheck.disabled = true;
                 dtCheck.disabled = true;
             } else if (isSupp) {
-                rofSelect.disabled = false;
+                rofSelect.disabled = true; // Fix: Proper Lock for Suppressive Fire
                 trbCheck.disabled = true;
                 dtCheck.disabled = true;
             } else if (isDT) {
@@ -2097,8 +2100,14 @@
             }
 
             let shots = parseInt(rofSelect.value) || 1;
-            // Recoil penalty only applies to actual multi-shot RoF (not 3RB, not DT)
-            let recoilPenalty = (!is3RB && !isDT && shots > 1) ? -2 : 0;
+            // Fix: Suppressive Fire inherently causes -2 Recoil Penalty regardless of actual shots
+            let recoilPenalty = 0;
+            if (isSupp) {
+                recoilPenalty = -2;
+            } else if (!is3RB && !isDT && shots > 1) {
+                recoilPenalty = -2;
+            }
+            
             let trbBonus = is3RB ? 1 : 0;
             let dtBonus = isDT ? 1 : 0;
 
@@ -2141,24 +2150,22 @@
                 isDoubleTap = document.getElementById('doubletap-checkbox')?.checked || false;
 
                 if (is3RB) {
-                    // 3-Round Burst: single roll, 3 bullets
                     shotsFired = 1;
                     bulletsExpended = 3;
                 } else if (isDoubleTap) {
-                    // Double Tap: single roll, 2 bullets, +1 to hit already in mod
                     shotsFired = 1;
                     bulletsExpended = 2;
+                } else if (isSupp) {
+                    // Fix: Suppressive Fire strictly uses 3x the max Weapon RoF 
+                    let weaponRoF = parseInt(activeWeaponContext.rof) || 1;
+                    const costMap = {1:1, 2:5, 3:10, 4:20, 5:40, 6:50};
+                    let baseBullets = costMap[weaponRoF] || (weaponRoF * 10);
+                    bulletsExpended = baseBullets * 3;
+                    shotsFired = 1; // Single shooting die logic required
                 } else {
                     shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
                     const costMap = {1:1, 2:5, 3:10, 4:20, 5:40, 6:50};
                     bulletsExpended = costMap[shotsFired] || (shotsFired * 10);
-                    
-                    if (isSupp) {
-                        // SWADE p.107: Suppressive Fire uses 3x the RoF ammo
-                        // but attacker makes a SINGLE Shooting roll regardless of RoF
-                        bulletsExpended *= 3;
-                        shotsFired = 1; // Force single roll for Suppressive Fire
-                    }
                 }
             }
 
@@ -2171,10 +2178,19 @@
 
                 if (weaponIdx !== -1 && ammoType !== 'none') {
                     if (ammoType === 'ballistic') {
-                        charData.weapons[weaponIdx].magAmmo = Math.max(0, (charData.weapons[weaponIdx].magAmmo || 0) - bulletsExpended);
+                        // Fix: Halt execution if ammo check fails before subtracting ammo
+                        if (charData.weapons[weaponIdx].magAmmo < bulletsExpended) {
+                            alert(`Not enough ammo! This action requires ${bulletsExpended} bullets, but you only have ${charData.weapons[weaponIdx].magAmmo} left.`);
+                            return; 
+                        }
+                        charData.weapons[weaponIdx].magAmmo -= bulletsExpended;
                         logToTerminal(`> Magazine: ${charData.weapons[weaponIdx].magAmmo}/${charData.weapons[weaponIdx].maxMag}`);
                     } else if (ammoType === 'projectile') {
-                        charData.weapons[weaponIdx].magAmmo = Math.max(0, (charData.weapons[weaponIdx].magAmmo || 0) - shotsFired);
+                        if (charData.weapons[weaponIdx].magAmmo < bulletsExpended) {
+                            alert(`Not enough ammo! This action requires ${bulletsExpended} shots, but you only have ${charData.weapons[weaponIdx].magAmmo} left.`);
+                            return; 
+                        }
+                        charData.weapons[weaponIdx].magAmmo -= bulletsExpended;
                         logToTerminal(`> ${activeWeaponContext.name} chamber: ${charData.weapons[weaponIdx].magAmmo}/${charData.weapons[weaponIdx].maxMag} | Total: ${charData.weapons[weaponIdx].projectileCount}`);
                     }
                     saveCharacter();
