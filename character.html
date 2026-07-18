@@ -856,19 +856,34 @@
             }
 
             // Derived Stats Auto-Calc
-            let fightDie = charData.skills["Fighting"] ? parseInt(charData.skills["Fighting"].die) : 4;
+            let fightDie = charData.skills["Fighting"] ? getDieStep(charData.skills["Fighting"].die) : 4;
             let parryOverride = parseInt(charData.derived.parryOverride) || 0;
             let calcParry = 2 + (fightDie / 2) + parryOverride;
             charData.derived.parry = calcParry;
-            document.getElementById('der-parry-calc').innerText = calcParry;
-            document.getElementById('der-parry-override').value = parryOverride;
-
-            let vigorDie = charData.attributes["Vigor"] ? parseInt(charData.attributes["Vigor"].die) : 4;
+            
+            let vigorDie = charData.attributes["Vigor"] ? getDieStep(charData.attributes["Vigor"].die) : 4;
             let toughOverride = parseInt(charData.derived.toughnessOverride) || 0;
             let calcToughness = 2 + (vigorDie / 2) + toughOverride;
             charData.derived.toughness = calcToughness;
+            
+            // Update the HTML inputs with the Lambda theme class "admin-input" and a reset button
+            document.getElementById('der-parry-calc').innerText = calcParry;
+            document.getElementById('der-parry-override').className = "admin-input";
+            document.getElementById('der-parry-override').style = "width: 50px; padding: 2px; text-align: center;";
+            document.getElementById('der-parry-override').value = parryOverride;
+            
             document.getElementById('der-toughness-calc').innerText = calcToughness;
+            document.getElementById('der-toughness-override').className = "admin-input";
+            document.getElementById('der-toughness-override').style = "width: 50px; padding: 2px; text-align: center;";
             document.getElementById('der-toughness-override').value = toughOverride;
+
+            // Ensure the Reset buttons exist in the HTML (Injecting them safely)
+            if (!document.getElementById('reset-parry-btn')) {
+                document.getElementById('der-parry-override').insertAdjacentHTML('afterend', ` <button id="reset-parry-btn" class="die-btn" style="padding: 2px 6px;" onclick="resetDerived('parry')" title="Reset Override">↺</button>`);
+            }
+            if (!document.getElementById('reset-toughness-btn')) {
+                document.getElementById('der-toughness-override').insertAdjacentHTML('afterend', ` <button id="reset-toughness-btn" class="die-btn" style="padding: 2px 6px;" onclick="resetDerived('toughness')" title="Reset Override">↺</button>`);
+            }
 
             document.getElementById('der-pace').innerText = charData.derived.pace;
             document.getElementById('notes-edges').value = charData.edges;
@@ -947,7 +962,7 @@
             // --- Inject Unarmed Strike card at the top ---
             let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
             let unarmedDamage = hasMA ? "Str+d4" : "Str";
-            let unarmedIcon = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png";
+            let unarmedIcon = "https://i.imgur.com/TimqS8i.png";
 
             container.innerHTML += `
                 <div class="weapon-card">
@@ -1371,7 +1386,7 @@
         function unarmedAttack() {
             let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
             let unarmedDamage = hasMA ? "Str+d4" : "Str";
-            let unarmedIcon = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png";
+            let unarmedIcon = "https://i.imgur.com/TimqS8i.png";
 
             let unarmedWeapon = {
                 name: 'Unarmed',
@@ -1398,8 +1413,11 @@
         async function rollUnarmedDamage() {
             let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
             let unarmedDamage = hasMA ? "Str+d4" : "Str";
-            let strDie = charData.attributes.Strength ? parseInt(charData.attributes.Strength.die) : 4;
-            let strMod = charData.attributes.Strength ? (parseInt(charData.attributes.Strength.mod) || 0) : 0;
+            
+            // FIX: Safely parse the Strength die and modifier to prevent "NaN" returning a 1
+            let strDie = getDieStep(charData.attributes?.Strength?.die || "4");
+            let strModStr = charData.attributes?.Strength?.mod || "0";
+            let strMod = parseInt(strModStr.replace('+', '')) || 0;
 
             let rolls = [];
             let total = 0;
@@ -1461,7 +1479,8 @@
                     fields: [
                         { name: "Dice History", value: `${rolls.join(' + ')}`, inline: true },
                         { name: "Damage Formula", value: unarmedDamage, inline: true }
-                    ]
+                    ],
+                    thumbnail: { url: "https://i.imgur.com/TimqS8i.png" } // ADDED THE EMBED IMAGE
                 };
                 if (strMod !== 0) embed.fields.push({ name: "Str Modifier", value: `${strMod > 0 ? '+' : ''}${strMod}`, inline: true });
                 if (hasRaiseBonus) {
@@ -2174,6 +2193,13 @@
             logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
         }
 
+        window.resetDerived = function(stat) {
+            if (stat === 'parry') charData.derived.parryOverride = 0;
+            if (stat === 'toughness') charData.derived.toughnessOverride = 0;
+            saveCharacter();
+            renderSheet();
+        };
+
         // ==========================================
         // 12. WINDOW EXPORTS
         // ==========================================
@@ -2202,6 +2228,7 @@
         window.updateAmmoTier = updateAmmoTier;
         window.proceedMinStr = proceedMinStr;
         window.cancelMinStr = cancelMinStr;
+        window.resetDerived = resetDerived;
 
         // Admin controls
         if (isAdmin) {
