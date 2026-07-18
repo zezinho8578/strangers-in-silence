@@ -576,6 +576,7 @@
         let globalState = { characters: {}, webhook: "", presets: defaultPresets };
         let pendingRoll = null;
         let activeWeaponContext = null;
+        let activeWeaponIndex = -1; // NEW: Globally tracks the index of the weapon performing the action
         let isEditing = false; 
         let pendingMinStrPenalty = 0; // Auto-applied min-str penalty tracked here
         let combatParticipant = null;
@@ -600,7 +601,7 @@
         }
 
         function getAmmoType(weapon) {
-            if (!weapon.shots || weapon.shots === "—" || weapon.shots === "Unlimited" || weapon.shots === "Contact") {
+            if (!weapon || !weapon.shots || weapon.shots === "—" || weapon.shots === "Unlimited" || weapon.shots === "Contact") {
                 return "none";
             }
             if (strongProjectileIds.includes(weapon.id)) {
@@ -1109,7 +1110,7 @@
                 }
 
                 // Damage button is always enabled so final shots can be resolved
-                const damageOnclick = `onclick="rollWeaponDamage('${w.name}', '${w.damage}')"`;
+                const damageOnclick = `onclick="rollWeaponDamage(${index})"`;
 
                 container.innerHTML += `
                     <div class="${cardClass}">
@@ -1125,7 +1126,7 @@
                             ${ammoDetailsHTML}
                         </div>
                         <div class="weapon-actions">
-                            <button class="die-btn" onclick="rollWeaponAttack('${w.name}', '${w.range}')">ATTACK</button>
+                            <button class="die-btn" onclick="rollWeaponAttack(${index})">ATTACK</button>
                             <button class="die-btn" ${damageOnclick}>DAMAGE</button>
                             ${reloadBtn}
                             <button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
@@ -1179,6 +1180,7 @@
             charData.weapons.splice(index, 1);
             saveCharacter();
             renderWeapons();
+            document.getElementById('tn-modal').style.display = 'none'; // Close modal to prevent index desync
         }
 
         // ==========================================
@@ -1408,11 +1410,12 @@
         // ==========================================
         // 9. WEAPON ATTACK & EXPLODING DAMAGE ROLLS
         // ==========================================
-        function rollWeaponAttack(weaponName, rangeStr) {
-            let weaponObj = charData.weapons.find(w => w.name === weaponName);
+        function rollWeaponAttack(index) {
+            let weaponObj = charData.weapons[index];
             if (!weaponObj) return;
 
             checkMinStr(weaponObj, () => {
+                let rangeStr = weaponObj.range;
                 // Ensure no blocks if using a melee weapon
                 let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
                 
@@ -1440,14 +1443,14 @@
                     }
                 }
 
-                let isThrown = rangeStr.toLowerCase().includes("throw") || weaponName.toLowerCase().includes("grenade");
+                let isThrown = rangeStr.toLowerCase().includes("throw") || weaponObj.name.toLowerCase().includes("grenade");
                 let skillNeeded = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
 
                 if (charData.skills[skillNeeded]) {
-                    prepareRoll(skillNeeded, "skills", weaponObj);
+                    prepareRoll(skillNeeded, "skills", weaponObj, index);
                 } else {
                     logToTerminal(`> SKILL [${skillNeeded.toUpperCase()}] UNAVAILABLE. CONVERTING TO UNSKILLED ACTION...`);
-                    prepareRoll("Unskilled Attempt", null, weaponObj);
+                    prepareRoll("Unskilled Attempt", null, weaponObj, index);
                 }
             });
         }
@@ -1470,10 +1473,10 @@
 
             checkMinStr(unarmedWeapon, () => {
                 if (charData.skills['Fighting']) {
-                    prepareRoll('Fighting', 'skills', unarmedWeapon);
+                    prepareRoll('Fighting', 'skills', unarmedWeapon, -1);
                 } else {
                     logToTerminal('> SKILL [FIGHTING] UNAVAILABLE. CONVERTING TO UNSKILLED ACTION...');
-                    prepareRoll('Unskilled Attempt', null, unarmedWeapon);
+                    prepareRoll('Unskilled Attempt', null, unarmedWeapon, -1);
                 }
             });
         }
@@ -1498,18 +1501,19 @@
 
             // Joker & Wild Attack Bonus
             let jokerBonus = isJoker ? 2 : 0;
-            let wildAttackDmgBonus = localStorage.getItem(`wild_attack_dmg_Unarmed`) === "true" ? 2 : 0;
-            if (wildAttackDmgBonus) localStorage.removeItem(`wild_attack_dmg_Unarmed`);
+            let storageKey = 'Unarmed';
+            let wildAttackDmgBonus = localStorage.getItem(`wild_attack_dmg_${storageKey}`) === "true" ? 2 : 0;
+            if (wildAttackDmgBonus) localStorage.removeItem(`wild_attack_dmg_${storageKey}`);
             total += jokerBonus + wildAttackDmgBonus;
 
             // Check for raise bonus
-            let hasRaiseBonus = localStorage.getItem(`raise_bonus_Unarmed`) === "true";
+            let hasRaiseBonus = localStorage.getItem(`raise_bonus_${storageKey}`) === "true";
             let bonusRolls = [];
             if (hasRaiseBonus) {
                 let bRoll = rollExploding(6);
                 total += bRoll.total;
                 bonusRolls = bRoll.history;
-                localStorage.removeItem(`raise_bonus_Unarmed`);
+                localStorage.removeItem(`raise_bonus_${storageKey}`);
             }
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
@@ -1559,7 +1563,26 @@
             }
         }
 
-        async function rollWeaponDamage(weaponName, damageStr) {
+        async function rollWeaponDamage(index) {
+            let weaponObj = charData.weapons[index];
+            if (!weaponObj) return;
+            let weaponName = weaponObj.name;
+            let damageStr = weaponObj.damage;
+            let storageKey = index;
+            
+            // Check if weapon is out of ammo — lock damage
+            if (weaponObj) {
+                const ammoType = getAmmoType(weaponObj);
+                if (ammoType === 'ballistic' && weaponObj.ammoTier === 'Out') {
+                    logToTerminal(`> [!] Cannot roll damage for ${weaponName.toUpperCase()} — OUT OF AMMO!`);
+                    return;
+                }
+                if (ammoType === 'projectile' && (weaponObj.projectileCount || 0) <= 0 && (weaponObj.magAmmo || 0) <= 0) {
+                    logToTerminal(`> [!] Cannot roll damage for ${weaponName.toUpperCase()} — OUT OF AMMO!`);
+                    return;
+                }
+            }
+
             let parsed = parseDamage(damageStr);
             let total = 0;
             let rolls = [];
@@ -1575,17 +1598,17 @@
             }
 
             // Add 3-Round Burst modifier +1 before calculating
-            let has3RBBonus = localStorage.getItem(`3rb_bonus_${weaponName}`) === "true";
+            let has3RBBonus = localStorage.getItem(`3rb_bonus_${storageKey}`) === "true";
             if (has3RBBonus) {
                 parsed.modifier += 1;
-                localStorage.removeItem(`3rb_bonus_${weaponName}`);
+                localStorage.removeItem(`3rb_bonus_${storageKey}`);
             }
 
             // Add Double Tap modifier +1 before calculating
-            let hasDTBonus = localStorage.getItem(`dt_bonus_${weaponName}`) === "true";
+            let hasDTBonus = localStorage.getItem(`dt_bonus_${storageKey}`) === "true";
             if (hasDTBonus) {
                 parsed.modifier += 1;
-                localStorage.removeItem(`dt_bonus_${weaponName}`);
+                localStorage.removeItem(`dt_bonus_${storageKey}`);
             }
 
             parsed.dice.forEach(d => {
@@ -1599,19 +1622,19 @@
             });
             total += parsed.modifier;
 
-            let hasRaiseBonus = localStorage.getItem(`raise_bonus_${weaponName}`) === "true";
+            let hasRaiseBonus = localStorage.getItem(`raise_bonus_${storageKey}`) === "true";
             let bonusRolls = [];
             if (hasRaiseBonus) {
                 let bRoll = rollExploding(6);
                 total += bRoll.total;
                 bonusRolls = bRoll.history;
-                localStorage.removeItem(`raise_bonus_${weaponName}`);
+                localStorage.removeItem(`raise_bonus_${storageKey}`);
             }
 
             // Joker & Wild Attack Bonus
             let jokerBonus = isJoker ? 2 : 0;
-            let wildAttackDmgBonus = localStorage.getItem(`wild_attack_dmg_${weaponName}`) === "true" ? 2 : 0;
-            if (wildAttackDmgBonus) localStorage.removeItem(`wild_attack_dmg_${weaponName}`);
+            let wildAttackDmgBonus = localStorage.getItem(`wild_attack_dmg_${storageKey}`) === "true" ? 2 : 0;
+            if (wildAttackDmgBonus) localStorage.removeItem(`wild_attack_dmg_${storageKey}`);
             total += jokerBonus + wildAttackDmgBonus;
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
@@ -1723,9 +1746,11 @@
 
             let jokerBonus = isJoker ? 2 : 0;
             let wildAttackBonus = 0;
+            let storageKey = activeWeaponIndex !== -1 ? activeWeaponIndex : (activeWeaponContext ? activeWeaponContext.name : "");
+
             if (activeWeaponContext && document.getElementById('wild-attack-checkbox').checked) {
                 wildAttackBonus = 2;
-                localStorage.setItem(`wild_attack_dmg_${activeWeaponContext.name}`, "true");
+                localStorage.setItem(`wild_attack_dmg_${storageKey}`, "true");
                 if (combatParticipant) {
                     let participants = globalState.combat.participants;
                     let pIdx = participants.findIndex(p => p.id === activeCharId);
@@ -1763,7 +1788,8 @@
             let isRanged = activeWeaponContext && !activeWeaponContext.range.toLowerCase().includes("melee") && !activeWeaponContext.range.toLowerCase().includes("contact");
 
             if (isRanged) {
-                if (shotsFired > 1 || isSupp || (activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun"))) {
+                let maxWeaponRoF = activeWeaponContext ? (parseInt(activeWeaponContext.rof) || 1) : 1;
+                if (maxWeaponRoF > 1 || isSupp || (activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun"))) {
                     bystanderThreshold = 2;
                 }
             }
@@ -1861,24 +1887,24 @@
 
             if (activeWeaponContext) {
                 if (hitWithRaise) {
-                    localStorage.setItem(`raise_bonus_${activeWeaponContext.name}`, "true");
+                    localStorage.setItem(`raise_bonus_${storageKey}`, "true");
                     logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${activeWeaponContext.name} will include +1d6 raise bonus.`);
                 } else {
-                    localStorage.removeItem(`raise_bonus_${activeWeaponContext.name}`);
+                    localStorage.removeItem(`raise_bonus_${storageKey}`);
                 }
 
                 if (hit && is3RB) {
-                    localStorage.setItem(`3rb_bonus_${activeWeaponContext.name}`, "true");
+                    localStorage.setItem(`3rb_bonus_${storageKey}`, "true");
                     logToTerminal(`> [!] 3-ROUND BURST: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +1 damage bonus.`);
                 } else {
-                    localStorage.removeItem(`3rb_bonus_${activeWeaponContext.name}`);
+                    localStorage.removeItem(`3rb_bonus_${storageKey}`);
                 }
 
                 if (hit && isDoubleTap) {
-                    localStorage.setItem(`dt_bonus_${activeWeaponContext.name}`, "true");
+                    localStorage.setItem(`dt_bonus_${storageKey}`, "true");
                     logToTerminal(`> [!] DOUBLE TAP: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +1 damage bonus.`);
                 } else {
-                    localStorage.removeItem(`dt_bonus_${activeWeaponContext.name}`);
+                    localStorage.removeItem(`dt_bonus_${storageKey}`);
                 }
             }
 
@@ -1978,7 +2004,7 @@
             term.scrollTop = term.scrollHeight;
         }
 
-        function prepareRoll(name, cat, weaponObj = null) {
+        function prepareRoll(name, cat, weaponObj = null, weaponIndex = -1) {
             // Reset min-str penalty for non-weapon rolls
             if (!weaponObj) {
                 pendingMinStrPenalty = 0;
@@ -1986,6 +2012,7 @@
 
             pendingRoll = { name, cat };
             activeWeaponContext = weaponObj;
+            activeWeaponIndex = weaponIndex;
 
             document.getElementById('tn-input').value = "4"; 
             document.getElementById('mod-override-input').value = "0";
@@ -2084,14 +2111,17 @@
                 rofSelect.disabled = true;
                 suppCheck.disabled = true;
                 dtCheck.disabled = true;
+                rofSelect.value = "1";
             } else if (isSupp) {
-                rofSelect.disabled = true; // Fix: Proper Lock for Suppressive Fire
+                rofSelect.disabled = true; 
                 trbCheck.disabled = true;
                 dtCheck.disabled = true;
+                rofSelect.value = "1";
             } else if (isDT) {
                 rofSelect.disabled = true;
                 suppCheck.disabled = true;
                 trbCheck.disabled = true;
+                rofSelect.value = "1";
             } else {
                 rofSelect.disabled = false;
                 suppCheck.disabled = false;
@@ -2100,7 +2130,6 @@
             }
 
             let shots = parseInt(rofSelect.value) || 1;
-            // Fix: Suppressive Fire inherently causes -2 Recoil Penalty regardless of actual shots
             let recoilPenalty = 0;
             if (isSupp) {
                 recoilPenalty = -2;
@@ -2161,7 +2190,7 @@
                     const costMap = {1:1, 2:5, 3:10, 4:20, 5:40, 6:50};
                     let baseBullets = costMap[weaponRoF] || (weaponRoF * 10);
                     bulletsExpended = baseBullets * 3;
-                    shotsFired = 1; // Single shooting die logic required
+                    shotsFired = 1; // Force single roll for Suppressive Fire
                 } else {
                     shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
                     const costMap = {1:1, 2:5, 3:10, 4:20, 5:40, 6:50};
@@ -2174,24 +2203,22 @@
             // Decrement ammo after confirming the attack
             if (activeWeaponContext) {
                 const ammoType = getAmmoType(activeWeaponContext);
-                const weaponIdx = charData.weapons.findIndex(w => w.name === activeWeaponContext.name);
-
-                if (weaponIdx !== -1 && ammoType !== 'none') {
+                
+                if (activeWeaponIndex !== -1 && ammoType !== 'none') {
                     if (ammoType === 'ballistic') {
-                        // Fix: Halt execution if ammo check fails before subtracting ammo
-                        if (charData.weapons[weaponIdx].magAmmo < bulletsExpended) {
-                            alert(`Not enough ammo! This action requires ${bulletsExpended} bullets, but you only have ${charData.weapons[weaponIdx].magAmmo} left.`);
+                        if (charData.weapons[activeWeaponIndex].magAmmo < bulletsExpended) {
+                            alert(`Not enough ammo! This action requires ${bulletsExpended} bullets, but you only have ${charData.weapons[activeWeaponIndex].magAmmo} left.`);
                             return; 
                         }
-                        charData.weapons[weaponIdx].magAmmo -= bulletsExpended;
-                        logToTerminal(`> Magazine: ${charData.weapons[weaponIdx].magAmmo}/${charData.weapons[weaponIdx].maxMag}`);
+                        charData.weapons[activeWeaponIndex].magAmmo -= bulletsExpended;
+                        logToTerminal(`> Magazine: ${charData.weapons[activeWeaponIndex].magAmmo}/${charData.weapons[activeWeaponIndex].maxMag}`);
                     } else if (ammoType === 'projectile') {
-                        if (charData.weapons[weaponIdx].magAmmo < bulletsExpended) {
-                            alert(`Not enough ammo! This action requires ${bulletsExpended} shots, but you only have ${charData.weapons[weaponIdx].magAmmo} left.`);
+                        if (charData.weapons[activeWeaponIndex].magAmmo < bulletsExpended) {
+                            alert(`Not enough ammo! This action requires ${bulletsExpended} shots, but you only have ${charData.weapons[activeWeaponIndex].magAmmo} left.`);
                             return; 
                         }
-                        charData.weapons[weaponIdx].magAmmo -= bulletsExpended;
-                        logToTerminal(`> ${activeWeaponContext.name} chamber: ${charData.weapons[weaponIdx].magAmmo}/${charData.weapons[weaponIdx].maxMag} | Total: ${charData.weapons[weaponIdx].projectileCount}`);
+                        charData.weapons[activeWeaponIndex].magAmmo -= bulletsExpended;
+                        logToTerminal(`> ${activeWeaponContext.name} chamber: ${charData.weapons[activeWeaponIndex].magAmmo}/${charData.weapons[activeWeaponIndex].maxMag} | Total: ${charData.weapons[activeWeaponIndex].projectileCount}`);
                     }
                     saveCharacter();
                     renderWeapons();
