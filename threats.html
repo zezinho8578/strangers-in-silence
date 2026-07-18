@@ -189,25 +189,27 @@
             <span>Target Number (TN):</span>
             <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center;">
         </div>
+        
         <div id="ranged-options-container" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <div class="setting-row">
                 <span>Range Bracket:</span>
-                <select id="range-select" class="admin-input" style="width:180px;" onchange="updateRangePenalty()">
+                <select id="range-select" class="admin-input" style="width:180px;" onchange="updateModifierAdjust()">
                     <option value="0">Short Range (+0)</option>
                     <option value="-2">Medium Range (-2)</option>
                     <option value="-4">Long Range (-4)</option>
                     <option value="-8">Extreme Range (-8)</option>
                 </select>
             </div>
-            <div class="setting-row" id="scope-row" style="display:none;">
-                <span>Scoped Sight Mounted?</span>
-                <input type="checkbox" id="scope-checkbox" onchange="updateRangePenalty()" style="width: 20px; height: 20px;">
+            <div class="setting-row">
+                <span>Is Aiming? (Ignores up to 4 points of penalties)</span>
+                <input type="checkbox" id="aim-checkbox" onchange="updateModifierAdjust()" style="width: 20px; height: 20px;">
             </div>
         </div>
+        
         <div id="rof-options-container" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <div class="setting-row">
                 <span>Shots Fired (RoF):</span>
-                <select id="rof-select" class="admin-input" style="width:180px;" onchange="updateRecoilPenalty()">
+                <select id="rof-select" class="admin-input" style="width:180px;" onchange="updateModifierAdjust()">
                     <option value="1">Single Shot (1 Bullet)</option>
                 </select>
             </div>
@@ -215,15 +217,25 @@
                 <span>Fire Mode:</span>
                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
                     <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
-                        <input type="checkbox" id="suppressive-checkbox" onchange="updateRecoilPenalty()"> Suppressive (x3 Ammo)
+                        <input type="checkbox" id="suppressive-checkbox" onchange="updateModifierAdjust()"> Suppressive Fire (x3 Ammo)
                     </label>
                     <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
-                        <input type="checkbox" id="3rb-checkbox" onchange="updateRecoilPenalty()"> 3-Round Burst (+1 Hit/Dmg)
+                        <input type="checkbox" id="3rb-checkbox" onchange="updateModifierAdjust()"> 3-Round Burst (+1 Hit/Dmg)
                     </label>
                 </div>
             </div>
             <div id="recoil-warning" style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">* Firing at RoF > 1 incurs a -2 Recoil penalty.</div>
         </div>
+        
+        <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Actions this Turn:</span>
+            <select id="map-select" class="admin-input" style="width:180px;" onchange="updateModifierAdjust()">
+                <option value="0">1 Action (No Penalty)</option>
+                <option value="-2">2 Actions (-2 Penalty)</option>
+                <option value="-4">3 Actions (-4 Penalty)</option>
+            </select>
+        </div>
+        
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Modifier Adjust:</span>
             <input type="number" id="mod-override-input" value="0" class="admin-input" style="width:80px; text-align:center;">
@@ -571,17 +583,16 @@
             
             document.getElementById('tn-input').value = "4"; 
             document.getElementById('mod-override-input').value = "0";
+            document.getElementById('map-select').value = "0";
 
             const rangedOpts = document.getElementById('ranged-options-container');
             const rofOpts = document.getElementById('rof-options-container');
-            const scopeRow = document.getElementById('scope-row');
             
             document.getElementById('range-select').value = "0";
-            document.getElementById('scope-checkbox').checked = false;
+            document.getElementById('aim-checkbox').checked = false;
 
             if (!isMelee) {
                 rangedOpts.style.display = "block"; 
-                scopeRow.style.display = "flex";
                 rofOpts.style.display = "block";
                 
                 let rofVal = parseInt(wep.rof) || 1;
@@ -605,44 +616,56 @@
             document.getElementById('tn-modal').style.display = 'block';
         };
 
-        window.updateRangePenalty = function() {
-            if (!activeWeaponContext) return;
-            let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
-            let isScoped = document.getElementById('scope-checkbox').checked;
-            if (rangePenalty === -8 && isScoped) rangePenalty = -6;
-            document.getElementById('mod-override-input').value = rangePenalty;
-        };
-
-        window.updateRecoilPenalty = function() {
+        window.updateModifierAdjust = function() {
             if (!activeWeaponContext) return;
             
-            let is3RB = document.getElementById('3rb-checkbox').checked;
-            let isSupp = document.getElementById('suppressive-checkbox').checked;
-            let rofSelect = document.getElementById('rof-select');
+            let isRanged = document.getElementById('ranged-options-container').style.display !== 'none';
             
-            if (is3RB) {
-                rofSelect.disabled = true;
-                document.getElementById('suppressive-checkbox').disabled = true;
-            } else if (isSupp) {
-                rofSelect.disabled = false;
-                document.getElementById('3rb-checkbox').disabled = true;
-            } else {
-                rofSelect.disabled = false;
-                document.getElementById('suppressive-checkbox').disabled = false;
-                document.getElementById('3rb-checkbox').disabled = false;
+            let rangePenalty = 0;
+            let recoilPenalty = 0;
+            let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
+            let trbBonus = 0;
+            
+            if (isRanged) {
+                rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
+                
+                let is3RB = document.getElementById('3rb-checkbox').checked;
+                let isSupp = document.getElementById('suppressive-checkbox').checked;
+                let rofSelect = document.getElementById('rof-select');
+                
+                if (is3RB) {
+                    rofSelect.disabled = true;
+                    document.getElementById('suppressive-checkbox').disabled = true;
+                } else if (isSupp) {
+                    rofSelect.disabled = true; // Automatically lock RoF when suppressive is checked
+                    document.getElementById('3rb-checkbox').disabled = true;
+                } else {
+                    rofSelect.disabled = false;
+                    document.getElementById('suppressive-checkbox').disabled = false;
+                    document.getElementById('3rb-checkbox').disabled = false;
+                }
+                
+                let shots = parseInt(rofSelect.value) || 1;
+                recoilPenalty = (!is3RB && shots > 1) ? -2 : 0;
+                trbBonus = is3RB ? 1 : 0;
+                
+                const warning = document.getElementById('recoil-warning');
+                if (warning) warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none';
             }
             
-            let shots = parseInt(rofSelect.value) || 1;
-            let recoilPenalty = (!is3RB && shots > 1) ? -2 : 0;
-            let trbBonus = is3RB ? 1 : 0;
+            // Gather all negative penalties to see what Aiming might mitigate
+            let totalPenalties = 0;
+            if (rangePenalty < 0) totalPenalties += rangePenalty;
+            if (recoilPenalty < 0) totalPenalties += recoilPenalty;
+            if (mapPenalty < 0) totalPenalties += mapPenalty;
             
-            let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
-            let isScoped = document.getElementById('scope-checkbox').checked;
-            if (rangePenalty === -8 && isScoped) rangePenalty = -6;
-
-            const warning = document.getElementById('recoil-warning');
-            if (warning) warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none';
-            document.getElementById('mod-override-input').value = rangePenalty + recoilPenalty + trbBonus;
+            // Mitigate up to 4 points of negative penalties if Aiming
+            if (isRanged && document.getElementById('aim-checkbox').checked) {
+                let ignored = Math.min(4, Math.abs(totalPenalties));
+                totalPenalties += ignored;
+            }
+            
+            document.getElementById('mod-override-input').value = totalPenalties + trbBonus;
         };
 
         window.confirmRoll = function() {
@@ -796,7 +819,7 @@
                     termLog += `&nbsp;&nbsp;<span style="color:#00aaff;">🟦 <b>3-ROUND BURST:</b> +1 Hit/Dmg (Damage bonus applied to next damage roll)</span><br>`;
                 }
                 if (r.bystander) {
-                    termLog += `&nbsp;&nbsp;<span style="color:#ff3333;">🩸 <b>INNOCENT BYSTANDER STRUCK:</b> Skill die rolled a ${r.initialTrait}. Random adjacent target hit!</span><br>`;
+                    termLog += `&nbsp;&nbsp;<span style="color:#ff3333;">⚠️ INNOCENT BYSTANDER HIT! (Trait die rolled ${r.initialTrait})</span><br>`;
                 }
             });
             logToTerminal(termLog);
@@ -814,7 +837,7 @@
                         desc += `🟦 **3-ROUND BURST:** +1 Hit/Dmg (Damage bonus applied to next damage roll).\n`;
                     }
                     if (r.bystander) {
-                        desc += `🩸 **INNOCENT BYSTANDER STRUCK:** The skill die rolled a ${r.initialTrait}. A random adjacent target is hit!\n`;
+                        desc += `⚠️ INNOCENT BYSTANDER HIT! (Trait die rolled ${r.initialTrait})\n`;
                     }
                     desc += `\n`;
                 });
