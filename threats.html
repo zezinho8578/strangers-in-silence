@@ -201,8 +201,15 @@
                 </select>
             </div>
             <div class="setting-row">
-                <span>Is Aiming? (Ignores up to 4 points of penalties)</span>
+                <span>Is Aiming?</span>
                 <input type="checkbox" id="aim-checkbox" onchange="updateModifierAdjust()" style="width: 20px; height: 20px;">
+            </div>
+            <div class="setting-row">
+                <span>Aim Benefit:</span>
+                <select id="aim-mode-select" class="form-input" onchange="updateModifierAdjust()">
+                    <option value="ignore">Ignore up to 4 pts of penalties</option>
+                    <option value="plus2">+2 to roll</option>
+                </select>
             </div>
         </div>
         
@@ -219,7 +226,7 @@
                     <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
                         <input type="checkbox" id="suppressive-checkbox" onchange="updateModifierAdjust()"> Suppressive Fire (x3 Ammo)
                     </label>
-                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
+                    <label id="3rb-label" style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
                         <input type="checkbox" id="3rb-checkbox" onchange="updateModifierAdjust()"> 3-Round Burst (+1 Hit/Dmg)
                     </label>
                 </div>
@@ -408,6 +415,7 @@
                                     <span>Dmg:</span><input type="text" class="wep-input" style="width:60px;" value="${w.damage}" onchange="updateWep(${index}, 'damage', this.value)">
                                     <span>AP:</span><input type="number" class="wep-input" style="width:30px;" value="${w.ap}" onchange="updateWep(${index}, 'ap', this.value)">
                                     <span>RoF:</span><input type="number" class="wep-input" style="width:30px;" value="${w.rof}" onchange="updateWep(${index}, 'rof', this.value)">
+                                    <span>3RB:</span><input type="checkbox" ${w.burst ? "checked" : ""} onchange="updateWep(${index}, 'burst', this.checked)" title="Has Three-Round Burst ability">
                                 </div>
                             </div>
                         </div>
@@ -541,7 +549,17 @@
             if (wRoll) finalTotal = Math.max(tRoll.total, wRoll.total) + totalMod;
 
             let tn = 4;
-            let isCritFail = wRoll ? (tRoll.history[0] === 1 && wRoll.history[0] === 1) : (tRoll.history[0] === 1);
+            // SWADE: Wild Cards crit-fail on trait 1 + Wild Die 1. Extras roll a
+            // confirming d6 on a natural 1; only a second 1 is a Critical Failure.
+            let isCritFail = false;
+            let critConfirmNote = "";
+            if (wRoll) {
+                isCritFail = (tRoll.history[0] === 1 && wRoll.history[0] === 1);
+            } else if (tRoll.history[0] === 1) {
+                let confirmRoll = rollExploding(6);
+                isCritFail = (confirmRoll.history[0] === 1);
+                critConfirmNote = `<br>&nbsp;&nbsp;<span style="color:#ff9900;">Extra rolled natural 1 — confirming d6: ${confirmRoll.history.join(' + ')} → ${isCritFail ? "CRITICAL FAILURE CONFIRMED" : "normal failure"}</span>`;
+            }
             let outcome = "FAILURE"; let color = "#ff3333";
             
             if (isCritFail) { outcome = "CRITICAL FAILURE!"; } 
@@ -591,6 +609,7 @@
             
             document.getElementById('range-select').value = "0";
             document.getElementById('aim-checkbox').checked = false;
+            document.getElementById('aim-mode-select').value = 'ignore';
 
             if (!isMelee) {
                 rangedOpts.style.display = "block"; 
@@ -609,6 +628,9 @@
                 document.getElementById('rof-select').disabled = false;
                 document.getElementById('suppressive-checkbox').disabled = false;
                 document.getElementById('3rb-checkbox').disabled = false;
+
+                // 3-Round Burst is a weapon-specific ability — only offer it if this weapon has it.
+                document.getElementById('3rb-label').style.display = (wep.burst === true) ? "flex" : "none";
             } else { 
                 rangedOpts.style.display = "none"; 
                 rofOpts.style.display = "none"; 
@@ -662,13 +684,20 @@
                 if (warning) warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none';
             }
             
-            // FIX 3: Mirror character.html - Aiming only mitigates range penalties, not total penalties
+            // SWADE Aim: ignore up to 4 points of penalties (Range, Cover, Called Shot,
+            // Scale, Speed), or add +2 to the roll.
+            let aimBonus = 0;
             let computedRangePenalty = rangePenalty;
             if (isRanged && document.getElementById('aim-checkbox').checked) {
-                computedRangePenalty = Math.min(0, rangePenalty + 4);
+                let aimMode = document.getElementById('aim-mode-select')?.value || 'ignore';
+                if (aimMode === 'plus2') {
+                    aimBonus = 2;
+                } else {
+                    computedRangePenalty = Math.min(0, rangePenalty + 4);
+                }
             }
             
-            document.getElementById('mod-override-input').value = computedRangePenalty + recoilPenalty + trbBonus;
+            document.getElementById('mod-override-input').value = computedRangePenalty + recoilPenalty + trbBonus + aimBonus;
         };
 
         window.confirmRoll = function() {
@@ -733,7 +762,16 @@
                 traitRolls.forEach(r => { if (r.originalTraitFirst === 1) onesCount++; });
                 if (wildRoll && wildRoll.history[0] === 1) onesCount++;
 
-                isCritFail = (onesCount > (wildRoll ? shotsFired + 1 : shotsFired) / 2);
+                let overHalf = (onesCount > (wildRoll ? shotsFired + 1 : shotsFired) / 2);
+                if (wildRoll) {
+                    // SWADE: Wild Cards also need the Wild Die itself to be a natural 1.
+                    isCritFail = overHalf && wildRoll.history[0] === 1;
+                } else if (overHalf) {
+                    // SWADE: Extras confirm with a d6; only a second 1 is a Critical Failure.
+                    let confirmRoll = rollExploding(6);
+                    isCritFail = (confirmRoll.history[0] === 1);
+                    logToTerminal(`> Extra rolled 1s on over half the dice — confirming d6: ${confirmRoll.history.join(' + ')} → ${isCritFail ? "CRITICAL FAILURE CONFIRMED" : "normal failure"}`);
+                }
 
                 let minVal = Math.min(...traitRolls.map(r => r.total));
                 let minIdx = traitRolls.findIndex(r => r.total === minVal);
@@ -770,7 +808,12 @@
                 if (wildRoll) {
                     bestTotal = Math.max(traitRoll.total, wildRoll.total);
                     isCritFail = (traitRoll.originalTraitFirst === 1 && wildRoll.history[0] === 1);
-                } else isCritFail = (traitRoll.originalTraitFirst === 1);
+                } else if (traitRoll.originalTraitFirst === 1) {
+                    // SWADE: an Extra's natural 1 is only a Critical Failure if a confirming d6 also rolls 1.
+                    let confirmRoll = rollExploding(6);
+                    isCritFail = (confirmRoll.history[0] === 1);
+                    logToTerminal(`> Extra rolled natural 1 — confirming d6: ${confirmRoll.history.join(' + ')} → ${isCritFail ? "CRITICAL FAILURE CONFIRMED" : "normal failure"}`);
+                }
                 bestTotal += totalModifier;
 
                 let outcome = ""; let hasRaise = false;
