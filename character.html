@@ -363,6 +363,7 @@
                             <th>RoF</th>
                             <th>Shots</th>
                             <th>Min Str</th>
+                            <th>3RB?</th>
                             <th>Icon Image Link</th>
                             <th>Action</th>
                         </tr>
@@ -403,8 +404,23 @@
                 </select>
             </div>
             <div class="setting-row" id="scope-row" style="display:none;">
-                <span>Is Aiming? (Ignores up to 4 points of penalties)</span>
+                <span>Is Aiming? (takes your whole turn; benefit applies to your next attack)</span>
                 <input type="checkbox" id="scope-checkbox" onchange="updateRangePenalty()" style="width: 20px; height: 20px; pointer-events: auto !important;">
+            </div>
+            <div class="setting-row" id="aim-mode-row" style="display:none;">
+                <span>Aim Benefit:</span>
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                        <input type="radio" name="aim-mode" id="aim-mode-ignore" value="ignore" checked onchange="updateRangePenalty()"> Ignore up to 4 pts of penalties
+                    </label>
+                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                        <input type="radio" name="aim-mode" id="aim-mode-plus2" value="plus2" onchange="updateRangePenalty()"> +2 to your roll
+                    </label>
+                </div>
+            </div>
+            <div class="setting-row" id="aim-scope-row" style="display:none;">
+                <span>Scoped weapon? (scope cancels 2 additional pts — ignore cap 6)</span>
+                <input type="checkbox" id="aim-scope-checkbox" onchange="updateRangePenalty()" style="width: 20px; height: 20px; pointer-events: auto !important;">
             </div>
         </div>
 
@@ -421,10 +437,10 @@
                     <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
                         <input type="checkbox" id="suppressive-checkbox" onchange="updateRecoilPenalty()"> Suppressive Fire (x3 Ammo)
                     </label>
-                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                    <label id="3rb-label" style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
                         <input type="checkbox" id="3rb-checkbox" onchange="updateRecoilPenalty()"> 3-Round Burst (+1 Hit/Dmg)
                     </label>
-                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                    <label id="doubletap-label" style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
                         <input type="checkbox" id="doubletap-checkbox" onchange="updateRecoilPenalty()"> Double Tap (+1 Hit/Dmg)
                     </label>
                 </div>
@@ -515,10 +531,10 @@
             { id: "stunstick", name: "Stunstick", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", shots: "Charge 20", minStr: "d4", icon: "https://i.imgur.com/pMPZprv.png" },
             { id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", shots: "18", minStr: "d4", icon: "https://i.imgur.com/sAz8rBR.png" },
             { id: "magnum-357", name: "357 Magnum", range: "15/30/60", damage: "2d10", ap: "2", rof: "1", shots: "6", minStr: "d6", icon: "https://i.imgur.com/cLsJTiP.png" },
-            { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", shots: "30", minStr: "d6", icon: "https://i.imgur.com/oAbqfGW.png" },
+            { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", shots: "30", minStr: "d6", burst: true, icon: "https://i.imgur.com/oAbqfGW.png" },
             { id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", shots: "6", minStr: "d8", icon: "https://i.imgur.com/8ewEl7D.png" },
             { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", shots: "2", minStr: "d8", icon: "https://i.imgur.com/8ewEl7D.png" },
-            { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", shots: "30", minStr: "d6", icon: "https://i.imgur.com/3rgRKGo.png" },
+            { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", shots: "30", minStr: "d6", burst: true, icon: "https://i.imgur.com/3rgRKGo.png" },
             { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", shots: "1", minStr: "d6", icon: "https://i.imgur.com/4lFt2CC.png" },
             { id: "crossbow", name: "Crossbow", range: "24/48/96", damage: "3d10", ap: "4", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/2oHfVXb.png" },
             { id: "rpg", name: "RPG Launcher", range: "36/72/144", damage: "6d10", ap: "6", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/yyVsqkD.png" },
@@ -926,9 +942,13 @@
             }
 
             // Derived Stats Auto-Calc
-            let fightDie = charData.skills["Fighting"] ? getDieStep(charData.skills["Fighting"].die) : 4;
+            // SWADE: Parry = 2 + half Fighting die type (base 2 with NO Fighting skill).
+            // Traits above d12 add half the fixed modifier (Fighting d12+2 -> Parry 9).
+            let fightSkill = charData.skills["Fighting"];
+            let fightDie = fightSkill ? getDieStep(fightSkill.die) : 0;
+            let fightMod = fightSkill ? (parseInt(fightSkill.mod) || 0) : 0;
             let parryOverride = parseInt(charData.derived.parryOverride) || 0;
-            let calcParry = 2 + (fightDie / 2) + parryOverride;
+            let calcParry = 2 + Math.floor(fightDie / 2) + Math.floor(fightMod / 2) + parryOverride;
             charData.derived.parry = calcParry;
             
             let vigorDie = charData.attributes["Vigor"] ? getDieStep(charData.attributes["Vigor"].die) : 4;
@@ -1375,6 +1395,7 @@
                         <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="rof">${p.rof}</td>
                         <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="shots">${p.shots}</td>
                         <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="minStr">${p.minStr}</td>
+                        <td style="text-align:center;"><input type="checkbox" class="burst-toggle" data-index="${index}" ${p.burst ? "checked" : ""} style="width:18px; height:18px;" title="Has Three-Round Burst ability"></td>
                         <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="icon" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.icon}</td>
                         <td><button class="die-btn del-btn" onclick="deletePreset(${index})">DELETE</button></td>
                     </tr>`;
@@ -1388,12 +1409,19 @@
                     await saveGlobalPresets();
                 });
             });
+
+            document.querySelectorAll('.burst-toggle').forEach(el => {
+                el.addEventListener('change', async (e) => {
+                    globalState.presets[e.target.dataset.index].burst = e.target.checked;
+                    await saveGlobalPresets();
+                });
+            });
         }
 
         function addCustomPreset() {
             let id = "custom_" + Date.now();
             globalState.presets.push({
-                id: id, name: "New Weapon", range: "Melee", damage: "2d6", ap: "0", rof: "1", shots: "—", minStr: "d4", icon: "https://i.imgur.com/niLzrfW.png"
+                id: id, name: "New Weapon", range: "Melee", damage: "2d6", ap: "0", rof: "1", shots: "—", minStr: "d4", burst: false, icon: "https://i.imgur.com/niLzrfW.png"
             });
             saveGlobalPresets();
             renderMasterPresets();
@@ -1604,10 +1632,11 @@
                 localStorage.removeItem(`3rb_bonus_${storageKey}`);
             }
 
-            // Add Double Tap modifier +1 before calculating
-            let hasDTBonus = localStorage.getItem(`dt_bonus_${storageKey}`) === "true";
+            // Add Double Tap modifier before calculating (+1, or +2 on a 3RB-capable weapon)
+            let dtBonusVal = parseInt(localStorage.getItem(`dt_bonus_${storageKey}`)) || 0;
+            let hasDTBonus = dtBonusVal > 0;
             if (hasDTBonus) {
-                parsed.modifier += 1;
+                parsed.modifier += dtBonusVal;
                 localStorage.removeItem(`dt_bonus_${storageKey}`);
             }
 
@@ -1639,7 +1668,7 @@
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
-            let dtStr = hasDTBonus ? ` (Includes +1 from Double Tap)` : "";
+            let dtStr = hasDTBonus ? ` (Includes +${dtBonusVal} from Double Tap)` : "";
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
             let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
             let waStr = wildAttackDmgBonus > 0 ? ` + ${wildAttackDmgBonus} (Wild Attack)` : "";
@@ -1674,8 +1703,8 @@
                     embed.description += `\n*(Includes +1 Damage from 3-Round Burst)*`;
                 }
                 if (hasDTBonus) {
-                    embed.fields.push({ name: "Double Tap", value: "+1 Damage", inline: true });
-                    embed.description += `\n*(Includes +1 Damage from Double Tap)*`;
+                    embed.fields.push({ name: "Double Tap", value: `+${dtBonusVal} Damage`, inline: true });
+                    embed.description += `\n*(Includes +${dtBonusVal} Damage from Double Tap)*`;
                 }
                 if (jokerBonus > 0) {
                     embed.fields.push({ name: "Joker's Wild (+2)", value: "+2", inline: true });
@@ -1812,7 +1841,9 @@
                 if (wildRoll.history[0] === 1) onesCount++;
 
                 let totalDice = shotsFired + 1;
-                isCritFail = (onesCount > totalDice / 2);
+                // SWADE: with multiple dice, a Critical Failure requires more than half the
+                // dice to be natural 1s AND the Wild Die itself must be a natural 1.
+                isCritFail = (onesCount > totalDice / 2) && wildRoll.history[0] === 1;
 
                 let traitTotals = traitRolls.map(r => r.total);
                 let minVal = Math.min(...traitTotals);
@@ -1901,8 +1932,9 @@
                 }
 
                 if (hit && isDoubleTap) {
-                    localStorage.setItem(`dt_bonus_${storageKey}`, "true");
-                    logToTerminal(`> [!] DOUBLE TAP: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +1 damage bonus.`);
+                    let dtDmgBonus = (activeWeaponContext.burst === true) ? 2 : 1;
+                    localStorage.setItem(`dt_bonus_${storageKey}`, String(dtDmgBonus));
+                    logToTerminal(`> [!] DOUBLE TAP: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +${dtDmgBonus} damage bonus.`);
                 } else {
                     localStorage.removeItem(`dt_bonus_${storageKey}`);
                 }
@@ -2040,6 +2072,10 @@
             
             document.getElementById('range-select').value = "0";
             document.getElementById('scope-checkbox').checked = false;
+            document.getElementById('aim-mode-ignore').checked = true;
+            document.getElementById('aim-scope-checkbox').checked = false;
+            document.getElementById('aim-mode-row').style.display = "none";
+            document.getElementById('aim-scope-row').style.display = "none";
             document.getElementById('wild-attack-checkbox').checked = false;
 
             if (weaponObj) {
@@ -2073,6 +2109,12 @@
                         document.getElementById('suppressive-checkbox').disabled = false;
                         document.getElementById('3rb-checkbox').disabled = false;
                         document.getElementById('doubletap-checkbox').disabled = false;
+
+                        // 3RB is a weapon-specific ability; Double Tap is an Edge and requires a RoF 1 weapon
+                        const edgesNorm = (charData.edges || "").toLowerCase().replace(/[^a-z]/g, "");
+                        const hasDoubleTapEdge = edgesNorm.includes("doubletap");
+                        document.getElementById('3rb-label').style.display = (weaponObj.burst === true) ? "flex" : "none";
+                        document.getElementById('doubletap-label').style.display = (hasDoubleTapEdge && (parseInt(weaponObj.rof) || 1) === 1) ? "flex" : "none";
                         
                         const warning = document.getElementById('recoil-warning');
                         warning.style.display = 'none'; // reset visibility
@@ -2091,16 +2133,24 @@
 
         function updateRangePenalty() {
             if (!activeWeaponContext) return;
-            let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
+            // Show/hide the Aim sub-options
             let isAiming = document.getElementById('scope-checkbox').checked;
+            let aimPlus2 = document.getElementById('aim-mode-plus2').checked;
+            document.getElementById('aim-mode-row').style.display = isAiming ? "flex" : "none";
+            document.getElementById('aim-scope-row').style.display = (isAiming && !aimPlus2) ? "flex" : "none";
+            // Delegate so every modifier (range, recoil, fire modes, Aim) stays in sync
+            updateRecoilPenalty();
+        }
 
-            // SWADE: Aiming with a scope cancels up to 4 points of range penalties
-            // (2 for Aiming + 2 additional for Scope)
-            if (isAiming) {
-                rangePenalty = Math.min(0, rangePenalty + 4);
-            }
-
-            applyComputedModifiers(rangePenalty + pendingMinStrPenalty);
+        // SWADE Aim (PAGE 99): spend the whole turn Aiming; on your next turn either ignore
+        // up to 4 points of penalties (Range, Cover, Called Shot, Scale, Speed, etc.) OR add
+        // +2 to the roll. A scope cancels 2 ADDITIONAL points when Aiming (ignore cap 6).
+        function getAimAdjustments(basePenalty) {
+            let isAiming = document.getElementById('scope-checkbox').checked;
+            if (!isAiming) return { penalty: basePenalty, bonus: 0 };
+            if (document.getElementById('aim-mode-plus2').checked) return { penalty: basePenalty, bonus: 2 };
+            let hasScope = document.getElementById('aim-scope-checkbox').checked;
+            return { penalty: Math.min(0, basePenalty + (hasScope ? 6 : 4)), bonus: 0 };
         }
 
         function updateRecoilPenalty() {
@@ -2146,12 +2196,13 @@
             }
             
             let trbBonus = is3RB ? 1 : 0;
-            let dtBonus = isDT ? 1 : 0;
+            // Double Tap: +1 to hit, or +2 when the weapon also has Three-Round Burst
+            let dtBonus = isDT ? ((activeWeaponContext.burst === true) ? 2 : 1) : 0;
 
-            // Recalculate range penalty with aiming logic
+            // Aim applies to the total situational penalty (not just Range); +2 mode
+            // leaves penalties untouched and adds a flat +2 instead.
             let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
-            let isAiming = document.getElementById('scope-checkbox').checked;
-            if (isAiming) rangePenalty = Math.min(0, rangePenalty + 4);
+            let aim = getAimAdjustments(rangePenalty + recoilPenalty + pendingMinStrPenalty);
 
             const warning = document.getElementById('recoil-warning');
             if (recoilPenalty !== 0) {
@@ -2160,7 +2211,7 @@
                 warning.style.display = 'none';
             }
 
-            applyComputedModifiers(rangePenalty + recoilPenalty + trbBonus + dtBonus + pendingMinStrPenalty);
+            applyComputedModifiers(aim.penalty + aim.bonus + trbBonus + dtBonus);
         }
 
         function applyComputedModifiers(computedVal) {
@@ -2191,7 +2242,8 @@
                     bulletsExpended = 3;
                 } else if (isDoubleTap) {
                     shotsFired = 1;
-                    bulletsExpended = 2;
+                    // Double Tap costs 1 extra bullet — or expends 6 on a 3RB-capable weapon
+                    bulletsExpended = (activeWeaponContext && activeWeaponContext.burst === true) ? 6 : 2;
                 } else if (isSupp) {
                     // Fix: Suppressive Fire strictly uses 3x the max Weapon RoF 
                     let weaponRoF = parseInt(activeWeaponContext.rof) || 1;
