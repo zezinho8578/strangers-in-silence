@@ -94,6 +94,7 @@
         .badge.shaken { border-color: #ff9900; color: #ff9900; }
         .badge.distracted { border-color: #ff3333; color: #ff3333; }
         .badge.vulnerable { border-color: #00ff00; color: #00ff00; }
+        .badge.incap { border-color: #ff3333; color: #ff3333; background: rgba(255,51,51,0.2); font-weight: bold; text-transform: uppercase; }
         .badge.anytime { border-color: #ffff00; color: #ffff00; animation: pulse 1.5s infinite; }
 
         /* Detail Panel */
@@ -200,7 +201,7 @@
                         <div>
                             <button class="die-btn" onclick="adjustStat('wounds', -1)">-</button>
                             <span id="detail-wounds" style="display:inline-block; width: 30px; text-align: center;">0</span>
-                            <button class="die-btn" onclick="adjustStat('wounds', 1)">+</button>
+                            <button class="die-btn" id="btn-wounds-up" onclick="adjustStat('wounds', 1)">+</button>
                         </div>
                     </div>
                     <div class="stat-control">
@@ -208,7 +209,7 @@
                         <div>
                             <button class="die-btn" onclick="adjustStat('fatigue', -1)">-</button>
                             <span id="detail-fatigue" style="display:inline-block; width: 30px; text-align: center;">0</span>
-                            <button class="die-btn" onclick="adjustStat('fatigue', 1)">+</button>
+                            <button class="die-btn" id="btn-fatigue-up" onclick="adjustStat('fatigue', 1)">+</button>
                         </div>
                     </div>
                     
@@ -223,7 +224,7 @@
                     </div>
 
                     <div style="font-size: 0.9em; opacity: 0.8;">
-                        Parry: <span id="detail-parry">--</span> | Toughness: <span id="detail-toughness">--</span>
+                        Parry: <span id="detail-parry">--</span> | Toughness: <span id="detail-toughness">--</span> | Pace: <span id="detail-pace">--</span>
                     </div>
 
                     <div id="remove-btn-container" style="margin-top: 15px; display: none;">
@@ -393,18 +394,29 @@
             // Pull players from global characters
             if (globalState.characters) {
                 for (const [id, data] of Object.entries(globalState.characters)) {
+                    let edgesNorm = (data.edges || "").toLowerCase().replace(/[^a-z]/g, "");
+                    let woundCap = 4; // A11 Fix: Wild Cards can take 3 wounds, incap on 4th
+                    if (edgesNorm.includes("improvedtoughasnails")) woundCap = 6;
+                    else if (edgesNorm.includes("toughasnails")) woundCap = 5;
+
                     participants.push({
                         id: id,
                         name: data.name,
                         isPlayer: true,
+                        isWildCard: true, // A11 Fix
                         bennies: data.bennies || 0,
                         parry: parseInt(data.derived?.parry) || 4,
                         toughness: parseInt(data.derived?.toughness) || 4,
+                        pace: parseInt(data.derived?.pace) || 6, // A13 Fix
                         wounds: 0,
                         fatigue: 0,
+                        woundCap: woundCap, // A11 Fix
+                        incapacitated: false, // A11 Fix
                         shaken: false,
                         distracted: false,
+                        distractedTTL: 0, // A12 Fix
                         vulnerable: false,
+                        vulnerableTTL: 0, // A12 Fix
                         card: null,
                         jokerRound: null
                     });
@@ -513,9 +525,9 @@
                 }
             });
 
-            // Set active turn to the first non-Joker participant
-            let firstNonJokerIdx = combat.participants.findIndex(p => !p.card.isJoker);
-            combat.activeTurnIndex = firstNonJokerIdx !== -1 ? firstNonJokerIdx : 0;
+            // Set active turn to the first non-Joker, non-Incapacitated participant
+            let firstValidIdx = combat.participants.findIndex(p => !p.card.isJoker && !p.incapacitated);
+            combat.activeTurnIndex = firstValidIdx !== -1 ? firstValidIdx : 0;
             combat.jokerActiveIndex = -1; // Reset Joker interrupt state
 
             // Save the updated combat state (including new bennies and gmPool) to Firebase
@@ -540,10 +552,34 @@
                 return;
             }
 
-            let nextIdx = (combat.activeTurnIndex || 0) + 1;
+            // A12 Fix: Decrement TTLs for the participant whose turn is ending
+            let oldIdx = combat.activeTurnIndex || 0;
+            let oldP = combat.participants[oldIdx];
+            if (oldP) {
+                let changed = false;
+                if (oldP.distractedTTL > 0) {
+                    oldP.distractedTTL--;
+                    if (oldP.distractedTTL === 0) {
+                        oldP.distracted = false;
+                        changed = true;
+                    }
+                }
+                if (oldP.vulnerableTTL > 0) {
+                    oldP.vulnerableTTL--;
+                    if (oldP.vulnerableTTL === 0) {
+                        oldP.vulnerable = false;
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    await set(ref(db, `campaignState/combat/participants/${oldIdx}`), oldP);
+                }
+            }
+
+            let nextIdx = oldIdx + 1;
             
-            // Skip Jokers in the normal turn order progression
-            while (nextIdx < combat.participants.length && combat.participants[nextIdx].card && combat.participants[nextIdx].card.isJoker) {
+            // A11 Fix: Skip Jokers AND Incapacitated participants in the normal turn order progression
+            while (nextIdx < combat.participants.length && combat.participants[nextIdx].card && (combat.participants[nextIdx].card.isJoker || combat.participants[nextIdx].incapacitated)) {
                 nextIdx++;
             }
 
@@ -554,12 +590,12 @@
                 if (combat.round === undefined || combat.round === null) combat.round = 1;
                 else combat.round += 1;
 
-                // Cap at last non-joker
-                let lastNonJoker = combat.participants.length - 1;
-                while (lastNonJoker >= 0 && combat.participants[lastNonJoker].card && combat.participants[lastNonJoker].card.isJoker) {
-                    lastNonJoker--;
+                // Cap at last valid (non-joker, non-incapacitated)
+                let lastValid = combat.participants.length - 1;
+                while (lastValid >= 0 && combat.participants[lastValid].card && (combat.participants[lastValid].card.isJoker || combat.participants[lastValid].incapacitated)) {
+                    lastValid--;
                 }
-                combat.activeTurnIndex = lastNonJoker >= 0 ? lastNonJoker : 0;
+                combat.activeTurnIndex = lastValid >= 0 ? lastValid : 0;
                 
                 // Save BOTH the new activeTurnIndex and the new round to Firebase to instantly invalidate Jokers
                 await update(ref(db, 'campaignState/combat'), {
@@ -587,20 +623,27 @@
             if (!name) return;
             let parry = parseInt(prompt("Enter Parry:", "5")) || 5;
             let toughness = parseInt(prompt("Enter Toughness:", "6")) || 6;
+            let pace = parseInt(prompt("Enter Pace:", "6")) || 6; // A13 Fix
+            let isWildCard = confirm("Is this NPC a Wild Card? (Cancel for Extra)"); // A11 Fix
 
             let newNpc = {
                 id: "npc_" + Date.now(),
                 name: name,
                 isPlayer: false,
-                isWildCard: confirm("Is this NPC a Wild Card? (Cancel for Extra)"),
-                bennies: 0,
+                isWildCard: isWildCard,
+                bennies: isWildCard ? 3 : 0, // A11 Fix
                 parry: parry,
                 toughness: toughness,
+                pace: pace, // A13 Fix
                 wounds: 0,
                 fatigue: 0,
+                woundCap: isWildCard ? 4 : 1, // A11 Fix: WC incap on 4th, Extra on 1st
+                incapacitated: false, // A11 Fix
                 shaken: false,
                 distracted: false,
+                distractedTTL: 0, // A12 Fix
                 vulnerable: false,
+                vulnerableTTL: 0, // A12 Fix
                 card: null,
                 jokerRound: null
             };
@@ -655,11 +698,16 @@
                 let cardHtml = p.card ? `<div class="card-display ${isJoker ? 'joker-text' : ''}">${p.card.label} ${isJoker ? '[+2 ALL ROLLS]' : ''}</div>` : `<div class="card-display">Waiting for card...</div>`;
                 
                 let badges = "";
+                if (p.incapacitated) badges += `<span class="badge incap">INCAPACITATED</span>`; // A11 Fix
                 if (p.shaken) badges += `<span class="badge shaken">SHAKEN</span>`;
                 if (p.distracted) badges += `<span class="badge distracted">DISTRACTED [-2]</span>`;
                 if (p.vulnerable) badges += `<span class="badge vulnerable">VULNERABLE [+2 to be hit]</span>`;
-                let totalPenalty = (p.wounds || 0) + (p.fatigue || 0);
-                if (totalPenalty > 0) badges += `<span class="badge" style="border-color:#ff3333;">W/F PENALTY: -${totalPenalty}</span>`;
+                
+                // A13 Fix: Penalty display caps
+                let wounds = p.wounds || 0;
+                let fatigue = p.fatigue || 0;
+                let totalPenalty = Math.min(wounds, 3) + Math.min(fatigue, 2);
+                if (!p.incapacitated && totalPenalty > 0) badges += `<span class="badge" style="border-color:#ff3333;">W/F PENALTY: -${totalPenalty}</span>`;
 
                 // Add ACT ANYTIME badge for Jokers
                 let jokerBadge = isJoker ? `<span class="badge anytime">ACT ANYTIME</span>` : '';
@@ -712,8 +760,26 @@
             document.getElementById('detail-wounds').innerText = p.wounds || 0;
             document.getElementById('detail-fatigue').innerText = p.fatigue || 0;
             
-            let penalty = (p.wounds || 0) + (p.fatigue || 0);
-            document.getElementById('detail-penalty').innerText = `Penalty: -${penalty} to Trait Rolls`;
+            // A13 Fix: Penalty display caps
+            let wounds = p.wounds || 0;
+            let fatigue = p.fatigue || 0;
+            let totalPenalty = Math.min(wounds, 3) + Math.min(fatigue, 2);
+            
+            let penaltyEl = document.getElementById('detail-penalty');
+            if (p.incapacitated) {
+                penaltyEl.innerText = "INCAPACITATED";
+                penaltyEl.style.color = "#ff3333";
+                penaltyEl.style.fontWeight = "bold";
+            } else {
+                penaltyEl.innerText = `Penalty: -${totalPenalty} to Trait Rolls`;
+                penaltyEl.style.color = "var(--theme-color)";
+                penaltyEl.style.fontWeight = "normal";
+            }
+
+            // A13 Fix: Effective Pace display
+            let basePace = p.pace || 6;
+            let effPace = p.incapacitated ? 0 : Math.max(1, basePace - Math.min(wounds, 3));
+            document.getElementById('detail-pace').innerText = `${effPace} (Base: ${basePace})`;
 
             document.getElementById('detail-parry').innerText = p.parry;
             document.getElementById('detail-toughness').innerText = p.toughness;
@@ -721,6 +787,10 @@
             document.getElementById('btn-shaken').className = `die-btn ${p.shaken ? 'active-toggle' : ''}`;
             document.getElementById('btn-distracted').className = `die-btn ${p.distracted ? 'active-toggle' : ''}`;
             document.getElementById('btn-vulnerable').className = `die-btn ${p.vulnerable ? 'active-toggle' : ''}`;
+
+            // A11 Fix: Disable + buttons for wounds/fatigue if Incapacitated
+            document.getElementById('btn-wounds-up').disabled = p.incapacitated;
+            document.getElementById('btn-fatigue-up').disabled = p.incapacitated;
 
             const removeContainer = document.getElementById('remove-btn-container');
             if (removeContainer) {
@@ -741,10 +811,33 @@
             let newVal = (p[stat] || 0) + amount;
             if (newVal < 0) newVal = 0;
             
-            // SWADE Limits: Wildcards natively support Edges like Tough as Nails (up to 5 wounds)
-            // and 3 Fatigue points representing the Incapacitated state.
-            if (stat === 'wounds' && newVal > 5) newVal = 5; 
-            if (stat === 'fatigue' && newVal > 3) newVal = 3; 
+            // A11 Fix: Wound and Fatigue caps, Incapacitated state trigger
+            if (stat === 'wounds') {
+                let cap = p.woundCap || (p.isWildCard ? 4 : 1); // A11 Fix: WC incap at 4, Extra at 1
+                if (newVal >= cap) {
+                    newVal = cap;
+                    p.incapacitated = true;
+                } else {
+                    // Recover from incapacitated if fatigue isn't also at cap
+                    let fCap = 3;
+                    if ((p.fatigue || 0) < fCap) {
+                        p.incapacitated = false;
+                    }
+                }
+            } 
+            else if (stat === 'fatigue') {
+                let cap = 3;
+                if (newVal >= cap) {
+                    newVal = cap;
+                    p.incapacitated = true;
+                } else {
+                    // Recover from incapacitated if wounds aren't also at cap
+                    let wCap = p.woundCap || (p.isWildCard ? 4 : 1); // A11 Fix
+                    if ((p.wounds || 0) < wCap) {
+                        p.incapacitated = false;
+                    }
+                }
+            }
 
             p[stat] = newVal;
 
@@ -762,11 +855,23 @@
             let idx = participants.findIndex(x => x.id === selectedParticipantId);
             if (idx === -1) return;
 
-            participants[idx][status] = !participants[idx][status];
+            let p = participants[idx];
+            let isOn = !p[status];
+            p[status] = isOn;
+
+            // A12 Fix: Apply TTL counters for Distracted/Vulnerable
+            if (isOn) {
+                let ttlKey = status + "TTL";
+                // If applied during own turn, TTL=2 (clears at end of NEXT turn). If applied during others' turn, TTL=1 (clears at end of NEXT turn).
+                p[ttlKey] = (idx === globalState.combat.activeTurnIndex) ? 2 : 1;
+            } else {
+                p[status + "TTL"] = 0;
+            }
+
             await set(ref(db, 'campaignState/combat/participants'), participants);
             
-            if (participants[idx][status]) {
-                logToWebhook("STATUS UPDATE", `${participants[idx].name} is now **${status.toUpperCase()}**.`);
+            if (isOn) {
+                logToWebhook("STATUS UPDATE", `${p.name} is now **${status.toUpperCase()}**.`);
             }
         };
 
@@ -799,16 +904,16 @@
                 turnIndex = 0;
             }
             
-            // Ensure activeTurnIndex doesn't land on a Joker
-            while (turnIndex < participants.length && participants[turnIndex].card && participants[turnIndex].card.isJoker) {
+            // Ensure activeTurnIndex doesn't land on a Joker or Incapacitated participant
+            while (turnIndex < participants.length && participants[turnIndex].card && (participants[turnIndex].card.isJoker || participants[turnIndex].incapacitated)) {
                 turnIndex++;
             }
             if (turnIndex >= participants.length) {
-                let lastNonJoker = participants.length - 1;
-                while (lastNonJoker >= 0 && participants[lastNonJoker].card && participants[lastNonJoker].card.isJoker) {
-                    lastNonJoker--;
+                let lastValid = participants.length - 1;
+                while (lastValid >= 0 && participants[lastValid].card && (participants[lastValid].card.isJoker || participants[lastValid].incapacitated)) {
+                    lastValid--;
                 }
-                turnIndex = lastNonJoker >= 0 ? lastNonJoker : 0;
+                turnIndex = lastValid >= 0 ? lastValid : 0;
             }
 
             await update(ref(db, 'campaignState/combat'), {
