@@ -405,18 +405,19 @@
                         shaken: false,
                         distracted: false,
                         vulnerable: false,
-                        card: null
+                        card: null,
+                        jokerRound: null
                     });
                 }
             }
 
             const initialCombatState = {
-                round: 1,
+                round: 0, // Start at 0, dealInitiative will bump to 1 on the very first deal
                 activeTurnIndex: 0,
-                jokerActiveIndex: -1, // ADDED: Tracks when a Joker interrupts
+                jokerActiveIndex: -1,
                 deck: createDeck(),
                 needsReshuffle: false,
-                gmPool: 0, // ADDED: Villain benny pool for Joker's Wild
+                gmPool: 0,
                 participants: participants
             };
 
@@ -438,6 +439,12 @@
         window.dealInitiative = async function() {
             let combat = globalState.combat;
             
+            // Only initialize round to 1 if it's the very first deal. 
+            // nextTurn() handles the increments at the end of each round to seal the gap.
+            if (combat.round === undefined || combat.round === null || combat.round === 0) {
+                combat.round = 1;
+            }
+            
             if (combat.needsReshuffle || !combat.deck || combat.deck.length < combat.participants.length) {
                 combat.deck = createDeck();
                 combat.needsReshuffle = false;
@@ -452,9 +459,12 @@
             combat.participants.forEach(p => {
                 let drawn = combat.deck.pop();
                 p.card = drawn;
+                p.jokerRound = null; // Clear previous round's joker status
+                
                 if (drawn.isJoker) {
                     combat.needsReshuffle = true;
                     jokerDrawnBy.push(p.name);
+                    p.jokerRound = combat.round; // Store the active round on the participant!
                     
                     // Track who drew the Joker to trigger the right benny logic
                     if (p.isPlayer) {
@@ -508,9 +518,6 @@
             combat.activeTurnIndex = firstNonJokerIdx !== -1 ? firstNonJokerIdx : 0;
             combat.jokerActiveIndex = -1; // Reset Joker interrupt state
 
-            if (combat.round === undefined) combat.round = 1;
-            else combat.round += 1;
-
             // Save the updated combat state (including new bennies and gmPool) to Firebase
             await set(ref(db, 'campaignState/combat'), combat);
             
@@ -542,12 +549,24 @@
 
             if (nextIdx >= combat.participants.length) {
                 alert("Round Complete! Deal initiative for the next round.");
+                
+                // INCREMENT ROUND HERE so the gap between rounds invalidates the old Joker
+                if (combat.round === undefined || combat.round === null) combat.round = 1;
+                else combat.round += 1;
+
                 // Cap at last non-joker
                 let lastNonJoker = combat.participants.length - 1;
                 while (lastNonJoker >= 0 && combat.participants[lastNonJoker].card && combat.participants[lastNonJoker].card.isJoker) {
                     lastNonJoker--;
                 }
                 combat.activeTurnIndex = lastNonJoker >= 0 ? lastNonJoker : 0;
+                
+                // Save BOTH the new activeTurnIndex and the new round to Firebase to instantly invalidate Jokers
+                await update(ref(db, 'campaignState/combat'), {
+                    activeTurnIndex: combat.activeTurnIndex,
+                    round: combat.round
+                });
+                return;
             } else {
                 combat.activeTurnIndex = nextIdx;
             }
@@ -573,7 +592,7 @@
                 id: "npc_" + Date.now(),
                 name: name,
                 isPlayer: false,
-                isWildCard: confirm("Is this NPC a Wild Card? (Cancel for Extra)"), // ADDED: Prompt for Wild Card status
+                isWildCard: confirm("Is this NPC a Wild Card? (Cancel for Extra)"),
                 bennies: 0,
                 parry: parry,
                 toughness: toughness,
@@ -582,7 +601,8 @@
                 shaken: false,
                 distracted: false,
                 vulnerable: false,
-                card: null
+                card: null,
+                jokerRound: null
             };
 
             let participants = globalState.combat.participants || [];
@@ -619,7 +639,8 @@
             }
 
             combat.participants.forEach((p, index) => {
-                let isJoker = p.card && p.card.isJoker;
+                // FIX: Only apply Joker visual indicators if the jokerRound matches the current round
+                let isJoker = p.card && p.card.isJoker && p.jokerRound === combat.round;
                 let isActive = false;
                 
                 // Determine if this row is active
@@ -631,7 +652,7 @@
                 
                 let isSelected = p.id === selectedParticipantId;
                 
-                let cardHtml = p.card ? `<div class="card-display ${p.card.isJoker ? 'joker-text' : ''}">${p.card.label} ${p.card.isJoker ? '[+2 ALL ROLLS]' : ''}</div>` : `<div class="card-display">Waiting for card...</div>`;
+                let cardHtml = p.card ? `<div class="card-display ${isJoker ? 'joker-text' : ''}">${p.card.label} ${isJoker ? '[+2 ALL ROLLS]' : ''}</div>` : `<div class="card-display">Waiting for card...</div>`;
                 
                 let badges = "";
                 if (p.shaken) badges += `<span class="badge shaken">SHAKEN</span>`;
