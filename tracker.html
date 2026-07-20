@@ -414,6 +414,7 @@
                 activeTurnIndex: 0,
                 deck: createDeck(),
                 needsReshuffle: false,
+                gmPool: 0, // ADDED: Villain benny pool for Joker's Wild
                 participants: participants
             };
 
@@ -442,6 +443,8 @@
             }
 
             let jokerDrawnBy = [];
+            let playerDrewJoker = false;
+            let villainDrewJoker = false;
 
             // Deal cards
             combat.participants.forEach(p => {
@@ -450,8 +453,44 @@
                 if (drawn.isJoker) {
                     combat.needsReshuffle = true;
                     jokerDrawnBy.push(p.name);
+                    
+                    // Track who drew the Joker to trigger the right benny logic
+                    if (p.isPlayer) {
+                        playerDrewJoker = true;
+                    } else {
+                        villainDrewJoker = true;
+                    }
                 }
             });
+
+            // --- JOKER'S WILD BENNY DISTRIBUTION LOGIC ---
+            let playerBennyUpdates = {}; // Used to batch update character sheets
+
+            if (playerDrewJoker) {
+                // Rule: Player draws Joker -> All players get a Benny
+                combat.participants.forEach(p => {
+                    if (p.isPlayer) {
+                        p.bennies = (p.bennies || 0) + 1;
+                        playerBennyUpdates[`${p.id}/bennies`] = p.bennies; // Queue sync to character sheet
+                    }
+                });
+            }
+
+            if (villainDrewJoker) {
+                // Rule: Villain draws Joker -> +1 to GM Pool, +1 to each enemy Wild Card
+                combat.gmPool = (combat.gmPool || 0) + 1;
+                
+                combat.participants.forEach(p => {
+                    if (!p.isPlayer && p.isWildCard) {
+                        p.bennies = (p.bennies || 0) + 1;
+                    }
+                });
+            }
+
+            // Sync player bennies to their character sheets in one batched Firebase update
+            if (Object.keys(playerBennyUpdates).length > 0) {
+                await update(ref(db, 'campaignState/characters'), playerBennyUpdates);
+            }
 
             // Sort participants by Card SWADE Rules
             combat.participants.sort((a, b) => {
@@ -466,10 +505,15 @@
             if (combat.round === undefined) combat.round = 1;
             else combat.round += 1;
 
+            // Save the updated combat state (including new bennies and gmPool) to Firebase
             await set(ref(db, 'campaignState/combat'), combat);
             
             let desc = `Round ${combat.round} turn order established.`;
-            if (jokerDrawnBy.length > 0) desc += `\n**JOKER DRAWN BY: ${jokerDrawnBy.join(', ')}! (+2 to all rolls)**`;
+            if (jokerDrawnBy.length > 0) {
+                desc += `\n**JOKER DRAWN BY: ${jokerDrawnBy.join(', ')}! (+2 to all rolls)**`;
+                if (playerDrewJoker) desc += `\n*Joker's Wild: All players received a Benny!*`;
+                if (villainDrewJoker) desc += `\n*Villain Joker: GM Pool +1, Enemy Wild Cards +1 Benny!*`;
+            }
             logToWebhook(`ROUND ${combat.round} INITIATIVE`, desc);
         };
 
@@ -493,6 +537,7 @@
                 id: "npc_" + Date.now(),
                 name: name,
                 isPlayer: false,
+                isWildCard: confirm("Is this NPC a Wild Card? (Cancel for Extra)"), // ADDED: Prompt for Wild Card status
                 bennies: 0,
                 parry: parry,
                 toughness: toughness,
