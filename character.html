@@ -491,7 +491,7 @@
     <!-- Minimum Strength Warning Modal -->
     <div id="min-str-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid #ff3333; background: var(--bg-color); padding: 25px; z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(255,0,0,0.9); width: max-content; min-width: 350px; pointer-events: auto !important;">
         <h3 style="color:#ff3333; margin-top:0; border-bottom: 1px solid #ff3333; padding-bottom: 10px;">STRENGTH REQUIREMENT NOT MET</h3>
-        <p>You do not meet the minimum strength requirement for this weapon.<br>Firing it will incur <b>automatic penalties</b> to your trait roll (-1 per die step below requirement).</p>
+        <p id="min-str-modal-text">You do not meet the minimum strength requirement for this weapon.<br>Firing it will incur <b>automatic penalties</b> to your trait roll (-1 per die step below requirement).</p>
         <label style="display:inline-flex; align-items:center; gap:8px; margin: 15px 0; font-size: 0.9em; cursor:pointer; pointer-events: auto !important;">
             <input type="checkbox" id="never-show-min-str" style="width:16px; height:16px;"> Never show me again for future weapons
         </label>
@@ -595,7 +595,6 @@
         let activeWeaponIndex = -1; // NEW: Globally tracks the index of the weapon performing the action
         let isEditing = false; 
         let pendingMinStrPenalty = 0; // Auto-applied min-str penalty tracked here (ranged only)
-        let pendingMinStrDamageCap = null; // Stores the max die value for melee damage cap (e.g., 4 for d4)
         let combatParticipant = null;
         let isJoker = false;
 
@@ -668,6 +667,27 @@
             let dice = [];
             let modifier = 0;
             
+            // Determine if we need to cap dice based on Min Str
+            let damageCap = 0;
+            if (weaponObj) {
+                let rangeStr = weaponObj.range || "";
+                let isMeleeOrThrown = rangeStr.toLowerCase().includes("melee") || 
+                                      rangeStr.toLowerCase().includes("contact") ||
+                                      rangeStr.toLowerCase().includes("throw") ||
+                                      weaponObj.name.toLowerCase().includes("grenade");
+                                      
+                if (isMeleeOrThrown && weaponObj.minStr && weaponObj.minStr !== "—" && weaponObj.minStr !== "-") {
+                    let currentStrVal = parseInt(strDieRaw) || 4;
+                    let reqStrMatch = weaponObj.minStr.match(/d?(\d+)/i);
+                    if (reqStrMatch) {
+                        let reqStrVal = parseInt(reqStrMatch[1]);
+                        if (currentStrVal < reqStrVal) {
+                            damageCap = currentStrVal; // Cap at Str die value
+                        }
+                    }
+                }
+            }
+            
             tokens.forEach(token => {
                 token = token.replace(/\s/g, '');
                 let sign = token.startsWith('-') ? -1 : 1;
@@ -680,12 +700,10 @@
                     
                     // Apply melee damage cap if user's Strength is below weapon's Min Str
                     // Only cap weapon damage dice, not the Strength die itself
-                    if (pendingMinStrDamageCap !== null && pendingMinStrDamageCap > 0) {
-                        // Check if this die is part of the weapon's base damage (not Str)
-                        // We cap any weapon die that exceeds the Strength die value
-                        if (sides > pendingMinStrDamageCap) {
-                            sides = pendingMinStrDamageCap;
-                        }
+                    // The Str die is already substituted to its actual value (e.g. d4), 
+                    // so if sides === currentStrVal, it's the Str die and we DON'T cap it.
+                    if (damageCap > 0 && sides > damageCap) {
+                        sides = damageCap;
                     }
                     
                     for (let i = 0; i < count; i++) {
@@ -881,7 +899,6 @@
         let pendingMinStrCallback = null;
         function checkMinStr(weapon, callback) {
             pendingMinStrPenalty = 0;
-            pendingMinStrDamageCap = null;
 
             if (!evaluateMinStr(weapon.minStr)) {
                 return callback(); 
@@ -902,14 +919,16 @@
                                       rangeStr.toLowerCase().includes("throw") ||
                                       weapon.name.toLowerCase().includes("grenade");
                 
+                let modalTextEl = document.getElementById('min-str-modal-text');
+                
                 if (isMeleeOrThrown) {
-                    // MELEE/THROWN RULE: Damage die is capped at Strength die value
-                    // No attack roll penalty applied
-                    pendingMinStrDamageCap = currentStr; // e.g., 4 means cap at d4
-                    logToTerminal(`> [!] MELEE WEAPON UNDER STR: Damage dice capped at d${currentStr} (your Str die).`);
+                    // MELEE/THROWN RULE: Damage die is capped at Strength die value, no attack penalty
+                    modalTextEl.innerHTML = "You do not meet the minimum strength requirement for this weapon.<br>Wielding it will <b>cap your damage dice</b> at your Strength die type and you <b>do not benefit</b> from the weapon's positive abilities (Reach, Parry, etc.).";
+                    logToTerminal(`> [!] MELEE WEAPON UNDER STR: Damage dice capped at d${currentStr}. Positive abilities (Reach, Parry) suppressed.`);
                 } else {
                     // RANGED RULE: -1 attack penalty per die step below requirement
                     pendingMinStrPenalty = -(reqIdx - currIdx); // e.g. -2 for two steps below
+                    modalTextEl.innerHTML = "You do not meet the minimum strength requirement for this weapon.<br>Firing it will incur <b>automatic penalties</b> to your trait roll (-1 per die step below requirement).";
                 }
             }
 
@@ -937,7 +956,6 @@
             document.getElementById('min-str-modal').style.display = 'none';
             pendingMinStrCallback = null;
             pendingMinStrPenalty = 0;
-            pendingMinStrDamageCap = null;
         }
 
         // ==========================================
@@ -982,7 +1000,21 @@
             let fightDie = fightSkill ? getDieStep(fightSkill.die) : 0;
             let fightMod = fightSkill ? (parseInt(fightSkill.mod) || 0) : 0;
             let parryOverride = parseInt(charData.derived.parryOverride) || 0;
-            let calcParry = 2 + Math.floor(fightDie / 2) + Math.floor(fightMod / 2) + parryOverride;
+            
+            // Weapon Parry Bonus (only applied if min Str is met)
+            let weaponParryBonus = 0;
+            if (charData.weapons) {
+                charData.weapons.forEach(w => {
+                    if (w.parry) {
+                        let pBonus = parseInt(w.parry) || 0;
+                        if (pBonus > weaponParryBonus && !evaluateMinStr(w.minStr)) {
+                            weaponParryBonus = pBonus;
+                        }
+                    }
+                });
+            }
+            
+            let calcParry = 2 + Math.floor(fightDie / 2) + Math.floor(fightMod / 2) + weaponParryBonus + parryOverride;
             charData.derived.parry = calcParry;
             
             let vigorDie = charData.attributes["Vigor"] ? getDieStep(charData.attributes["Vigor"].die) : 4;
@@ -1546,7 +1578,6 @@
         // Unarmed Damage — handles dynamic formula parsing universally
         async function rollUnarmedDamage() {
             let unarmedDamageFormula = getUnarmedDamageDisplay();
-            // Unarmed is always melee, so apply damage cap if Str is below requirement (unarmed has no minStr, but we still check for consistency)
             let parsed = parseDamageFormula(unarmedDamageFormula);
             
             let rolls = [];
@@ -2084,7 +2115,6 @@
             // Reset min-str penalty for non-weapon rolls
             if (!weaponObj) {
                 pendingMinStrPenalty = 0;
-                pendingMinStrDamageCap = null;
             }
 
             pendingRoll = { name, cat };
@@ -2100,11 +2130,6 @@
                 let currentMod = parseInt(document.getElementById('mod-override-input').value) || 0;
                 document.getElementById('mod-override-input').value = currentMod + pendingMinStrPenalty;
                 logToTerminal(`> [!] STRENGTH REQUIREMENT NOT MET: Auto-applied ${pendingMinStrPenalty} penalty to attack roll.`);
-            }
-            
-            // Log melee damage cap if applicable
-            if (weaponObj && pendingMinStrDamageCap !== null && pendingMinStrDamageCap > 0) {
-                logToTerminal(`> [!] MELEE WEAPON UNDER STR: Damage dice will be capped at d${pendingMinStrDamageCap}.`);
             }
 
             const rangedOpts = document.getElementById('ranged-options-container');
@@ -2337,7 +2362,6 @@
             document.getElementById('tn-modal').style.display = 'none';
             pendingRoll = null;
             pendingMinStrPenalty = 0;
-            pendingMinStrDamageCap = null;
         }
 
         function confirmEquip() {
