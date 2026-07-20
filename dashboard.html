@@ -53,7 +53,7 @@
         displayUsername.innerText = `USER: ${currentUser.toUpperCase()}`;
 
         function getCharacterUrl(name) {
-            if (name === "Administrator") return "https://strangers-in-silence.vercel.app/character/adminview";
+            if (name === "Administrator") return "https://strangers-in-silence.vercel.app/character.html";
             let formattedName = name.toLowerCase().replace(' ', '-');
             return `https://strangers-in-silence.vercel.app/character/${formattedName}`;
         }
@@ -65,7 +65,7 @@
             // Inject GM Threat Registry Button
             const grid = document.getElementById('main-panel-grid');
             const threatBtn = document.createElement('a');
-            threatBtn.href = "https://strangers-in-silence.vercel.app/threats/adminview";
+            threatBtn.href = "https://strangers-in-silence.vercel.app/threats.html";
             threatBtn.className = "panel";
             threatBtn.style.borderColor = "#ff3333";
             threatBtn.style.color = "#ff3333";

@@ -23,7 +23,7 @@ function checkSourceInvariants() {
   assert(!files.character.includes('maxWeaponRoF'), 'character: weapon max RoF must not drive bystander threshold');
   assert(!files.threats.includes('|| isCritFail'), 'threats: crit failures must not be treated as automatic bystander hits');
   assert(files.tracker.includes('effectiveToughness = toughness + effectiveArmor'), 'tracker: damage calculator must apply armor after AP');
-  assert(files.threats.includes('effectiveToughness = toughness + effectiveArmor'), 'threats: damage calculator must apply armor after AP');
+  assert(files.threats.includes('armor: activeThreat.armor || 0'), 'threats: deployed threats must retain armor for tracker AP handling');
 }
 
 function parseDamageFormulaLikeSheet(formulaStr, strengthDie = 'd12', strengthMod = '+12') {
