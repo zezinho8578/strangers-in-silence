@@ -395,7 +395,9 @@
             
             // Pull players from global characters
             if (globalState.characters) {
-                for (const [id, data] of Object.entries(globalState.characters)) {
+                for (const [id, rawData] of Object.entries(globalState.characters)) {
+                    const data = rawData || {};
+                    const characterName = (typeof data.name === "string" && data.name.trim()) ? data.name.trim() : id;
                     let edgesNorm = (data.edges || "").toLowerCase().replace(/[^a-z]/g, "");
                     let woundCap = 4; // A11 Fix: Wild Cards can take 3 wounds, incap on 4th
                     if (edgesNorm.includes("improvedtoughasnails")) woundCap = 6;
@@ -403,7 +405,7 @@
 
                     participants.push({
                         id: id,
-                        name: data.name,
+                        name: characterName,
                         isPlayer: true,
                         isWildCard: true, // A11 Fix
                         bennies: data.bennies || 0,
