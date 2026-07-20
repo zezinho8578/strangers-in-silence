@@ -813,7 +813,9 @@
                 if (combatParticipant.shaken) statusHtml += ` <br><span style="color:#ff9900;">[ SHAKEN ]</span>`;
                 if (combatParticipant.distracted) statusHtml += ` <span style="color:#ff3333;">[ DISTRACTED ]</span>`;
                 if (combatParticipant.vulnerable) statusHtml += ` <span style="color:#00ff00;">[ VULNERABLE ]</span>`;
-                if (combatParticipant.card && combatParticipant.card.isJoker) {
+                
+                // FIX: Only apply Joker bonus if the jokerRound matches the current combat round
+                if (combatParticipant.card && combatParticipant.card.isJoker && combatParticipant.jokerRound === globalState.combat.round) {
                     statusHtml += ` <br><span style="color:#ffff00; text-shadow: 0 0 5px #ffff00;">[ JOKER'S WILD: +2 APPLIED! ]</span>`;
                     isJoker = true;
                 }
