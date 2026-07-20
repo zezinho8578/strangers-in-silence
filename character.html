@@ -582,7 +582,7 @@
         };
 
         // Determine Admin context securely
-        const isAdmin = (currentUser === "Administrator") || window.location.pathname.includes("adminview");
+        const isAdmin = (currentUser === "Administrator");
         let activeCharId = "katey-commons";
         if (currentUser && !isAdmin) {
             activeCharId = currentUser.toLowerCase().replace(' ', '-');
@@ -597,6 +597,44 @@
         let pendingMinStrPenalty = 0; // Auto-applied min-str penalty tracked here (ranged only)
         let combatParticipant = null;
         let isJoker = false;
+        let lastCombatRound = null;
+        const pendingDamagePrefix = 'pending_damage_bonus_';
+
+        function getWeaponBonusKey(weaponObj, fallback = '') {
+            return weaponObj?.id || weaponObj?.name || fallback || 'Unarmed';
+        }
+
+        function getPendingDamageBonus(key) {
+            if (!key) return {};
+            let raw = sessionStorage.getItem(`${pendingDamagePrefix}${key}`);
+            return raw ? JSON.parse(raw) : {};
+        }
+
+        function setPendingDamageBonus(key, updates) {
+            if (!key) return;
+            let current = getPendingDamageBonus(key);
+            let next = { ...current, ...updates };
+            sessionStorage.setItem(`${pendingDamagePrefix}${key}`, JSON.stringify(next));
+        }
+
+        function clearPendingDamageBonus(key, fields = null) {
+            if (!key) return;
+            if (!fields) {
+                sessionStorage.removeItem(`${pendingDamagePrefix}${key}`);
+                return;
+            }
+            let current = getPendingDamageBonus(key);
+            fields.forEach(field => delete current[field]);
+            if (Object.keys(current).length === 0) sessionStorage.removeItem(`${pendingDamagePrefix}${key}`);
+            else sessionStorage.setItem(`${pendingDamagePrefix}${key}`, JSON.stringify(current));
+        }
+
+        function clearAllPendingDamageBonuses() {
+            Object.keys(sessionStorage)
+                .filter(key => key.startsWith(pendingDamagePrefix))
+                .forEach(key => sessionStorage.removeItem(key));
+        }
+
 
         let db;
         if (isFirebaseConfigured) {
@@ -729,7 +767,11 @@
 
         // Wrapper for parseDamage that accepts weaponObj for context (passes through to parseDamageFormula)
         function parseDamageWithContext(damageStr, weaponObj) {
-            return parseDamageFormula(damageStr, weaponObj);
+            let parsed = parseDamageFormula(damageStr, weaponObj);
+            if (parsed.dice.length === 0 && parsed.modifier === 0 && !damageStr.toString().match(/\d/)) {
+                return null;
+            }
+            return parsed;
         }
 
         // Build dynamic unarmed formula display (e.g., d6+1+d4)
@@ -808,6 +850,10 @@
             }
             
             if (combatParticipant) {
+                if (lastCombatRound !== null && globalState.combat.round !== lastCombatRound) {
+                    clearAllPendingDamageBonuses();
+                }
+                lastCombatRound = globalState.combat.round;
                 hudEl.style.display = 'block';
                 let statusHtml = `Wounds: ${combatParticipant.wounds || 0} | Fatigue: ${combatParticipant.fatigue || 0}`;
                 if (combatParticipant.shaken) statusHtml += ` <br><span style="color:#ff9900;">[ SHAKEN ]</span>`;
@@ -1598,18 +1644,19 @@
             // Joker & Wild Attack Bonus
             let jokerBonus = isJoker ? 2 : 0;
             let storageKey = 'Unarmed';
-            let wildAttackDmgBonus = localStorage.getItem(`wild_attack_dmg_${storageKey}`) === "true" ? 2 : 0;
-            if (wildAttackDmgBonus) localStorage.removeItem(`wild_attack_dmg_${storageKey}`);
+            let pendingBonus = getPendingDamageBonus(storageKey);
+            let wildAttackDmgBonus = pendingBonus.wildAttack ? 2 : 0;
+            if (wildAttackDmgBonus) clearPendingDamageBonus(storageKey, ['wildAttack']);
             total += jokerBonus + wildAttackDmgBonus;
 
             // Check for raise bonus
-            let hasRaiseBonus = localStorage.getItem(`raise_bonus_${storageKey}`) === "true";
+            let hasRaiseBonus = pendingBonus.raise === true;
             let bonusRolls = [];
             if (hasRaiseBonus) {
                 let bRoll = rollExploding(6);
                 total += bRoll.total;
                 bonusRolls = bRoll.history;
-                localStorage.removeItem(`raise_bonus_${storageKey}`);
+                clearPendingDamageBonus(storageKey, ['raise']);
             }
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
@@ -1664,7 +1711,8 @@
             if (!weaponObj) return;
             let weaponName = weaponObj.name;
             let damageStr = weaponObj.damage;
-            let storageKey = index;
+            let storageKey = getWeaponBonusKey(weaponObj, index);
+            let pendingBonus = getPendingDamageBonus(storageKey);
             
             // Check if weapon is out of ammo — lock damage
             if (weaponObj) {
@@ -1695,18 +1743,18 @@
             }
 
             // Add 3-Round Burst modifier +1 before calculating
-            let has3RBBonus = localStorage.getItem(`3rb_bonus_${storageKey}`) === "true";
+            let has3RBBonus = pendingBonus.threeRoundBurst === true;
             if (has3RBBonus) {
                 parsed.modifier += 1;
-                localStorage.removeItem(`3rb_bonus_${storageKey}`);
+                clearPendingDamageBonus(storageKey, ['threeRoundBurst']);
             }
 
             // Add Double Tap modifier before calculating (+1, or +2 on a 3RB-capable weapon)
-            let dtBonusVal = parseInt(localStorage.getItem(`dt_bonus_${storageKey}`)) || 0;
+            let dtBonusVal = parseInt(pendingBonus.doubleTap) || 0;
             let hasDTBonus = dtBonusVal > 0;
             if (hasDTBonus) {
                 parsed.modifier += dtBonusVal;
-                localStorage.removeItem(`dt_bonus_${storageKey}`);
+                clearPendingDamageBonus(storageKey, ['doubleTap']);
             }
 
             parsed.dice.forEach(d => {
@@ -1720,19 +1768,19 @@
             });
             total += parsed.modifier;
 
-            let hasRaiseBonus = localStorage.getItem(`raise_bonus_${storageKey}`) === "true";
+            let hasRaiseBonus = pendingBonus.raise === true;
             let bonusRolls = [];
             if (hasRaiseBonus) {
                 let bRoll = rollExploding(6);
                 total += bRoll.total;
                 bonusRolls = bRoll.history;
-                localStorage.removeItem(`raise_bonus_${storageKey}`);
+                clearPendingDamageBonus(storageKey, ['raise']);
             }
 
             // Joker & Wild Attack Bonus
             let jokerBonus = isJoker ? 2 : 0;
-            let wildAttackDmgBonus = localStorage.getItem(`wild_attack_dmg_${storageKey}`) === "true" ? 2 : 0;
-            if (wildAttackDmgBonus) localStorage.removeItem(`wild_attack_dmg_${storageKey}`);
+            let wildAttackDmgBonus = pendingBonus.wildAttack ? 2 : 0;
+            if (wildAttackDmgBonus) clearPendingDamageBonus(storageKey, ['wildAttack']);
             total += jokerBonus + wildAttackDmgBonus;
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
@@ -1844,11 +1892,11 @@
 
             let jokerBonus = isJoker ? 2 : 0;
             let wildAttackBonus = 0;
-            let storageKey = activeWeaponIndex !== -1 ? activeWeaponIndex : (activeWeaponContext ? activeWeaponContext.name : "");
+            let storageKey = activeWeaponContext ? getWeaponBonusKey(activeWeaponContext, activeWeaponIndex) : "";
 
             if (activeWeaponContext && document.getElementById('wild-attack-checkbox').checked) {
                 wildAttackBonus = 2;
-                localStorage.setItem(`wild_attack_dmg_${storageKey}`, "true");
+                setPendingDamageBonus(storageKey, { wildAttack: true });
                 if (combatParticipant) {
                     let participants = globalState.combat.participants;
                     let pIdx = participants.findIndex(p => p.id === activeCharId);
@@ -1888,8 +1936,7 @@
             let isRanged = activeWeaponContext && !activeWeaponContext.range.toLowerCase().includes("melee") && !activeWeaponContext.range.toLowerCase().includes("contact");
 
             if (isRanged) {
-                let maxWeaponRoF = activeWeaponContext ? (parseInt(activeWeaponContext.rof) || 1) : 1;
-                if (maxWeaponRoF > 1 || isSupp || (activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun"))) {
+                if (shotsFired > 1 || isSupp || (activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun"))) {
                     bystanderThreshold = 2;
                 }
             }
@@ -1904,12 +1951,16 @@
                 let onesCount = 0;
                 traitRolls.forEach(r => { 
                     if (r.history[0] === 1) onesCount++;
-                    if (isRanged && r.history[0] <= bystanderThreshold) {
+                });
+                if (wildRoll.history[0] === 1) onesCount++;
+
+                traitRolls.forEach(r => {
+                    let skillScore = r.total + totalModifier;
+                    if (isRanged && skillScore < targetNumber && r.history[0] <= bystanderThreshold) {
                         bystanderHit = true;
                         bystanderDieVal = r.history[0];
                     }
                 });
-                if (wildRoll.history[0] === 1) onesCount++;
 
                 let totalDice = shotsFired + 1;
                 // SWADE: with multiple dice, a Critical Failure requires more than half the
@@ -1954,11 +2005,6 @@
                 let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalModifier;
                 isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
                 
-                if (isRanged && traitRoll.history[0] <= bystanderThreshold) {
-                    bystanderHit = true;
-                    bystanderDieVal = traitRoll.history[0];
-                }
-
                 let outcome = "";
                 let hasRaise = false;
 
@@ -1970,6 +2016,11 @@
                     let raises = Math.floor((bestTotal - targetNumber) / 4);
                     outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
                     if (raises > 0) hasRaise = true;
+                }
+
+                if (isRanged && bestTotal < targetNumber && traitRoll.history[0] <= bystanderThreshold && wildRoll.total + totalModifier < targetNumber) {
+                    bystanderHit = true;
+                    bystanderDieVal = traitRoll.history[0];
                 }
 
                 results.push({
@@ -1989,25 +2040,25 @@
 
             if (activeWeaponContext) {
                 if (hitWithRaise) {
-                    localStorage.setItem(`raise_bonus_${storageKey}`, "true");
+                    setPendingDamageBonus(storageKey, { raise: true });
                     logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${activeWeaponContext.name} will include +1d6 raise bonus.`);
                 } else {
-                    localStorage.removeItem(`raise_bonus_${storageKey}`);
+                    clearPendingDamageBonus(storageKey, ['raise']);
                 }
 
                 if (hit && is3RB) {
-                    localStorage.setItem(`3rb_bonus_${storageKey}`, "true");
+                    setPendingDamageBonus(storageKey, { threeRoundBurst: true });
                     logToTerminal(`> [!] 3-ROUND BURST: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +1 damage bonus.`);
                 } else {
-                    localStorage.removeItem(`3rb_bonus_${storageKey}`);
+                    clearPendingDamageBonus(storageKey, ['threeRoundBurst']);
                 }
 
                 if (hit && isDoubleTap) {
                     let dtDmgBonus = (activeWeaponContext.burst === true) ? 2 : 1;
-                    localStorage.setItem(`dt_bonus_${storageKey}`, String(dtDmgBonus));
+                    setPendingDamageBonus(storageKey, { doubleTap: dtDmgBonus });
                     logToTerminal(`> [!] DOUBLE TAP: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +${dtDmgBonus} damage bonus.`);
                 } else {
-                    localStorage.removeItem(`dt_bonus_${storageKey}`);
+                    clearPendingDamageBonus(storageKey, ['doubleTap']);
                 }
             }
 

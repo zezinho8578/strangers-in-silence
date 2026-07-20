@@ -248,6 +248,8 @@
                     <div class="calc-row">
                         <span style="width: 80px;">Dmg Roll:</span>
                         <input type="number" id="calc-damage" class="calc-input">
+                        <span style="width: 30px;">AP:</span>
+                        <input type="number" id="calc-ap" class="calc-input" value="0">
                         <button class="die-btn" onclick="calcDamage()">COMPARE TOUGHNESS</button>
                     </div>
                     <div id="calc-result">> WAITING FOR INPUT...</div>
@@ -285,7 +287,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        const isAdmin = (currentUser === "Administrator") || window.location.pathname.includes("adminview");
+        const isAdmin = (currentUser === "Administrator");
         
         let globalState = null;
         let selectedParticipantId = null;
@@ -407,6 +409,8 @@
                         bennies: data.bennies || 0,
                         parry: parseInt(data.derived?.parry) || 4,
                         toughness: parseInt(data.derived?.toughness) || 4,
+                        armor: parseInt(data.derived?.armor) || 0,
+                        scale: data.derived?.scale || "Normal",
                         pace: parseInt(data.derived?.pace) || 6, // A13 Fix
                         wounds: 0,
                         fatigue: 0,
@@ -622,7 +626,9 @@
             let name = prompt("Enter NPC/Group Name:");
             if (!name) return;
             let parry = parseInt(prompt("Enter Parry:", "5")) || 5;
-            let toughness = parseInt(prompt("Enter Toughness:", "6")) || 6;
+            let toughness = parseInt(prompt("Enter Toughness before armor:", "6")) || 6;
+            let armor = parseInt(prompt("Enter Armor:", "0")) || 0;
+            let scale = prompt("Enter Scale:", "Normal") || "Normal";
             let pace = parseInt(prompt("Enter Pace:", "6")) || 6; // A13 Fix
             let isWildCard = confirm("Is this NPC a Wild Card? (Cancel for Extra)"); // A11 Fix
 
@@ -634,6 +640,8 @@
                 bennies: isWildCard ? 3 : 0, // A11 Fix
                 parry: parry,
                 toughness: toughness,
+                armor: armor,
+                scale: scale,
                 pace: pace, // A13 Fix
                 wounds: 0,
                 fatigue: 0,
@@ -965,6 +973,7 @@
         window.calcDamage = function() {
             let targetId = document.getElementById('calc-target').value;
             let roll = parseInt(document.getElementById('calc-damage').value);
+            let ap = parseInt(document.getElementById('calc-ap').value) || 0;
             let resultBox = document.getElementById('calc-result');
 
             if (!targetId || isNaN(roll)) {
@@ -973,15 +982,19 @@
             }
 
             let target = globalState.combat.participants.find(x => x.id === targetId);
-            let toughness = parseInt(target.toughness);
+            let toughness = parseInt(target.toughness) || 0;
+            let armor = parseInt(target.armor) || 0;
+            let effectiveArmor = Math.max(0, armor - Math.max(0, ap));
+            let effectiveToughness = toughness + effectiveArmor;
+            let breakdown = `Toughness ${toughness} + Armor ${armor} − AP ${Math.max(0, ap)} = ${effectiveToughness}`;
 
             resultBox.style.borderColor = "var(--theme-color)";
 
-            if (roll < toughness) {
-                resultBox.innerHTML = `NO EFFECT. Armor/Toughness holds.`;
+            if (roll < effectiveToughness) {
+                resultBox.innerHTML = `NO EFFECT. ${breakdown}.`;
                 resultBox.style.color = "var(--theme-color)";
             } else {
-                let extra = roll - toughness;
+                let extra = roll - effectiveToughness;
                 let wounds = Math.floor(extra / 4);
 
                 let output = "";
@@ -991,7 +1004,7 @@
                     output = `Target is **SHAKEN** and takes **${wounds} WOUND(S)**!`;
                 }
                 
-                resultBox.innerHTML = output;
+                resultBox.innerHTML = `${output}<br><span style="font-size:0.9em;">${breakdown}</span>`;
                 resultBox.style.color = "#ff9900";
             }
         };
