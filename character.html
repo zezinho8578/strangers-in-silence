@@ -1854,6 +1854,8 @@
                     let pIdx = participants.findIndex(p => p.id === activeCharId);
                     if (pIdx !== -1) {
                         participants[pIdx].vulnerable = true;
+                        // A12 FIX: Apply vulnerableTTL so it expires at the end of the character's next turn
+                        participants[pIdx].vulnerableTTL = (pIdx === globalState.combat.activeTurnIndex) ? 2 : 1;
                         set(ref(db, 'campaignState/combat/participants'), participants);
                     }
                 }
