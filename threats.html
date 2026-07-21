@@ -1386,7 +1386,7 @@
                     id: "npc_" + activeTemplateId + "_" + Date.now() + "_" + i, name: baseName + suffix, isPlayer: false,
                     isWildCard: activeThreat.isWildCard, parry: activeThreat.parry, toughness: activeThreat.toughness,
                     armor: activeThreat.armor || 0, scale: activeThreat.scale || "Normal", pace: activeThreat.pace || 6,
-                    bennies: activeThreat.isWildCard ? 3 : 0,
+                    bennies: 0, // NPCs use shared GM pool
                     groupId: batchGroupId, // B14
                     groupName: baseName,   // B14
                     hasDodge: false,       // B8: defender Dodge/Deflect flag (toggled from the TN modal)
