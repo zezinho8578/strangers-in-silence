@@ -143,6 +143,24 @@
             animation: pulse 1.5s infinite;
         }
 
+        /* B14: Group header + nested member rows */
+        .group-header-row {
+            background: rgba(255, 153, 0, 0.08);
+            border: 1px dashed rgba(255, 153, 0, 0.5);
+            cursor: default;
+        }
+
+        .group-header-row:hover {
+            background: rgba(255, 153, 0, 0.08);
+            border-color: rgba(255, 153, 0, 0.5);
+        }
+
+        .nested-member {
+            margin-left: 22px;
+            border-left: 2px solid rgba(255, 153, 0, 0.35);
+            padding-left: 10px;
+        }
+
         /* Status Badges */
         .badge {
             display: inline-block;
@@ -364,6 +382,13 @@
         </div>
         <div class="tracker-header">
             <span id="round-display">ROUND: --</span>
+            <!-- B3: GM Benny Pool -->
+            <span id="gm-pool-display" style="display: none; align-items: center; gap: 6px;">
+                GM POOL:
+                <button class="die-btn" style="padding: 2px 8px;" onclick="adjustGmPool(-1)">-</button>
+                <span id="gm-pool-count" style="display:inline-block; min-width: 24px; text-align: center;">0</span>
+                <button class="die-btn" style="padding: 2px 8px;" onclick="adjustGmPool(1)">+</button>
+            </span>
             <span id="deck-display">ACTIVE DECK: --/54 CARDS</span>
         </div>
         <div id="recovery-banner"
@@ -428,6 +453,14 @@
                             onclick="rollRecovery()">ROLL SPIRIT RECOVERY</button>
                         <button id="btn-soak" class="die-btn" style="flex-grow: 1;" onclick="soakWounds()">SOAK (1
                             BENNY)</button>
+                    </div>
+                    <!-- B3: Benny Unshake + Draw New Card -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button id="btn-unshake" class="die-btn"
+                            style="flex-grow: 1; border-color: #ffff00; color: #ffff00; display: none;"
+                            onclick="unshakeWithBenny()">BENNY: UNSHAKE</button>
+                        <button id="btn-newcard" class="die-btn" style="flex-grow: 1; display: none;"
+                            onclick="drawNewCard()">NEW CARD (1 BENNY)</button>
                     </div>
                     <!-- B5: On Hold controls -->
                     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
@@ -497,6 +530,9 @@
                     <button class="die-btn" id="btn-next-turn" onclick="nextTurn()">NEXT TURN ></button>
                     <button class="die-btn" onclick="dealInitiative()">DEAL INITIATIVE</button>
                     <button class="die-btn" onclick="addNpc()">+ ADD EXTRA</button>
+                    <!-- B14: GM toggle for shared group cards -->
+                    <button class="die-btn" id="btn-group-toggle" onclick="toggleGroupExtras()">GROUP EXTRAS:
+                        ON</button>
                     <button class="die-btn" onclick="endCombat()" style="border-color: #ff3333; color: #ff3333;">END
                         COMBAT</button>
                 </div>
@@ -562,12 +598,10 @@
             const ui = document.getElementById('combat-ui');
             const countdownEl = document.getElementById('countdown-text');
             if (globalState.combatActive) {
-                // Combat is ON
                 screen.style.display = 'none';
                 ui.style.display = 'block';
                 if (countdownTimer) clearInterval(countdownTimer);
             } else {
-                // Combat is OFF
                 ui.style.display = 'none';
                 screen.style.display = 'flex';
                 if (isAdmin) {
@@ -618,10 +652,8 @@
                     });
                 });
             });
-            // Add Jokers
             deck.push({ label: `Red Joker 🃏`, rank: 15, suit: 5, isJoker: true });
             deck.push({ label: `Black Joker 🃏`, rank: 15, suit: 5, isJoker: true });
-            // Fisher-Yates Shuffle
             for (let i = deck.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -643,6 +675,32 @@
                 return a.suit - b.suit;
             });
             return sorted[0];
+        }
+        // ==========================================
+        // B14. GROUP HELPERS — Extras share one Action Card per squad (p.94)
+        // ==========================================
+        function isGroupableParticipant(p, groupOn) {
+            return groupOn && p.groupId && !p.isWildCard && !p.isPlayer;
+        }
+        // Build the list of "dealing units": each player and Wild Card is its own unit;
+        // grouped Extras collapse into one unit per groupId. Used for both the reshuffle
+        // count and the actual deal, so the deck can never run dry mid-deal.
+        function buildDealingPlan(combat) {
+            let groupOn = combat.groupExtras !== false;
+            let plan = [];
+            let seenGroups = {};
+            combat.participants.forEach(p => {
+                if (isGroupableParticipant(p, groupOn)) {
+                    if (!seenGroups[p.groupId]) {
+                        seenGroups[p.groupId] = { type: 'group', groupId: p.groupId, members: [] };
+                        plan.push(seenGroups[p.groupId]);
+                    }
+                    seenGroups[p.groupId].members.push(p);
+                } else {
+                    plan.push({ type: 'single', participant: p });
+                }
+            });
+            return plan;
         }
         // ==========================================
         // B5. MODAL HELPERS (Level Headed picker + Quick redraw)
@@ -687,17 +745,16 @@
         // ==========================================
         window.initializeCombat = async function () {
             let participants = [];
-            // Pull players from global characters
+            let playerCount = 0;
             if (globalState.characters) {
                 for (const [id, rawData] of Object.entries(globalState.characters)) {
                     const data = rawData || {};
                     const characterName = (typeof data.name === "string" && data.name.trim()) ? data.name.trim() : id;
                     let edgesNorm = (data.edges || "").toLowerCase().replace(/[^a-z]/g, "");
-                    let woundCap = 4; // A11 Fix: Wild Cards can take 3 wounds, incap on 4th
+                    let woundCap = 4;
                     if (edgesNorm.includes("improvedtoughasnails")) woundCap = 6;
                     else if (edgesNorm.includes("toughasnails")) woundCap = 5;
                     // B5: Detect initiative Edges/Hindrances from the sheet's edges text.
-                    // "Quick" uses a word-boundary regex (and excludes "Quick Draw") to avoid false positives.
                     let edgesLower = (data.edges || "").toLowerCase();
                     let hasQuick = /\bquick\b/.test(edgesLower) && !/\bquick\s*draw\b/.test(edgesLower);
                     let initFlags = {
@@ -710,44 +767,46 @@
                         id: id,
                         name: characterName,
                         isPlayer: true,
-                        isWildCard: true, // A11 Fix
+                        isWildCard: true,
                         bennies: data.bennies || 0,
                         parry: parseInt(data.derived?.parry) || 4,
                         toughness: parseInt(data.derived?.toughness) || 4,
                         armor: parseInt(data.derived?.armor) || 0,
                         scale: data.derived?.scale || "Normal",
-                        pace: parseInt(data.derived?.pace) || 6, // A13 Fix
+                        pace: parseInt(data.derived?.pace) || 6,
                         wounds: 0,
                         fatigue: 0,
-                        woundCap: woundCap, // A11 Fix
-                        incapacitated: false, // A11 Fix
+                        woundCap: woundCap,
+                        incapacitated: false,
                         shaken: false,
                         distracted: false,
-                        distractedTTL: 0, // A12 Fix
+                        distractedTTL: 0,
                         vulnerable: false,
-                        vulnerableTTL: 0, // A12 Fix
+                        vulnerableTTL: 0,
                         initFlags: initFlags, // B5
                         onHold: false, // B5
                         card: null,
                         jokerRound: null
                     });
+                    playerCount++;
                 }
             }
             const initialCombatState = {
-                round: 0, // Start at 0, dealInitiative will bump to 1 on the very first deal
+                round: 0,
                 activeTurnIndex: 0,
                 jokerActiveIndex: -1,
                 holdActiveIndex: -1, // B5
                 deck: createDeck(),
                 needsReshuffle: false,
-                gmPool: 0,
+                gmPool: playerCount, // B3: GM starts with 1 Benny per player (p.91)
+                groupExtras: true, // B14: Extras share one card per squad by default
                 participants: participants
             };
             await update(ref(db, 'campaignState'), {
                 combatActive: true,
                 combat: initialCombatState
             });
-            logToWebhook("TACTICAL ENGAGEMENT INITIATED", "Combat has begun.");
+            logToWebhook("TACTICAL ENGAGEMENT INITIATED", `Combat has begun. GM Benny Pool seeded with **${playerCount}** (1 per player).`);
         };
         window.endCombat = async function () {
             if (confirm("End combat? This will wipe the tracker and return players to dashboard.")) {
@@ -758,23 +817,28 @@
         };
         window.dealInitiative = async function () {
             let combat = globalState.combat;
-            // Only initialize round to 1 if it's the very first deal.
-            // nextTurn() handles the increments at the end of each round to seal the gap.
             if (combat.round === undefined || combat.round === null || combat.round === 0) {
                 combat.round = 1;
             }
             // B5: A new deal ends any pending Hold and resets the interrupt slot
             combat.holdActiveIndex = -1;
             combat.participants.forEach(p => { p.onHold = false; });
-            // B5: Compute total cards needed so the reshuffle check accounts for multi-card draws
+            // B14: Build dealing units (grouped Extras share one card)
+            let plan = buildDealingPlan(combat);
+            // B5 + B14: Compute total cards needed so the reshuffle check is accurate.
+            // Group units need exactly 1 card; single units depend on their initiative flags.
             let totalNeeded = 0;
-            combat.participants.forEach(p => {
-                let f = p.initFlags || {};
-                if (f.hesitant) totalNeeded += 2;
-                else if (f.improvedLevelHeaded) totalNeeded += 3;
-                else if (f.levelHeaded) totalNeeded += 2;
-                else totalNeeded += 1;
-                if (f.quick) totalNeeded += 1; // Quick may need one extra card
+            plan.forEach(unit => {
+                if (unit.type === 'group') {
+                    totalNeeded += 1;
+                } else {
+                    let f = unit.participant.initFlags || {};
+                    if (f.hesitant) totalNeeded += 2;
+                    else if (f.improvedLevelHeaded) totalNeeded += 3;
+                    else if (f.levelHeaded) totalNeeded += 2;
+                    else totalNeeded += 1;
+                    if (f.quick) totalNeeded += 1;
+                }
             });
             if (combat.needsReshuffle || !combat.deck || combat.deck.length < totalNeeded) {
                 combat.deck = createDeck();
@@ -784,59 +848,77 @@
             let jokerDrawnBy = [];
             let playerDrewJoker = false;
             let villainDrewJoker = false;
-            // B5: Deal cards one combatant at a time so Hesitant / Level Headed / Quick resolve correctly
-            for (let p of combat.participants) {
-                let f = p.initFlags || {};
-                let finalCard = null;
-                if (f.hesitant) {
-                    // HESITANT (Minor, p.27): draw two, act on the lowest. A Joker overrides.
-                    let drawn = [drawCard(combat), drawCard(combat)];
-                    let jokerCard = drawn.find(c => c.isJoker);
-                    finalCard = jokerCard ? jokerCard : pickLowest(drawn);
-                } else if (f.improvedLevelHeaded || f.levelHeaded) {
-                    // LEVEL HEADED (p.45): draw an extra card and choose. Improved draws two extra.
-                    let count = f.improvedLevelHeaded ? 3 : 2;
-                    let drawn = [];
-                    for (let i = 0; i < count; i++) drawn.push(drawCard(combat));
-                    let chosenIdx = await showCardPicker(drawn, p.name, f.improvedLevelHeaded);
-                    finalCard = drawn[chosenIdx];
-                } else {
-                    finalCard = drawCard(combat);
-                }
-                // QUICK (p.45): may redraw any card of Five or lower (one redraw).
-                if (f.quick && finalCard && !finalCard.isJoker && finalCard.rank <= 5) {
-                    let redraw = await showYesNo(`${p.name} drew the ${finalCard.label} and has QUICK. Redraw it?`);
-                    if (redraw) {
+            // Deal one card per dealing unit. Single units apply Hesitant / Level Headed /
+            // Quick; group units give the SAME card to every member.
+            for (let unit of plan) {
+                if (unit.type === 'single') {
+                    let p = unit.participant;
+                    let f = p.initFlags || {};
+                    let finalCard = null;
+                    if (f.hesitant) {
+                        // HESITANT (p.27): draw two, act on the lowest. A Joker overrides.
+                        let drawn = [drawCard(combat), drawCard(combat)];
+                        let jokerCard = drawn.find(c => c.isJoker);
+                        finalCard = jokerCard ? jokerCard : pickLowest(drawn);
+                    } else if (f.improvedLevelHeaded || f.levelHeaded) {
+                        // LEVEL HEADED (p.45): draw extra card(s) and choose.
+                        let count = f.improvedLevelHeaded ? 3 : 2;
+                        let drawn = [];
+                        for (let i = 0; i < count; i++) drawn.push(drawCard(combat));
+                        let chosenIdx = await showCardPicker(drawn, p.name, f.improvedLevelHeaded);
+                        finalCard = drawn[chosenIdx];
+                    } else {
                         finalCard = drawCard(combat);
                     }
-                }
-                p.card = finalCard;
-                p.jokerRound = null; // Clear previous round's joker status
-                if (finalCard.isJoker) {
-                    combat.needsReshuffle = true;
-                    jokerDrawnBy.push(p.name);
-                    p.jokerRound = combat.round; // Store the active round on the participant!
-                    // Track who drew the Joker to trigger the right benny logic
-                    if (p.isPlayer) {
-                        playerDrewJoker = true;
-                    } else {
-                        villainDrewJoker = true;
+                    // QUICK (p.45): may redraw any card of Five or lower (one redraw).
+                    if (f.quick && finalCard && !finalCard.isJoker && finalCard.rank <= 5) {
+                        let redraw = await showYesNo(`${p.name} drew the ${finalCard.label} and has QUICK. Redraw it?`);
+                        if (redraw) {
+                            finalCard = drawCard(combat);
+                        }
+                    }
+                    p.card = finalCard;
+                    p.jokerRound = null;
+                    if (finalCard.isJoker) {
+                        combat.needsReshuffle = true;
+                        jokerDrawnBy.push(p.name);
+                        p.jokerRound = combat.round;
+                        if (p.isPlayer) {
+                            playerDrewJoker = true;
+                        } else if (p.isWildCard) {
+                            // B14: only Wild Card villains hand out bennies; Extras do not
+                            villainDrewJoker = true;
+                        }
+                    }
+                } else {
+                    // B14: Group — same card object to every member
+                    let drawn = drawCard(combat);
+                    unit.members.forEach(p => {
+                        p.card = drawn;
+                        p.jokerRound = null;
+                        if (drawn.isJoker) {
+                            p.jokerRound = combat.round; // whole squad may act any time
+                        }
+                    });
+                    if (drawn.isJoker) {
+                        combat.needsReshuffle = true;
+                        let label = unit.members[0].groupName || unit.members[0].name;
+                        jokerDrawnBy.push(`${label} squad`);
+                        // Extras drawing a Joker get act-anytime but do NOT give out bennies
                     }
                 }
             }
             // --- JOKER'S WILD BENNY DISTRIBUTION LOGIC ---
-            let playerBennyUpdates = {}; // Used to batch update character sheets
+            let playerBennyUpdates = {};
             if (playerDrewJoker) {
-                // Rule: Player draws Joker -> All players get a Benny
                 combat.participants.forEach(p => {
                     if (p.isPlayer) {
                         p.bennies = (p.bennies || 0) + 1;
-                        playerBennyUpdates[`${p.id}/bennies`] = p.bennies; // Queue sync to character sheet
+                        playerBennyUpdates[`${p.id}/bennies`] = p.bennies;
                     }
                 });
             }
             if (villainDrewJoker) {
-                // Rule: Villain draws Joker -> +1 to GM Pool, +1 to each enemy Wild Card
                 combat.gmPool = (combat.gmPool || 0) + 1;
                 combat.participants.forEach(p => {
                     if (!p.isPlayer && p.isWildCard) {
@@ -844,24 +926,22 @@
                     }
                 });
             }
-            // Sync player bennies to their character sheets in one batched Firebase update
             if (Object.keys(playerBennyUpdates).length > 0) {
                 await update(ref(db, 'campaignState/characters'), playerBennyUpdates);
             }
-            // Sort participants by Card SWADE Rules
+            // Sort by card (SWADE). JS sort is stable, so group members holding the
+            // identical card stay adjacent and keep their relative order.
             combat.participants.sort((a, b) => {
                 if (b.card.rank !== a.card.rank) {
-                    return b.card.rank - a.card.rank; // Highest rank first
+                    return b.card.rank - a.card.rank;
                 } else {
-                    return b.card.suit - a.card.suit; // Tie-breaker by suit
+                    return b.card.suit - a.card.suit;
                 }
             });
-            // Set active turn to the first non-Joker, non-Incapacitated, non-Holding participant
-            let firstValidIdx = combat.participants.findIndex(p => !p.card.isJoker && !p.incapacitated && !p.onHold);
+            let firstValidIdx = combat.participants.findIndex(p => !p.card.isJoker && !p.incapacitated);
             combat.activeTurnIndex = firstValidIdx !== -1 ? firstValidIdx : 0;
-            combat.jokerActiveIndex = -1; // Reset Joker interrupt state
-            combat.holdActiveIndex = -1; // B5: Reset Hold interrupt state
-            // Save the updated combat state (including new bennies and gmPool) to Firebase
+            combat.jokerActiveIndex = -1;
+            combat.holdActiveIndex = -1; // B5
             await set(ref(db, 'campaignState/combat'), combat);
             let desc = `Round ${combat.round} turn order established.`;
             if (jokerDrawnBy.length > 0) {
@@ -914,16 +994,13 @@
             }
             if (nextIdx >= combat.participants.length) {
                 alert("Round Complete! Deal initiative for the next round.");
-                // INCREMENT ROUND HERE so the gap between rounds invalidates the old Joker
                 if (combat.round === undefined || combat.round === null) combat.round = 1;
                 else combat.round += 1;
-                // Cap at last valid (non-joker, non-incapacitated, non-holding)
                 let lastValid = combat.participants.length - 1;
                 while (lastValid >= 0 && combat.participants[lastValid].card && (combat.participants[lastValid].card.isJoker || combat.participants[lastValid].incapacitated || combat.participants[lastValid].onHold)) {
                     lastValid--;
                 }
                 combat.activeTurnIndex = lastValid >= 0 ? lastValid : 0;
-                // Save BOTH the new activeTurnIndex and the new round to Firebase to instantly invalidate Jokers
                 await update(ref(db, 'campaignState/combat'), {
                     activeTurnIndex: combat.activeTurnIndex,
                     round: combat.round
@@ -965,7 +1042,6 @@
             if (idx === -1) return;
             let p = participants[idx];
             if (!p.onHold) return;
-            // Reinsert before the pending turn: they interrupt now, then play resumes where it was
             p.onHold = false;
             combat.holdActiveIndex = idx;
             await set(ref(db, 'campaignState/combat'), combat);
@@ -981,6 +1057,86 @@
             p.initFlags[flag] = val;
             await set(ref(db, 'campaignState/combat/participants'), participants);
         };
+        // ==========================================
+        // B14. GM TOGGLE — grouped Extras share one card (ON) or each gets their own (OFF)
+        // ==========================================
+        window.toggleGroupExtras = async function () {
+            let combat = globalState.combat;
+            let currentlyOn = combat.groupExtras !== false;
+            await set(ref(db, 'campaignState/combat/groupExtras'), !currentlyOn);
+        };
+        // ==========================================
+        // B3. GM BENNY POOL — manual adjust (GM only)
+        // ==========================================
+        window.adjustGmPool = async function (amount) {
+            if (!isAdmin) return;
+            if (!globalState.combat) return;
+            let newPool = (globalState.combat.gmPool || 0) + amount;
+            if (newPool < 0) newPool = 0;
+            await set(ref(db, 'campaignState/combat/gmPool'), newPool);
+        };
+        // ==========================================
+        // B3. UNSHAKE WITH A BENNY (p.92) — from the tracker detail panel
+        // ==========================================
+        window.unshakeWithBenny = async function () {
+            if (!selectedParticipantId || !globalState.combat || !globalState.combat.participants) return;
+            let participants = globalState.combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+            if (!p.shaken) return;
+            if ((p.bennies || 0) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
+            p.bennies = (p.bennies || 0) - 1;
+            p.shaken = false;
+            if (p.isPlayer) {
+                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
+            }
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+            logToWebhook("BENNY: UNSHAKE", `${p.name} spent a Benny to remove **SHAKEN** instantly. May act normally.`);
+        };
+        // ==========================================
+        // B3. DRAW A NEW ACTION CARD (p.92)
+        // ==========================================
+        window.drawNewCard = async function () {
+            if (!selectedParticipantId || !globalState.combat || !globalState.combat.participants) return;
+            let combat = globalState.combat;
+            let participants = combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+            if (!p.card) { alert("Cards have not been dealt yet. Deal initiative first."); return; }
+            if ((p.bennies || 0) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
+            if (!combat.deck || combat.deck.length === 0) { alert("The deck is empty. Reshuffle is pending — deal initiative next round."); return; }
+            let activeId = null;
+            let jokerActiveId = null;
+            if (combat.activeTurnIndex >= 0 && combat.activeTurnIndex < participants.length) {
+                activeId = participants[combat.activeTurnIndex].id;
+            }
+            if (combat.jokerActiveIndex >= 0 && combat.jokerActiveIndex < participants.length) {
+                jokerActiveId = participants[combat.jokerActiveIndex].id;
+            }
+            let oldCard = p.card;
+            p.bennies = (p.bennies || 0) - 1;
+            p.card = combat.deck.pop();
+            p.jokerRound = null;
+            if (p.card.isJoker) {
+                combat.needsReshuffle = true;
+                p.jokerRound = combat.round;
+            }
+            if (p.isPlayer) {
+                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
+            }
+            participants.sort((a, b) => {
+                if (b.card.rank !== a.card.rank) return b.card.rank - a.card.rank;
+                return b.card.suit - a.card.suit;
+            });
+            let newActiveIdx = participants.findIndex(x => x.id === activeId);
+            let newJokerIdx = jokerActiveId ? participants.findIndex(x => x.id === jokerActiveId) : -1;
+            combat.activeTurnIndex = newActiveIdx !== -1 ? newActiveIdx : 0;
+            combat.jokerActiveIndex = newJokerIdx;
+            await set(ref(db, 'campaignState/combat'), combat);
+            logToWebhook("NEW ACTION CARD", `${p.name} spent a Benny to redraw. Discarded **${oldCard.label}**, drew **${p.card.label}**. Turn order re-sorted.`);
+        };
         window.addNpc = async function () {
             let name = prompt("Enter NPC/Group Name:");
             if (!name) return;
@@ -988,28 +1144,28 @@
             let toughness = parseInt(prompt("Enter Toughness before armor:", "6")) || 6;
             let armor = parseInt(prompt("Enter Armor:", "0")) || 0;
             let scale = prompt("Enter Scale:", "Normal") || "Normal";
-            let pace = parseInt(prompt("Enter Pace:", "6")) || 6; // A13 Fix
-            let isWildCard = confirm("Is this NPC a Wild Card? (Cancel for Extra)"); // A11 Fix
+            let pace = parseInt(prompt("Enter Pace:", "6")) || 6;
+            let isWildCard = confirm("Is this NPC a Wild Card? (Cancel for Extra)");
             let newNpc = {
                 id: "npc_" + Date.now(),
                 name: name,
                 isPlayer: false,
                 isWildCard: isWildCard,
-                bennies: isWildCard ? 3 : 0, // A11 Fix
+                bennies: isWildCard ? 3 : 0,
                 parry: parry,
                 toughness: toughness,
                 armor: armor,
                 scale: scale,
-                pace: pace, // A13 Fix
+                pace: pace,
                 wounds: 0,
                 fatigue: 0,
-                woundCap: isWildCard ? 4 : 1, // A11 Fix: WC incap on 4th, Extra on 1st
-                incapacitated: false, // A11 Fix
+                woundCap: isWildCard ? 4 : 1,
+                incapacitated: false,
                 shaken: false,
                 distracted: false,
-                distractedTTL: 0, // A12 Fix
+                distractedTTL: 0,
                 vulnerable: false,
-                vulnerableTTL: 0, // A12 Fix
+                vulnerableTTL: 0,
                 initFlags: { hesitant: false, quick: false, levelHeaded: false, improvedLevelHeaded: false }, // B5
                 onHold: false, // B5
                 card: null,
@@ -1024,11 +1180,19 @@
         // ==========================================
         function renderCombatUI() {
             let combat = globalState.combat;
+            let groupOn = combat.groupExtras !== false; // B14
             document.getElementById('round-display').innerText = `ROUND: ${combat.round || 1}`;
             document.getElementById('deck-display').innerText = `ACTIVE DECK: ${combat.deck ? combat.deck.length : 0}/54 CARDS${combat.needsReshuffle ? ' [RESHUFFLE PENDING]' : ''}`;
+            // B3: GM Pool display
+            let gmPoolWrap = document.getElementById('gm-pool-display');
+            gmPoolWrap.style.display = 'flex';
+            document.getElementById('gm-pool-count').innerText = combat.gmPool || 0;
+            gmPoolWrap.querySelectorAll('.die-btn').forEach(b => { b.style.display = isAdmin ? 'inline-block' : 'none'; });
+            // B14: keep the toggle button label in sync
+            let groupToggleBtn = document.getElementById('btn-group-toggle');
+            if (groupToggleBtn) groupToggleBtn.innerText = `GROUP EXTRAS: ${groupOn ? 'ON' : 'OFF'}`;
             const container = document.getElementById('participants-container');
             const targetSelect = document.getElementById('calc-target');
-            // Preserve target select value if it exists
             let prevTarget = targetSelect.value;
             container.innerHTML = '';
             targetSelect.innerHTML = '<option value="">-- Select Target --</option>';
@@ -1056,6 +1220,12 @@
                     nextTurnBtn.innerText = "NEXT TURN >";
                 }
             }
+            // B14: groupId of the currently-active participant (to highlight its squad header)
+            let activeGroupId = null;
+            if (groupOn && activeP && activeP.groupId && !activeP.isWildCard && !activeP.isPlayer) {
+                activeGroupId = activeP.groupId;
+            }
+            let renderedGroups = new Set();
             combat.participants.forEach((p, index) => {
                 // FIX: Only apply Joker visual indicators if the jokerRound matches the current round
                 let isJoker = p.card && p.card.isJoker && p.jokerRound === combat.round;
@@ -1069,30 +1239,67 @@
                     isActive = (index === combat.activeTurnIndex);
                 }
                 let isSelected = p.id === selectedParticipantId;
-                let cardHtml = p.card ? `<div class="card-display ${isJoker ? 'joker-text' : ''}">${p.card.label} ${isJoker ? '[+2 ALL ROLLS]' : ''}</div>` : `<div class="card-display">Waiting for card...</div>`;
+                let isGrouped = isGroupableParticipant(p, groupOn); // B14
+                // Status badges (shared by grouped and ungrouped rows)
                 let badges = "";
-                if (p.incapacitated) badges += `<span class="badge incap">INCAPACITATED</span>`; // A11 Fix
+                if (p.incapacitated) badges += `<span class="badge incap">INCAPACITATED</span>`;
                 if (p.onHold) badges += `<span class="badge onhold">ON HOLD</span>`; // B5
                 if (p.shaken) badges += `<span class="badge shaken">SHAKEN</span>`;
                 if (p.distracted) badges += `<span class="badge distracted">DISTRACTED [-2]</span>`;
                 if (p.vulnerable) badges += `<span class="badge vulnerable">VULNERABLE [+2 to be hit]</span>`;
-                // A13 Fix: Penalty display caps
                 let wounds = p.wounds || 0;
                 let fatigue = p.fatigue || 0;
                 let totalPenalty = Math.min(wounds, 3) + Math.min(fatigue, 2);
                 if (!p.incapacitated && totalPenalty > 0) badges += `<span class="badge" style="border-color:#ff3333;">W/F PENALTY: -${totalPenalty}</span>`;
-                // Add ACT ANYTIME badge for Jokers
                 let jokerBadge = isJoker ? `<span class="badge anytime">ACT ANYTIME</span>` : '';
-                // Add GM Interrupt Controls for Jokers
-                let jokerBtnHtml = '';
-                if (isJoker && isAdmin) {
-                    if (combat.jokerActiveIndex === index) {
-                        jokerBtnHtml = `<button class="die-btn" style="font-size: 0.75em; padding: 2px 8px; margin-top: 5px; width: 100%; box-sizing: border-box;" onclick="event.stopPropagation(); endJokerInterrupt()">END INTERRUPT</button>`;
-                    } else if (!idxValid(combat.jokerActiveIndex)) {
-                        jokerBtnHtml = `<button class="die-btn" style="font-size: 0.75em; padding: 2px 8px; margin-top: 5px; width: 100%; box-sizing: border-box;" onclick="event.stopPropagation(); jokerTakeTurn(${index})">RESOLVE INTERRUPT</button>`;
+                if (isGrouped) {
+                    // B14: Emit the squad header once, the first time we hit one of its members
+                    if (!renderedGroups.has(p.groupId)) {
+                        renderedGroups.add(p.groupId);
+                        let memberCount = combat.participants.filter(m => m.groupId === p.groupId).length;
+                        let groupLabel = (p.groupName || p.name).toUpperCase();
+                        let headerActive = (p.groupId === activeGroupId);
+                        let groupCardHtml = p.card ? `<div class="card-display ${isJoker ? 'joker-text' : ''}">${p.card.label} ${isJoker ? '[+2 ALL ROLLS]' : ''} [SHARED]</div>` : `<div class="card-display">Waiting for card...</div>`;
+                        // Group-level Joker interrupt control (the squad acts as one on a Joker)
+                        let groupJokerBtn = '';
+                        if (isJoker && isAdmin) {
+                            let interruptingThisGroup = idxValid(combat.jokerActiveIndex) && combat.participants[combat.jokerActiveIndex] && combat.participants[combat.jokerActiveIndex].groupId === p.groupId;
+                            let firstMemberIdx = combat.participants.findIndex(m => m.groupId === p.groupId);
+                            if (interruptingThisGroup) {
+                                groupJokerBtn = `<button class="die-btn" style="font-size: 0.75em; padding: 2px 8px; margin-top: 5px; width: 100%; box-sizing: border-box;" onclick="event.stopPropagation(); endJokerInterrupt()">END INTERRUPT</button>`;
+                            } else if (!idxValid(combat.jokerActiveIndex)) {
+                                groupJokerBtn = `<button class="die-btn" style="font-size: 0.75em; padding: 2px 8px; margin-top: 5px; width: 100%; box-sizing: border-box;" onclick="event.stopPropagation(); jokerTakeTurn(${firstMemberIdx})">RESOLVE INTERRUPT</button>`;
+                            }
+                        }
+                        container.innerHTML += `
+<div class="participant-row group-header-row ${headerActive ? 'active-turn' : ''}">
+<div style="font-weight: bold;">
+${headerActive ? '[>] ' : ''}${groupLabel} SQUAD (${memberCount} UNITS)
+</div>
+${groupCardHtml}
+${groupJokerBtn}
+</div>`;
                     }
-                }
-                container.innerHTML += `
+                    // B14: Nested member row — no card here, it lives on the squad header
+                    container.innerHTML += `
+<div class="participant-row nested-member ${isActive ? 'active-turn' : ''} ${isSelected ? 'selected' : ''}" onclick="selectParticipant('${p.id}')">
+<div style="font-weight: bold;">
+${isActive ? '[>] ' : ''}${index + 1}. ${p.name.toUpperCase()}
+</div>
+<div>${jokerBadge}${badges}</div>
+</div>`;
+                } else {
+                    // Normal (ungrouped) row — with its own card
+                    let cardHtml = p.card ? `<div class="card-display ${isJoker ? 'joker-text' : ''}">${p.card.label} ${isJoker ? '[+2 ALL ROLLS]' : ''}</div>` : `<div class="card-display">Waiting for card...</div>`;
+                    let jokerBtnHtml = '';
+                    if (isJoker && isAdmin) {
+                        if (combat.jokerActiveIndex === index) {
+                            jokerBtnHtml = `<button class="die-btn" style="font-size: 0.75em; padding: 2px 8px; margin-top: 5px; width: 100%; box-sizing: border-box;" onclick="event.stopPropagation(); endJokerInterrupt()">END INTERRUPT</button>`;
+                        } else if (!idxValid(combat.jokerActiveIndex)) {
+                            jokerBtnHtml = `<button class="die-btn" style="font-size: 0.75em; padding: 2px 8px; margin-top: 5px; width: 100%; box-sizing: border-box;" onclick="event.stopPropagation(); jokerTakeTurn(${index})">RESOLVE INTERRUPT</button>`;
+                        }
+                    }
+                    container.innerHTML += `
 <div class="participant-row ${isActive ? 'active-turn' : ''} ${isSelected ? 'selected' : ''}" onclick="selectParticipant('${p.id}')">
 <div style="font-weight: bold;">
 ${isActive ? '[>] ' : ''}${index + 1}. ${p.name.toUpperCase()}
@@ -1101,7 +1308,8 @@ ${cardHtml}
 <div>${jokerBadge}${badges}</div>
 ${jokerBtnHtml}
 </div>`;
-                // Populate Target Select
+                }
+                // Populate Target Select (every individual is still targetable)
                 targetSelect.innerHTML += `<option value="${p.id}" ${prevTarget === p.id ? 'selected' : ''}>${p.name}</option>`;
             });
             updateDetailPanel();
@@ -1122,7 +1330,6 @@ ${jokerBtnHtml}
             document.getElementById('detail-bennies').innerText = p.bennies || 0;
             document.getElementById('detail-wounds').innerText = p.wounds || 0;
             document.getElementById('detail-fatigue').innerText = p.fatigue || 0;
-            // A13 Fix: Penalty display caps
             let wounds = p.wounds || 0;
             let fatigue = p.fatigue || 0;
             let totalPenalty = Math.min(wounds, 3) + Math.min(fatigue, 2);
@@ -1136,7 +1343,6 @@ ${jokerBtnHtml}
                 penaltyEl.style.color = "var(--theme-color)";
                 penaltyEl.style.fontWeight = "normal";
             }
-            // A13 Fix: Effective Pace display
             let basePace = p.pace || 6;
             let effPace = p.incapacitated ? 0 : Math.max(1, basePace - Math.min(wounds, 3));
             document.getElementById('detail-pace').innerText = `${effPace} (Base: ${basePace})`;
@@ -1145,13 +1351,17 @@ ${jokerBtnHtml}
             document.getElementById('btn-shaken').className = `die-btn ${p.shaken ? 'active-toggle' : ''}`;
             document.getElementById('btn-distracted').className = `die-btn ${p.distracted ? 'active-toggle' : ''}`;
             document.getElementById('btn-vulnerable').className = `die-btn ${p.vulnerable ? 'active-toggle' : ''}`;
-            // A11 Fix: Disable + buttons for wounds/fatigue if Incapacitated
             document.getElementById('btn-wounds-up').disabled = p.incapacitated;
             document.getElementById('btn-fatigue-up').disabled = p.incapacitated;
-            // B1: Show Spirit Recovery button only while Shaken
             document.getElementById('btn-recover').style.display = (p.shaken && !p.incapacitated) ? 'block' : 'none';
-            // B2: Soak requires a Benny and at least one Wound to soak
             document.getElementById('btn-soak').disabled = !((p.bennies || 0) > 0 && (p.wounds || 0) > 0);
+            // B3: Unshake shown while Shaken (needs a Benny); New Card shown once cards are dealt (needs a Benny)
+            let unshakeBtn = document.getElementById('btn-unshake');
+            unshakeBtn.style.display = (p.shaken && !p.incapacitated) ? 'block' : 'none';
+            unshakeBtn.disabled = (p.bennies || 0) <= 0;
+            let newCardBtn = document.getElementById('btn-newcard');
+            newCardBtn.style.display = p.card ? 'block' : 'none';
+            newCardBtn.disabled = (p.bennies || 0) <= 0;
             // B5: On Hold button visibility — GO ON HOLD when not holding, ACT NOW when holding
             document.getElementById('btn-hold').style.display = (!p.onHold && !p.incapacitated) ? 'block' : 'none';
             document.getElementById('btn-act').style.display = p.onHold ? 'block' : 'none';
@@ -1177,14 +1387,12 @@ ${jokerBtnHtml}
             let p = participants[idx];
             let newVal = (p[stat] || 0) + amount;
             if (newVal < 0) newVal = 0;
-            // A11 Fix: Wound and Fatigue caps, Incapacitated state trigger
             if (stat === 'wounds') {
-                let cap = p.woundCap || (p.isWildCard ? 4 : 1); // A11 Fix: WC incap at 4, Extra at 1
+                let cap = p.woundCap || (p.isWildCard ? 4 : 1);
                 if (newVal >= cap) {
                     newVal = cap;
                     p.incapacitated = true;
                 } else {
-                    // Recover from incapacitated if fatigue isn't also at cap
                     let fCap = 3;
                     if ((p.fatigue || 0) < fCap) {
                         p.incapacitated = false;
@@ -1197,15 +1405,13 @@ ${jokerBtnHtml}
                     newVal = cap;
                     p.incapacitated = true;
                 } else {
-                    // Recover from incapacitated if wounds aren't also at cap
-                    let wCap = p.woundCap || (p.isWildCard ? 4 : 1); // A11 Fix
+                    let wCap = p.woundCap || (p.isWildCard ? 4 : 1);
                     if ((p.wounds || 0) < wCap) {
                         p.incapacitated = false;
                     }
                 }
             }
             p[stat] = newVal;
-            // If modifying bennies for a player, sync back to character sheet
             if (stat === 'bennies' && p.isPlayer) {
                 await set(ref(db, `campaignState/characters/${p.id}/bennies`), newVal);
             }
@@ -1220,14 +1426,11 @@ ${jokerBtnHtml}
             let isOn = !p[status];
             p[status] = isOn;
             // B5: A character who becomes Shaken (or Stunned) immediately loses their Hold (p.105).
-            // They return to their normal card position but must deal with being Shaken first.
             if (status === 'shaken' && isOn && p.onHold) {
                 p.onHold = false;
             }
-            // A12 Fix: Apply TTL counters for Distracted/Vulnerable
             if (isOn) {
                 let ttlKey = status + "TTL";
-                // If applied during own turn, TTL=2 (clears at end of NEXT turn). If applied during others' turn, TTL=1 (clears at end of NEXT turn).
                 p[ttlKey] = (idx === globalState.combat.activeTurnIndex) ? 2 : 1;
             } else {
                 p[status + "TTL"] = 0;
@@ -1249,8 +1452,6 @@ ${jokerBtnHtml}
             } while (currentRoll === sides && sides > 1);
             return { total, history };
         }
-        // B1: Shaken recovery — free-action Spirit roll vs TN 4 (SWADE p.94).
-        // Success clears Shaken; failure leaves the combatant on free actions only.
         window.rollRecovery = async function (participantId = selectedParticipantId) {
             if (!participantId || !globalState.combat || !globalState.combat.participants) return;
             let participants = globalState.combat.participants;
@@ -1258,12 +1459,10 @@ ${jokerBtnHtml}
             if (idx === -1) return;
             let p = participants[idx];
             if (!p.shaken) return;
-            // Players pull their Spirit die from their synced character sheet; NPCs default to d6
             let spiritDie = 6;
             if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
                 spiritDie = parseInt(globalState.characters[p.id].attributes?.Spirit?.die) || 6;
             }
-            // Wound, Fatigue, and Distracted penalties apply to the recovery roll
             let penalty = Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2) + (p.distracted ? 2 : 0);
             let tRoll = rollExplodingDice(spiritDie);
             let wRoll = p.isWildCard ? rollExplodingDice(6) : null;
@@ -1278,8 +1477,6 @@ ${jokerBtnHtml}
             }
             logToWebhook("SPIRIT RECOVERY", desc);
         };
-        // B2: Soak roll — spend a Benny, Vigor vs TN 4, each success/raise removes 1 Wound (SWADE p.96).
-        // Wound modifiers from the Wounds being soaked do NOT apply to this roll.
         window.soakWounds = async function () {
             if (!selectedParticipantId || !globalState.combat || !globalState.combat.participants) return;
             let participants = globalState.combat.participants;
@@ -1288,7 +1485,6 @@ ${jokerBtnHtml}
             let p = participants[idx];
             if ((p.bennies || 0) <= 0) { alert("No Bennies remaining to Soak."); return; }
             if ((p.wounds || 0) <= 0) { alert("No Wounds to Soak."); return; }
-            // Players pull their Vigor die from their synced character sheet; NPCs default to d6
             let vigorDie = 6;
             if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
                 vigorDie = parseInt(globalState.characters[p.id].attributes?.Vigor?.die) || 6;
@@ -1301,16 +1497,13 @@ ${jokerBtnHtml}
             soaked = Math.min(soaked, p.wounds);
             p.bennies = (p.bennies || 0) - 1;
             p.wounds = (p.wounds || 0) - soaked;
-            // Soaking all Wounds also removes Shaken
             let removedShaken = false;
             if (soaked > 0 && p.wounds === 0 && p.shaken) {
                 p.shaken = false;
                 removedShaken = true;
             }
-            // Recover from Incapacitation if Wounds dropped below the cap
             let cap = p.woundCap || (p.isWildCard ? 4 : 1);
             if (p.incapacitated && p.wounds < cap && (p.fatigue || 0) < 3) p.incapacitated = false;
-            // Sync player Bennies back to their character sheet
             if (p.isPlayer) {
                 await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
             }
@@ -1333,25 +1526,21 @@ ${jokerBtnHtml}
             let turnIndex = globalState.combat.activeTurnIndex || 0;
             let jokerIdx = globalState.combat.jokerActiveIndex || -1;
             let holdIdx = globalState.combat.holdActiveIndex || -1; // B5
-            // Adjust Joker Interrupt Index if removing someone
             if (wasJokerActive) {
                 jokerIdx = -1;
             } else if (jokerIdx > removedIndex) {
                 jokerIdx--;
             }
-            // B5: Adjust Hold Interrupt Index if removing someone
             if (wasHoldActive) {
                 holdIdx = -1;
             } else if (holdIdx > removedIndex) {
                 holdIdx--;
             }
-            // Adjust normal Turn Index
             if (removedIndex < turnIndex) {
                 turnIndex--;
             } else if (removedIndex === turnIndex && participants.length <= turnIndex) {
                 turnIndex = 0;
             }
-            // Ensure activeTurnIndex doesn't land on a Joker, Incapacitated, or On-Hold participant
             while (turnIndex < participants.length && participants[turnIndex].card && (participants[turnIndex].card.isJoker || participants[turnIndex].incapacitated || participants[turnIndex].onHold)) {
                 turnIndex++;
             }
@@ -1384,7 +1573,6 @@ ${jokerBtnHtml}
             }
             let target = globalState.combat.participants.find(x => x.id === targetId);
             let parry = parseInt(target.parry);
-            // Being vulnerable adds +2 to actions/attacks against the target (SWADE p.100)
             let effectiveRoll = target.vulnerable ? roll + 2 : roll;
             resultBox.style.borderColor = "var(--theme-color)";
             if (effectiveRoll < parry) {
@@ -1426,8 +1614,6 @@ ${jokerBtnHtml}
                 let output = "";
                 if (wounds === 0) {
                     if (target.shaken) {
-                        // B1: SWADE — a success-level damage result against an already-Shaken
-                        // target (from physical damage) converts to 1 Wound. Apply it.
                         let participants = globalState.combat.participants;
                         let idx = participants.findIndex(x => x.id === targetId);
                         if (idx !== -1) {
