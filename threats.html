@@ -928,37 +928,83 @@
             }
             return { modifier: mod, notes: notes.join(", ") };
         }
-        function updateDefenderModifierAndStatus() {
-            let target = getSelectedTarget();
-            let statusEl = document.getElementById('target-status');
-            let result = computeDefenderModifier();
-            defenderModifier = result.modifier;
-            if (!target) {
-                defenderDisplay = "";
-                statusEl.innerHTML = "";
-                return;
-            }
-            let melee = isMeleeWeapon(activeWeaponContext);
-            let tnLabel = melee ? `Parry ${target.parry}` : `TN 4`;
-            let conds = [];
-            if (target.incapacitated) conds.push("INCAPACITATED");
-            if (target.shaken) conds.push("SHAKEN");
-            if (target.distracted) conds.push("DISTRACTED");
-            if (target.vulnerable) conds.push("VULNERABLE");
-            let html = `Target: <b>${target.name}</b> — ${tnLabel} | Toughness ${target.toughness}`;
-            if (conds.length) html += ` | ${conds.join(", ")}`;
-            if (result.notes) html += ` | <span style="color:#00ff00;">${result.notes}</span>`;
-            statusEl.innerHTML = html;
-            defenderDisplay = `Target: ${target.name}` + (defenderModifier !== 0 ? ` (${defenderModifier > 0 ? '+' : ''}${defenderModifier} defender mod)` : "");
-        }
-        function populateTargetSelect() {
-            let select = document.getElementById('target-select');
-            select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
-            if (!globalState.combat || !globalState.combat.participants) return;
-            globalState.combat.participants.forEach(p => {
-                select.innerHTML += `<option value="${p.id}">${p.name} (Parry ${p.parry})</option>`;
-            });
-        }
+function updateDefenderModifierAndStatus() {
+    let target = getSelectedTarget();
+    let statusEl = document.getElementById('target-status');
+    let result = computeDefenderModifier();
+
+    defenderModifier = result.modifier;
+
+    if (!target) {
+        defenderDisplay = "";
+        statusEl.innerHTML = "";
+        return;
+    }
+
+    let melee = isMeleeWeapon(activeWeaponContext);
+
+    let parry = parseInt(target.parry) || 0;
+    let toughness = parseInt(target.toughness) || 0;
+    let armor = parseInt(target.armor) || 0;
+    let wounds = target.wounds || 0;
+    let fatigue = target.fatigue || 0;
+
+    let tnLabel = melee ? `Parry ${parry}` : `TN 4`;
+
+    let conds = [];
+    if (target.incapacitated) conds.push("INCAPACITATED");
+    if (target.shaken) conds.push("SHAKEN");
+    if (target.distracted) conds.push("DISTRACTED");
+    if (target.vulnerable) conds.push("VULNERABLE");
+
+    let html = `Target: <b>${target.name}</b> — ${tnLabel} | Toughness ${toughness}`;
+
+    if (armor > 0) {
+        html += ` | Armor ${armor}`;
+    }
+
+    html += ` | Wounds ${wounds} | Fatigue ${fatigue}`;
+
+    if (conds.length) {
+        html += ` | ${conds.join(", ")}`;
+    }
+
+    if (result.notes) {
+        html += ` | <span style="color:#00ff00;">${result.notes}</span>`;
+    }
+
+    statusEl.innerHTML = html;
+
+    defenderDisplay = `Target: ${target.name}` + (defenderModifier !== 0 ? ` (${defenderModifier > 0 ? '+' : ''}${defenderModifier} defender mod)` : "");
+}
+function populateTargetSelect() {
+    let select = document.getElementById('target-select');
+    select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
+
+    if (!globalState.combat || !globalState.combat.participants) return;
+
+    let melee = isMeleeWeapon(activeWeaponContext);
+
+    globalState.combat.participants.forEach(p => {
+        let parry = parseInt(p.parry) || 0;
+        let toughness = parseInt(p.toughness) || 0;
+        let armor = parseInt(p.armor) || 0;
+        let wounds = p.wounds || 0;
+        let fatigue = p.fatigue || 0;
+
+        let armorLabel = armor > 0 ? "+" + armor : "";
+
+        let label = melee
+            ? `${p.name} — Parry ${parry}`
+            : `${p.name} — Tgh ${toughness}${armorLabel} | W ${wounds} | F ${fatigue}`;
+
+        let opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = label;
+        opt.title = label;
+        select.appendChild(opt);
+    });
+}
         window.onTargetChange = function () {
             let target = getSelectedTarget();
             let dodgeRow = document.getElementById('target-dodge-row');
