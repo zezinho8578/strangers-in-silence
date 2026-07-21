@@ -138,6 +138,11 @@
             color: var(--bg-color);
         }
 
+        .die-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
         .custom-checkbox {
             display: inline-flex;
             align-items: center;
@@ -181,6 +186,7 @@
             border-bottom: 1px dashed var(--theme-color);
             padding-bottom: 10px;
             gap: 15px;
+            flex-wrap: wrap;
         }
 
         .editor-header input {
@@ -412,6 +418,23 @@
             padding: 5px;
             font-family: inherit;
         }
+
+        .threat-reroll-btn {
+            border-color: #ffff00;
+            color: #ffff00;
+            margin-top: 6px;
+            font-size: 0.8em;
+        }
+
+        .threat-reroll-btn:hover {
+            background: #ffff00;
+            color: var(--bg-color);
+        }
+
+        .target-note {
+            color: #ffff00;
+            font-size: 0.85em;
+        }
     </style>
 </head>
 
@@ -422,7 +445,8 @@
     <div id="top-nav">
         <a href="/dashboard.html" class="nav-link">
             < RETURN TO DASHBOARD</a>
-                <div></div>
+                <div id="threat-gm-pool" style="display:none;">GM BENNY POOL: <span id="threat-gm-pool-count">0</span>
+                </div>
     </div>
     <div class="threat-grid">
         <div class="panel-box">
@@ -440,6 +464,11 @@
                     <input type="checkbox" id="edit-wildcard" onchange="updateActive()">
                     <span class="check-box"></span>
                     <span class="check-label">Wild Card</span>
+                </label>
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="edit-hasdodge" onchange="updateActive()">
+                    <span class="check-box"></span>
+                    <span class="check-label">Dodge/Deflect</span>
                 </label>
             </div>
             <div class="stats-row">
@@ -514,7 +543,6 @@
             <span>Target Number (TN):</span>
             <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center;">
         </div>
-        <!-- B8: Target selection (auto Parry for melee, defender modifiers) -->
         <div id="target-select-container"
             style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px; margin-top: 10px;">
             <div class="setting-row">
@@ -618,9 +646,11 @@
         let activeThreat = null;
         let pendingRoll = null;
         let activeWeaponContext = null;
-        // B8: Defender/target integration state
+        let activeWeaponIndex = -1;
         let defenderModifier = 0;
         let defenderDisplay = "";
+        let pendingDamageApplication = {};
+        let lastThreatRoll = null;
         const defaultAttributes = { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" };
         const defaultSkills = { Athletics: "d6", Fighting: "d6", Notice: "d6" };
         const defaultWeaponIcon = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png";
@@ -633,6 +663,17 @@
                 renderCodex();
                 populateWeaponDropdown();
                 renderDeployed();
+                let poolWrap = document.getElementById('threat-gm-pool');
+                let poolCount = document.getElementById('threat-gm-pool-count');
+                if (poolWrap && poolCount) {
+                    if (globalState.combatActive && globalState.combat) {
+                        poolWrap.style.display = 'block';
+                        poolCount.innerText = globalState.combat.gmPool || 0;
+                    } else {
+                        poolWrap.style.display = 'none';
+                        poolCount.innerText = '0';
+                    }
+                }
                 if (activeTemplateId && globalState.threatTemplates[activeTemplateId] && !activeThreat) {
                     loadTemplate(activeTemplateId);
                 }
@@ -659,7 +700,10 @@
             list.innerHTML = '';
             if (globalState.combat && globalState.combat.participants) {
                 globalState.combat.participants.forEach(p => {
-                    if (!p.isPlayer) list.innerHTML += `<div style="padding: 4px; border-bottom: 1px dashed var(--theme-color);">${p.name} [Wounds: ${p.wounds}]</div>`;
+                    if (!p.isPlayer) {
+                        let cap = p.woundCap || (p.isWildCard ? 4 : 1);
+                        list.innerHTML += `<div style="padding: 4px; border-bottom: 1px dashed var(--theme-color);">${p.name} [Wounds: ${p.wounds || 0}/${cap}]</div>`;
+                    }
                 });
             } else {
                 list.innerHTML = '<div style="opacity: 0.5;">No active combat or NPCs on board.</div>';
@@ -668,7 +712,7 @@
         window.createNewTemplate = function () {
             let id = "threat_" + Date.now();
             activeThreat = {
-                name: "New Threat", isWildCard: false, pace: 6, parry: 5, toughness: 5, armor: 0, scale: 0,
+                name: "New Threat", isWildCard: false, hasDodge: false, pace: 6, parry: 5, toughness: 5, armor: 0, scale: 0,
                 attributes: JSON.parse(JSON.stringify(defaultAttributes)), skills: JSON.parse(JSON.stringify(defaultSkills)), abilities: "", weapons: []
             };
             activeTemplateId = id;
@@ -680,13 +724,15 @@
             if (!activeThreat.attributes) activeThreat.attributes = JSON.parse(JSON.stringify(defaultAttributes));
             if (!activeThreat.skills) activeThreat.skills = JSON.parse(JSON.stringify(defaultSkills));
             if (!activeThreat.weapons) activeThreat.weapons = [];
+            if (activeThreat.hasDodge === undefined || activeThreat.hasDodge === null) activeThreat.hasDodge = false;
             renderEditor(); renderCodex();
         };
         function renderEditor() {
             if (!activeThreat) return;
             document.getElementById('editor-panel').style.display = 'block';
             document.getElementById('edit-name').value = activeThreat.name || "";
-            document.getElementById('edit-wildcard').checked = activeThreat.isWildCard;
+            document.getElementById('edit-wildcard').checked = !!activeThreat.isWildCard;
+            document.getElementById('edit-hasdodge').checked = !!activeThreat.hasDodge;
             document.getElementById('edit-pace').value = activeThreat.pace || 6;
             document.getElementById('edit-parry').value = activeThreat.parry || 5;
             document.getElementById('edit-toughness').value = activeThreat.toughness || 5;
@@ -735,7 +781,7 @@
 <div class="wep-edit-row">
 <span>Rng:</span><input type="text" class="wep-input" style="width:60px;" value="${w.range}" onchange="updateWep(${index}, 'range', this.value)">
 <span>Dmg:</span><input type="text" class="wep-input" style="width:60px;" value="${w.damage}" onchange="updateWep(${index}, 'damage', this.value)">
-<span>AP:</span><input type="number" class="wep-input" style="width:30px;" value="${w.ap}" onchange="updateWep(${index}, 'ap', this.value)">
+<span>AP:</span><input type="text" class="wep-input" style="width:50px;" value="${w.ap}" onchange="updateWep(${index}, 'ap', this.value)">
 <span>RoF:</span><input type="number" class="wep-input" style="width:30px;" value="${w.rof}" onchange="updateWep(${index}, 'rof', this.value)">
 <span>3RB:</span><input type="checkbox" ${w.burst ? "checked" : ""} onchange="updateWep(${index}, 'burst', this.checked)" title="Has Three-Round Burst ability">
 </div>
@@ -755,6 +801,7 @@
             if (!activeThreat) return;
             activeThreat.name = document.getElementById('edit-name').value;
             activeThreat.isWildCard = document.getElementById('edit-wildcard').checked;
+            activeThreat.hasDodge = document.getElementById('edit-hasdodge').checked;
             activeThreat.pace = parseInt(document.getElementById('edit-pace').value) || 6;
             activeThreat.parry = parseInt(document.getElementById('edit-parry').value) || 5;
             activeThreat.toughness = parseInt(document.getElementById('edit-toughness').value) || 5;
@@ -804,25 +851,25 @@
         window.seedBestiary = async function () {
             if (!confirm("Initialize Master HL2 Bestiary? This will overwrite standard templates with 19 pre-configured threats.")) return;
             const hl2Threats = {
-                "hl2_headcrab": { name: "Headcrab", isWildCard: false, pace: 6, parry: 5, toughness: 4, armor: 0, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d6", Notice: "d6", Stealth: "d8" }, abilities: "Leap: Jumps 6\" ignoring elevation.\nLatch: Raise on Fighting roll latches onto head. Victim rolls Vigor or becomes Shaken and starts transforming.", weapons: [{ name: "Latch/Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_headcrab_fast": { name: "Fast Headcrab", isWildCard: false, pace: 8, parry: 5, toughness: 3, armor: 0, scale: -2, attributes: { Agility: "d10", Smarts: "d4", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Athletics: "d10", Fighting: "d6", Notice: "d8", Stealth: "d10" }, abilities: "Leap & Latch.", weapons: [{ name: "Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_headcrab_poison": { name: "Poison Headcrab", isWildCard: false, pace: 6, parry: 6, toughness: 5, armor: 0, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8", Intimidation: "d10" }, abilities: "Leap & Latch.\nToxic Bite: Hit requires Vigor roll. Fail = Fatigue. Success = Shaken with pain (no Spirit recovery next round).", weapons: [{ name: "Toxic Bite", range: "Melee", damage: "Str", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_zombie": { name: "Zombie", isWildCard: false, pace: 4, parry: 5, toughness: 7, armor: 0, scale: 0, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d8", Vigor: "d8" }, skills: { Fighting: "d6", Intimidation: "d6", Notice: "d6", Throwing: "d6", Athletics: "d6" }, abilities: "Undead: +2 recover Shaken, no Called Shot dmg, immune poison/disease.\nHeadcrab Survivor: Destroying body drops 1-Wound Headcrab.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon }, { name: "Swat Object", range: "3/6/12", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_zombie_fast": { name: "Fast Zombie", isWildCard: false, pace: 8, parry: 6, toughness: 5, armor: 0, scale: 0, attributes: { Agility: "d10", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d6" }, abilities: "Undead.\nWall Crawler: Climb verticals at Pace 8.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_zombie_poison": { name: "Poison Zombie", isWildCard: false, pace: 4, parry: 6, toughness: 8, armor: 0, scale: 0, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Undead.\nToxic Aura: Start turn in melee = Vigor roll or Fatigue.\nHive: Can throw 2-3 Poison Headcrabs.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon }, { name: "Throw Headcrab", range: "4/8/16", damage: "Special", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_antlion": { name: "Antlion", isWildCard: false, pace: 8, parry: 6, toughness: 6, armor: 1, scale: 0, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Flight: Winged flight at Pace 8.\nBurrower: Hides underground, pops out as action.", weapons: [{ name: "Bite/Claws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_antlion_guard": { name: "Antlion Guard", isWildCard: true, pace: 8, parry: 6, toughness: 12, armor: 2, scale: 2, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d12+2", Vigor: "d12" }, skills: { Athletics: "d8", Fighting: "d8", Intimidation: "d10", Notice: "d6" }, abilities: "Charge: +4 Dmg and +2 Athletics pushback if runs 6\" straight line.\nCarapace: +2 Armor.\nSize +2: Large.", weapons: [{ name: "Ram/Gore", range: "Melee", damage: "Str+d8", ap: "2", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_scanner": { name: "City Scanner", isWildCard: false, pace: 10, parry: 4, toughness: 6, armor: 2, scale: -2, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Driving: "d8", Notice: "d10", Taunt: "d6" }, abilities: "Construct: +2 recover Shaken, immune poison/disease, no Called Shot dmg.\nMark Target: Grants Combine +1 hit vs target.\nFlashbulb: Small Burst, Vigor or Distracted 1d4 rnds.", weapons: [] },
-                "hl2_manhack": { name: "Manhack", isWildCard: false, pace: 8, parry: 6, toughness: 5, armor: 2, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d6" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Construct.\nSmall: Attackers -2 to hit.", weapons: [{ name: "Buzzsaw", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_rollermine": { name: "Rollermine", isWildCard: false, pace: 8, parry: 4, toughness: 8, armor: 2, scale: -1, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d8", Notice: "d8" }, abilities: "Construct.\nEMP Burst: Explodes Small Burst 2d6 electrical damage when destroyed.", weapons: [{ name: "Electric Shock", range: "Melee", damage: "2d6", ap: "2", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_metrocop": { name: "Civil Protection (Metrocop)", isWildCard: false, pace: 6, parry: 4, toughness: 6, armor: 1, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Driving: "d6", Fighting: "d6", Intimidation: "d6", Notice: "d6", Shooting: "d6", Taunt: "d6", Athletics: "d6" }, abilities: "Tactical Doctrine: +1 recover Shaken near command.", weapons: [{ name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", icon: "https://i.imgur.com/sAz8rBR.png" }, { name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", icon: "https://i.imgur.com/oAbqfGW.png" }, { name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", icon: "https://i.imgur.com/pMPZprv.png" }] },
-                "hl2_combine_soldier": { name: "Combine Soldier", isWildCard: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8", Stealth: "d6", Throwing: "d6" }, abilities: "Edges: Steady Hands.", weapons: [{ name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", icon: "https://i.imgur.com/oAbqfGW.png" }, { name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", icon: "https://i.imgur.com/3rgRKGo.png" }, { name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "1", icon: "https://i.imgur.com/9a4Uprg.png" }] },
-                "hl2_combine_shotgunner": { name: "Combine Shotgunner", isWildCard: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8" }, abilities: "Edges: Sweep.", weapons: [{ name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", icon: "https://i.imgur.com/8ewEl7D.png" }, { name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", icon: "https://i.imgur.com/8ewEl7D.png" }] },
-                "hl2_combine_elite": { name: "Combine Elite", isWildCard: true, pace: 6, parry: 6, toughness: 9, armor: 3, scale: 0, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d8", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Shooting: "d10", Stealth: "d8" }, abilities: "Edges: Rock and Roll!", weapons: [{ name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", icon: "https://i.imgur.com/3rgRKGo.png" }, { name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", icon: "https://i.imgur.com/4lFt2CC.png" }] },
-                "hl2_gunship": { name: "Combine Gunship", isWildCard: true, pace: 15, parry: 7, toughness: 17, armor: 4, scale: 4, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: "Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms).\nPoint Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.", weapons: [{ name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", icon: defaultWeaponIcon }] },
-                "hl2_strider": { name: "Strider", isWildCard: true, pace: 12, parry: 7, toughness: 28, armor: 6, scale: 8, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: "Construct. Massive (+8 Tgh, -8 to be hit by small arms).\nImpale: Legs deal Str+d10 AP4 in melee.\nCrouch: Can lower body to enter buildings.", weapons: [{ name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", icon: defaultWeaponIcon }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: "10", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_barnacle": { name: "Barnacle", isWildCard: false, pace: 0, parry: 2, toughness: 6, armor: 0, scale: 0, attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: "Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3\" up per round.\nWeak Point: Tongue is Toughness 5 to sever.", weapons: [{ name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
-                "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, armor: 1, scale: 0, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Aquatic: Pace 10 in water.\nDrag: Raise on bite pulls target underwater (hold breath).", weapons: [{ name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", icon: defaultWeaponIcon }] }
+                "hl2_headcrab": { name: "Headcrab", isWildCard: false, hasDodge: false, pace: 6, parry: 5, toughness: 4, armor: 0, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d6", Notice: "d6", Stealth: "d8" }, abilities: "Leap: Jumps 6\" ignoring elevation. Latch: Raise on Fighting roll latches onto head. Victim rolls Vigor or becomes Shaken and starts transforming.", weapons: [{ name: "Latch/Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_headcrab_fast": { name: "Fast Headcrab", isWildCard: false, hasDodge: false, pace: 8, parry: 5, toughness: 3, armor: 0, scale: -2, attributes: { Agility: "d10", Smarts: "d4", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Athletics: "d10", Fighting: "d6", Notice: "d8", Stealth: "d10" }, abilities: "Leap & Latch.", weapons: [{ name: "Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_headcrab_poison": { name: "Poison Headcrab", isWildCard: false, hasDodge: false, pace: 6, parry: 6, toughness: 5, armor: 0, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8", Intimidation: "d10" }, abilities: "Leap & Latch. Toxic Bite: Hit requires Vigor roll. Fail = Fatigue. Success = Shaken with pain (no Spirit recovery next round).", weapons: [{ name: "Toxic Bite", range: "Melee", damage: "Str", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_zombie": { name: "Zombie", isWildCard: false, hasDodge: false, pace: 4, parry: 5, toughness: 7, armor: 0, scale: 0, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d8", Vigor: "d8" }, skills: { Fighting: "d6", Intimidation: "d6", Notice: "d6", Throwing: "d6", Athletics: "d6" }, abilities: "Undead: +2 recover Shaken, no Called Shot dmg, immune poison/disease. Headcrab Survivor: Destroying body drops 1-Wound Headcrab.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon }, { name: "Swat Object", range: "3/6/12", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_zombie_fast": { name: "Fast Zombie", isWildCard: false, hasDodge: false, pace: 8, parry: 6, toughness: 5, armor: 0, scale: 0, attributes: { Agility: "d10", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d6" }, abilities: "Undead. Wall Crawler: Climb verticals at Pace 8.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_zombie_poison": { name: "Poison Zombie", isWildCard: false, hasDodge: false, pace: 4, parry: 6, toughness: 8, armor: 0, scale: 0, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Undead. Toxic Aura: Start turn in melee = Vigor roll or Fatigue. Hive: Can throw 2-3 Poison Headcrabs.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon }, { name: "Throw Headcrab", range: "4/8/16", damage: "Special", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_antlion": { name: "Antlion", isWildCard: false, hasDodge: false, pace: 8, parry: 6, toughness: 6, armor: 1, scale: 0, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Flight: Winged flight at Pace 8. Burrower: Hides underground, pops out as action.", weapons: [{ name: "Bite/Claws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_antlion_guard": { name: "Antlion Guard", isWildCard: true, hasDodge: false, pace: 8, parry: 6, toughness: 12, armor: 2, scale: 2, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d12+2", Vigor: "d12" }, skills: { Athletics: "d8", Fighting: "d8", Intimidation: "d10", Notice: "d6" }, abilities: "Charge: +4 Dmg and +2 Athletics pushback if runs 6\" straight line. Carapace: +2 Armor. Size +2: Large.", weapons: [{ name: "Ram/Gore", range: "Melee", damage: "Str+d8", ap: "2", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_scanner": { name: "City Scanner", isWildCard: false, hasDodge: false, pace: 10, parry: 4, toughness: 6, armor: 2, scale: -2, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Driving: "d8", Notice: "d10", Taunt: "d6" }, abilities: "Construct: +2 recover Shaken, immune poison/disease, no Called Shot dmg. Mark Target: Grants Combine +1 hit vs target. Flashbulb: Small Burst, Vigor or Distracted 1d4 rnds.", weapons: [] },
+                "hl2_manhack": { name: "Manhack", isWildCard: false, hasDodge: false, pace: 8, parry: 6, toughness: 5, armor: 2, scale: -2, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d6" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Construct. Small: Attackers -2 to hit.", weapons: [{ name: "Buzzsaw", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_rollermine": { name: "Rollermine", isWildCard: false, hasDodge: false, pace: 8, parry: 4, toughness: 8, armor: 2, scale: -1, attributes: { Agility: "d6", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d8", Notice: "d8" }, abilities: "Construct. EMP Burst: Explodes Small Burst 2d6 electrical damage when destroyed.", weapons: [{ name: "Electric Shock", range: "Melee", damage: "2d6", ap: "2", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_metrocop": { name: "Civil Protection (Metrocop)", isWildCard: false, hasDodge: false, pace: 6, parry: 4, toughness: 6, armor: 1, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Driving: "d6", Fighting: "d6", Intimidation: "d6", Notice: "d6", Shooting: "d6", Taunt: "d6", Athletics: "d6" }, abilities: "Tactical Doctrine: +1 recover Shaken near command.", weapons: [{ name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", icon: "https://i.imgur.com/sAz8rBR.png" }, { name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", icon: "https://i.imgur.com/oAbqfGW.png" }, { name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", icon: "https://i.imgur.com/pMPZprv.png" }] },
+                "hl2_combine_soldier": { name: "Combine Soldier", isWildCard: false, hasDodge: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8", Stealth: "d6", Throwing: "d6" }, abilities: "Edges: Steady Hands.", weapons: [{ name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", icon: "https://i.imgur.com/oAbqfGW.png" }, { name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", icon: "https://i.imgur.com/3rgRKGo.png" }, { name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "1", icon: "https://i.imgur.com/9a4Uprg.png" }] },
+                "hl2_combine_shotgunner": { name: "Combine Shotgunner", isWildCard: false, hasDodge: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8" }, abilities: "Edges: Sweep.", weapons: [{ name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", icon: "https://i.imgur.com/8ewEl7D.png" }, { name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", icon: "https://i.imgur.com/8ewEl7D.png" }] },
+                "hl2_combine_elite": { name: "Combine Elite", isWildCard: true, hasDodge: false, pace: 6, parry: 6, toughness: 9, armor: 3, scale: 0, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d8", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Shooting: "d10", Stealth: "d8" }, abilities: "Edges: Rock and Roll!", weapons: [{ name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", icon: "https://i.imgur.com/3rgRKGo.png" }, { name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", icon: "https://i.imgur.com/4lFt2CC.png" }] },
+                "hl2_gunship": { name: "Combine Gunship", isWildCard: true, hasDodge: false, pace: 15, parry: 7, toughness: 17, armor: 4, scale: 4, attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: "Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms). Point Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.", weapons: [{ name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", icon: defaultWeaponIcon }] },
+                "hl2_strider": { name: "Strider", isWildCard: true, hasDodge: false, pace: 12, parry: 7, toughness: 28, armor: 6, scale: 8, attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: "Construct. Massive (+8 Tgh, -8 to be hit by small arms). Impale: Legs deal Str+d10 AP4 in melee. Crouch: Can lower body to enter buildings.", weapons: [{ name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", icon: defaultWeaponIcon }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: "10", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_barnacle": { name: "Barnacle", isWildCard: false, hasDodge: false, pace: 0, parry: 2, toughness: 6, armor: 0, scale: 0, attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: "Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3\" up per round. Weak Point: Tongue is Toughness 5 to sever.", weapons: [{ name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", icon: defaultWeaponIcon }] },
+                "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, hasDodge: false, pace: 2, parry: 6, toughness: 8, armor: 1, scale: 0, attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Aquatic: Pace 10 in water. Drag: Raise on bite pulls target underwater (hold breath).", weapons: [{ name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", icon: defaultWeaponIcon }] }
             };
             await update(ref(db, 'campaignState/threatTemplates'), hl2Threats);
             logToTerminal("> OVERWATCH BESTIARY FULLY INTEGRATED.");
@@ -866,40 +913,36 @@
             let logStr = `> ${activeThreat.name} rolled ${traitName} (${dieValue}):<br>&nbsp;&nbsp;Trait: ${tRoll.history.join(' + ')}`;
             if (wRoll) logStr += ` | Wild: ${wRoll.history.join(' + ')}`;
             if (totalMod !== 0) logStr += ` | Mod: ${totalMod > 0 ? '+' + totalMod : totalMod}`;
-            logStr += `<br>&nbsp;&nbsp;Result: <b style="color:${color};">${finalTotal}</b> -> ${outcome}`;
+            logStr += `<br>&nbsp;&nbsp;Result: <b style="color:${color};">${finalTotal}</b> -> ${outcome}${critConfirmNote}`;
             logToTerminal(logStr);
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${activeThreat.name} rolled ${traitName}`,
-                    description: `**Result: ${finalTotal}**\n${outcome}`,
+                    description: `**Result: ${finalTotal}**
+${outcome}`,
                     color: color === "#00ff00" ? 0x00ff00 : (color === "#ff9900" ? 0xff9900 : 0xff0000),
                     fields: [{ name: `Trait (d${sides})`, value: tRoll.history.join(' + '), inline: true }]
                 };
                 if (wRoll) embed.fields.push({ name: "Wild (d6)", value: wRoll.history.join(' + '), inline: true });
                 if (totalMod !== 0) embed.fields.push({ name: "Modifier", value: totalMod > 0 ? `+${totalMod}` : `${totalMod}`, inline: true });
-                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(() => { });
             }
         };
-        // ==========================================
-        // B8. TARGET / DEFENDER INTEGRATION (SWADE p.95)
-        // Melee TN = defender's Parry. Ranged TN 4. Defender modifiers
-        // (Vulnerable +2, Dodge -2) kept separate from the Modifier Adjust box.
-        // ==========================================
         function isMeleeWeapon(weaponObj) {
             if (!weaponObj) return false;
             let r = (weaponObj.range || "").toLowerCase();
             return r.includes("melee") || r.includes("contact");
         }
         function targetHasDodge(target) {
+            if (!target) return false;
             if (target.isPlayer) {
                 let sheet = globalState.characters && globalState.characters[target.id];
-                if (sheet && sheet.edges) return /\bdodge\b/i.test(sheet.edges);
-                return false;
+                let sheetDodge = !!(sheet && sheet.edges && /\bdodge\b/i.test(sheet.edges));
+                return !!target.hasDodge || sheetDodge;
             }
             return !!target.hasDodge;
         }
         function attackerHasMarksman() {
-            // NPC attacker: Marksman listed in the template's abilities
             return !!(activeThreat && activeThreat.abilities && /\bmarksman\b/i.test(activeThreat.abilities));
         }
         function getSelectedTarget() {
@@ -918,12 +961,17 @@
                 notes.push("Vulnerable +2");
             }
             if (!melee) {
-                let dodge = targetHasDodge(target);
-                if (dodge && !attackerHasMarksman()) {
+                let dodgeRow = document.getElementById('target-dodge-row');
+                let dodgeChecked = false;
+                if (dodgeRow && dodgeRow.style.display !== 'none') dodgeChecked = document.getElementById('target-dodge-checkbox').checked;
+                else dodgeChecked = targetHasDodge(target);
+                if (dodgeChecked && !attackerHasMarksman()) {
                     mod -= 2;
                     notes.push("Dodge -2");
-                } else if (dodge && attackerHasMarksman()) {
+                } else if (dodgeChecked && attackerHasMarksman()) {
                     notes.push("Dodge ignored (Marksman)");
+                } else if (targetHasDodge(target) && !dodgeChecked) {
+                    notes.push("Dodge not applied (unchecked)");
                 }
             }
             return { modifier: mod, notes: notes.join(", ") };
@@ -939,15 +987,24 @@
                 return;
             }
             let melee = isMeleeWeapon(activeWeaponContext);
-            let tnLabel = melee ? `Parry ${target.parry}` : `TN 4`;
+            let armor = parseInt(target.armor) || 0;
+            let toughness = parseInt(target.toughness) || 0;
+            let woundCap = target.woundCap || (target.isWildCard ? 4 : 1);
+            let wounds = parseInt(target.wounds) || 0;
+            let fatigue = parseInt(target.fatigue) || 0;
+            let tnLabel = melee ? `Parry ${target.parry || 4}` : `TN 4`;
             let conds = [];
             if (target.incapacitated) conds.push("INCAPACITATED");
             if (target.shaken) conds.push("SHAKEN");
             if (target.distracted) conds.push("DISTRACTED");
             if (target.vulnerable) conds.push("VULNERABLE");
-            let html = `Target: <b>${target.name}</b> — ${tnLabel} | Toughness ${target.toughness}`;
+            let html = `Target: <b>${target.name}</b> — ${tnLabel} | Toughness ${toughness}${armor ? ` (+${armor} Armor)` : ''} | Wounds ${wounds}/${woundCap} | Fatigue ${fatigue}`;
             if (conds.length) html += ` | ${conds.join(", ")}`;
             if (result.notes) html += ` | <span style="color:#00ff00;">${result.notes}</span>`;
+            if (!melee && targetHasDodge(target)) {
+                if (attackerHasMarksman()) html += `<br><span class="target-note">DODGE EDGE detected but ignored (Marksman).</span>`;
+                else html += `<br><span class="target-note">DODGE EDGE: −2 to ranged attacks (Shooting/Athletics throws). Requires target to be aware; does not stack with cover—apply only the highest penalty. Auto-checked; uncheck if surprised or using cover.</span>`;
+            }
             statusEl.innerHTML = html;
             defenderDisplay = `Target: ${target.name}` + (defenderModifier !== 0 ? ` (${defenderModifier > 0 ? '+' : ''}${defenderModifier} defender mod)` : "");
         }
@@ -955,8 +1012,14 @@
             let select = document.getElementById('target-select');
             select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
             if (!globalState.combat || !globalState.combat.participants) return;
+            let melee = isMeleeWeapon(activeWeaponContext);
             globalState.combat.participants.forEach(p => {
-                select.innerHTML += `<option value="${p.id}">${p.name} (Parry ${p.parry})</option>`;
+                let cap = p.woundCap || (p.isWildCard ? 4 : 1);
+                let label = p.name;
+                if (p.incapacitated) label += ' [INCAP]';
+                if (melee) label += ` (Parry ${p.parry || 4}, Wounds ${p.wounds || 0}/${cap})`;
+                else label += ` (TN 4, Wounds ${p.wounds || 0}/${cap})`;
+                select.innerHTML += `<option value="${p.id}">${label}</option>`;
             });
         }
         window.onTargetChange = function () {
@@ -966,21 +1029,17 @@
             if (!target) {
                 document.getElementById('tn-input').value = "4";
                 dodgeRow.style.display = "none";
+                dodgeCheckbox.checked = false;
                 defenderModifier = 0;
                 defenderDisplay = "";
                 document.getElementById('target-status').innerHTML = "";
                 return;
             }
             let melee = isMeleeWeapon(activeWeaponContext);
-            document.getElementById('tn-input').value = melee ? target.parry : "4";
+            document.getElementById('tn-input').value = melee ? (target.parry || 4) : "4";
             if (!melee) {
-                if (target.isPlayer) {
-                    dodgeCheckbox.checked = targetHasDodge(target);
-                    dodgeCheckbox.disabled = true;
-                } else {
-                    dodgeCheckbox.checked = !!target.hasDodge;
-                    dodgeCheckbox.disabled = false;
-                }
+                dodgeCheckbox.checked = targetHasDodge(target);
+                dodgeCheckbox.disabled = false;
                 dodgeRow.style.display = "flex";
             } else {
                 dodgeRow.style.display = "none";
@@ -1000,9 +1059,34 @@
             }
             updateDefenderModifierAndStatus();
         };
-        // ==========================================
-        // WEAPON ATTACKS & MODALS
-        // ==========================================
+        function getThreatStorageKey(wep, index) {
+            let threatKey = activeTemplateId || (activeThreat ? activeThreat.name : 'threat');
+            let wepKey = wep?.id || wep?.name || ('weapon' + (index !== undefined && index !== null ? index : ''));
+            return `threat_pending_${threatKey}_${wepKey}`;
+        }
+        function getThreatPendingBonus(key) {
+            if (!key) return {};
+            let raw = sessionStorage.getItem(key);
+            if (!raw) return {};
+            try { return JSON.parse(raw); } catch (e) { return {}; }
+        }
+        function setThreatPendingBonus(key, updates) {
+            if (!key) return;
+            let current = getThreatPendingBonus(key);
+            let next = { ...current, ...updates };
+            sessionStorage.setItem(key, JSON.stringify(next));
+        }
+        function clearThreatPendingBonus(key, fields = null) {
+            if (!key) return;
+            if (!fields) {
+                sessionStorage.removeItem(key);
+                return;
+            }
+            let current = getThreatPendingBonus(key);
+            fields.forEach(field => delete current[field]);
+            if (Object.keys(current).length === 0) sessionStorage.removeItem(key);
+            else sessionStorage.setItem(key, JSON.stringify(current));
+        }
         window.prepareAttack = function (wepIndex) {
             let wep = activeThreat.weapons[wepIndex];
             let isMelee = wep.range.toLowerCase().includes("melee") || wep.range.toLowerCase().includes("contact");
@@ -1010,10 +1094,10 @@
             let skillName = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
             pendingRoll = { skill: skillName };
             activeWeaponContext = wep;
+            activeWeaponIndex = wepIndex;
             document.getElementById('tn-input').value = "4";
             document.getElementById('mod-override-input').value = "0";
             document.getElementById('map-select').value = "0";
-            // B8: Reset defender state and populate the target list when combat is live
             defenderModifier = 0;
             defenderDisplay = "";
             let targetContainer = document.getElementById('target-select-container');
@@ -1115,46 +1199,41 @@
                     shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
                 }
             }
+            let targetId = "";
+            let targetContainer = document.getElementById('target-select-container');
+            if (targetContainer && targetContainer.style.display !== 'none') {
+                targetId = document.getElementById('target-select').value || "";
+            }
             document.getElementById('tn-modal').style.display = 'none';
             pendingRoll.is3RB = is3RB;
             pendingRoll.isSupp = isSupp;
             let wepRoF = activeWeaponContext ? (activeWeaponContext.rof || 1) : 1;
-            executeThreatRoll(pendingRoll.skill, tn, shotsFired, is3RB, isSupp, wepRoF);
+            executeThreatRoll(pendingRoll.skill, tn, shotsFired, is3RB, isSupp, wepRoF, targetId);
         };
         window.cancelRoll = function () {
             document.getElementById('tn-modal').style.display = 'none';
             pendingRoll = null;
             activeWeaponContext = null;
-            // B8: clear defender state on cancel
+            activeWeaponIndex = -1;
             defenderModifier = 0;
             defenderDisplay = "";
         };
-        function executeThreatRoll(skillName, targetNumber, shotsFired, is3RB, isSuppressive, wepRoF) {
-            let dieValue = activeThreat.skills[skillName] || "d4";
-            let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
-            let sides = match ? parseInt(match[1]) : 4;
-            let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
-            let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
-            let customMod = parseInt(document.getElementById('mod-override-input').value) || 0;
-            let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
-            // B8: include the defender modifier (Vulnerable/Dodge)
-            let totalModifier = intrinsicMod + unskilledMod + customMod + mapPenalty + defenderModifier;
-            let results = []; let isCritFail = false;
-            let isShotgun = activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun");
-            let isFullAutoMode = is3RB || isSuppressive || shotsFired > 1;
-            let bThresh = (isShotgun || isFullAutoMode) ? 2 : 1;
-            if (shotsFired > 1) {
+        function performThreatRoll(ctx) {
+            let results = [];
+            let isCritFail = false;
+            if (ctx.shotsFired > 1) {
                 let traitRolls = [];
-                for (let i = 0; i < shotsFired; i++) {
-                    let r = rollExploding(sides);
+                for (let i = 0; i < ctx.shotsFired; i++) {
+                    let r = rollExploding(ctx.sides);
                     r.originalTraitFirst = r.history[0];
                     traitRolls.push(r);
                 }
-                let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
+                let wildRoll = ctx.isWildCard ? rollExploding(6) : null;
                 let onesCount = 0;
                 traitRolls.forEach(r => { if (r.originalTraitFirst === 1) onesCount++; });
                 if (wildRoll && wildRoll.history[0] === 1) onesCount++;
-                let overHalf = (onesCount > (wildRoll ? shotsFired + 1 : shotsFired) / 2);
+                let totalDice = wildRoll ? ctx.shotsFired + 1 : ctx.shotsFired;
+                let overHalf = onesCount > totalDice / 2;
                 if (wildRoll) {
                     isCritFail = overHalf && wildRoll.history[0] === 1;
                 } else if (overHalf) {
@@ -1170,25 +1249,31 @@
                     traitRolls[minIdx] = replaced;
                 }
                 traitRolls.forEach((r, idx) => {
-                    let score = r.total + totalModifier;
-                    let outcome = ""; let hasRaise = false;
+                    let score = r.total + ctx.totalModifier;
+                    let outcome = "";
+                    let hasRaise = false;
                     if (isCritFail) outcome = "CRITICAL FAILURE!";
-                    else if (score < targetNumber) outcome = "FAILURE.";
+                    else if (score < ctx.targetNumber) outcome = "FAILURE.";
                     else {
-                        let raises = Math.floor((score - targetNumber) / 4);
+                        let raises = Math.floor((score - ctx.targetNumber) / 4);
                         outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
                         if (raises > 0) hasRaise = true;
                     }
-                    let isBystander = (!outcome.includes("SUCCESS") && r.originalTraitFirst <= bThresh);
+                    let isBystander = (!outcome.includes("SUCCESS") && r.originalTraitFirst <= ctx.bystanderThreshold);
                     results.push({
-                        shotIndex: idx + 1, total: score, history: r.history, outcome: outcome,
-                        hasRaise: hasRaise, bystander: isBystander, initialTrait: r.originalTraitFirst
+                        shotIndex: idx + 1,
+                        total: score,
+                        history: r.history,
+                        outcome: outcome,
+                        hasRaise: hasRaise,
+                        bystander: isBystander,
+                        initialTrait: r.originalTraitFirst
                     });
                 });
             } else {
-                let traitRoll = rollExploding(sides);
+                let traitRoll = rollExploding(ctx.sides);
                 traitRoll.originalTraitFirst = traitRoll.history[0];
-                let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
+                let wildRoll = ctx.isWildCard ? rollExploding(6) : null;
                 let bestTotal = traitRoll.total;
                 if (wildRoll) {
                     bestTotal = Math.max(traitRoll.total, wildRoll.total);
@@ -1198,113 +1283,378 @@
                     isCritFail = (confirmRoll.history[0] === 1);
                     logToTerminal(`> Extra rolled natural 1 — confirming d6: ${confirmRoll.history.join(' + ')} → ${isCritFail ? "CRITICAL FAILURE CONFIRMED" : "normal failure"}`);
                 }
-                bestTotal += totalModifier;
-                let outcome = ""; let hasRaise = false;
+                bestTotal += ctx.totalModifier;
+                let outcome = "";
+                let hasRaise = false;
                 if (isCritFail) outcome = "CRITICAL FAILURE!";
-                else if (bestTotal < targetNumber) outcome = "FAILURE.";
+                else if (bestTotal < ctx.targetNumber) outcome = "FAILURE.";
                 else {
-                    let raises = Math.floor((bestTotal - targetNumber) / 4);
+                    let raises = Math.floor((bestTotal - ctx.targetNumber) / 4);
                     outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
                     if (raises > 0) hasRaise = true;
                 }
-                let isBystander = (!outcome.includes("SUCCESS") && traitRoll.originalTraitFirst <= bThresh);
+                let isBystander = (!outcome.includes("SUCCESS") && traitRoll.originalTraitFirst <= ctx.bystanderThreshold);
                 results.push({
-                    shotIndex: 1, total: bestTotal,
+                    shotIndex: 1,
+                    total: bestTotal,
                     history: wildRoll && wildRoll.total > traitRoll.total ? wildRoll.history : traitRoll.history,
-                    outcome: outcome, hasRaise: hasRaise, isSingle: true,
-                    traitHistory: traitRoll.history, wildHistory: wildRoll ? wildRoll.history : null,
+                    outcome: outcome,
+                    hasRaise: hasRaise,
+                    isSingle: true,
+                    traitHistory: traitRoll.history,
+                    wildHistory: wildRoll ? wildRoll.history : null,
                     bystander: isBystander,
                     initialTrait: traitRoll.originalTraitFirst
                 });
             }
-            let hit = results.some(r => r.outcome.includes("SUCCESS"));
-            if (activeWeaponContext && hit && pendingRoll.is3RB) {
-                let bonusKey = `threat_pending_damage_bonus_${activeTemplateId || activeThreat.name}_${activeWeaponContext.id || activeWeaponContext.name}`;
-                sessionStorage.setItem(bonusKey, "3rb");
-                logToTerminal(`> [!] 3-ROUND BURST: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +1 damage bonus.`);
-            } else if (activeWeaponContext) {
-                let bonusKey = `threat_pending_damage_bonus_${activeTemplateId || activeThreat.name}_${activeWeaponContext.id || activeWeaponContext.name}`;
-                sessionStorage.removeItem(bonusKey);
-            }
-            renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, wepRoF);
+            return { results, isCritFail };
         }
-        async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, wepRoF) {
+        function scoreThreatVolley(results, isCritFail) {
+            if (isCritFail) return -100000;
+            let hits = results.filter(r => r.outcome.includes("SUCCESS")).length;
+            let sum = results.reduce((acc, r) => acc + r.total, 0);
+            return hits * 100000 + sum;
+        }
+        function summarizeThreatVolley(results, isCritFail) {
+            if (isCritFail) return "CRITICAL FAILURE";
+            let totals = results.map(r => r.total).join(", ");
+            let hits = results.filter(r => r.outcome.includes("SUCCESS")).length;
+            return `${totals} (${hits} hit${hits !== 1 ? 's' : ''})`;
+        }
+        function applyThreatAttackSideEffects(results, ctx) {
+            if (!ctx.weapon || !ctx.storageKey) return;
+            let hit = results.some(r => r.outcome.includes("SUCCESS"));
+            let hitWithRaise = results.some(r => r.hasRaise);
+            if (hitWithRaise) {
+                setThreatPendingBonus(ctx.storageKey, { raise: true });
+                logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${ctx.weapon.name} will include +1d6 raise bonus.`);
+            } else {
+                clearThreatPendingBonus(ctx.storageKey, ['raise']);
+            }
+            if (hit && ctx.is3RB) {
+                setThreatPendingBonus(ctx.storageKey, { threeRoundBurst: true });
+                logToTerminal(`> [!] 3-ROUND BURST: Attack hit! Next damage roll for ${ctx.weapon.name} will include a +1 damage bonus.`);
+            } else {
+                clearThreatPendingBonus(ctx.storageKey, ['threeRoundBurst']);
+            }
+        }
+        function setThreatPendingApplication(ctx, results) {
+            if (!ctx.storageKey) return;
+            if (ctx.targetId) {
+                let hit = results.some(r => r.outcome.includes("SUCCESS"));
+                pendingDamageApplication[ctx.storageKey] = {
+                    targetId: ctx.targetId,
+                    hit: hit,
+                    round: globalState.combat ? globalState.combat.round : null,
+                    weaponName: ctx.weapon ? ctx.weapon.name : "Attack"
+                };
+            } else {
+                delete pendingDamageApplication[ctx.storageKey];
+            }
+        }
+        function executeThreatRoll(skillName, targetNumber, shotsFired, is3RB, isSuppressive, wepRoF, targetId) {
+            let dieValue = activeThreat.skills[skillName] || "d4";
+            let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
+            let sides = match ? parseInt(match[1]) : 4;
+            let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
+            let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
+            let customMod = parseInt(document.getElementById('mod-override-input').value) || 0;
+            let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
+            let totalModifier = intrinsicMod + unskilledMod + customMod + mapPenalty + defenderModifier;
+            let isShotgun = activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun");
+            let isFullAutoMode = is3RB || isSuppressive || shotsFired > 1;
+            let bThresh = (isShotgun || isFullAutoMode) ? 2 : 1;
+            let ctx = {
+                threatName: activeThreat.name,
+                isWildCard: !!activeThreat.isWildCard,
+                skillName,
+                targetNumber,
+                shotsFired,
+                is3RB,
+                isSuppressive,
+                wepRoF,
+                sides,
+                totalModifier,
+                defenderModifier,
+                defenderDisplay,
+                targetId,
+                storageKey: getThreatStorageKey(activeWeaponContext, activeWeaponIndex),
+                weapon: activeWeaponContext,
+                bystanderThreshold: bThresh
+            };
+            let outcome = performThreatRoll(ctx);
+            applyThreatAttackSideEffects(outcome.results, ctx);
+            setThreatPendingApplication(ctx, outcome.results);
+            lastThreatRoll = {
+                ctx,
+                results: outcome.results,
+                isCritFail: outcome.isCritFail,
+                score: scoreThreatVolley(outcome.results, outcome.isCritFail),
+                usedReroll: false
+            };
+            renderThreatAttack(ctx, outcome.results, outcome.isCritFail, null);
+        }
+        window.rerollThreatAttack = async function () {
+            if (!lastThreatRoll) return;
+            if (lastThreatRoll.usedReroll) {
+                logToTerminal("> [!] This attack has already been rerolled (one Benny per roll).");
+                return;
+            }
+            if (lastThreatRoll.isCritFail) {
+                logToTerminal("> [!] CANNOT REROLL: Critical Failures cannot be rerolled.");
+                return;
+            }
+            if (!globalState.combatActive || !globalState.combat) {
+                logToTerminal("> [!] Combat is not active — no GM Pool available for rerolls.");
+                return;
+            }
+            let pool = globalState.combat.gmPool || 0;
+            if (pool <= 0) {
+                logToTerminal("> [!] CANNOT REROLL: GM Benny Pool is empty.");
+                return;
+            }
+            await set(ref(db, 'campaignState/combat/gmPool'), pool - 1);
+            let ctx = lastThreatRoll.ctx;
+            let newOutcome = performThreatRoll(ctx);
+            let newScore = scoreThreatVolley(newOutcome.results, newOutcome.isCritFail);
+            let oldScore = lastThreatRoll.score;
+            let keptResults, keptIsCritFail, keptWhich;
+            if (newOutcome.isCritFail) {
+                keptResults = newOutcome.results;
+                keptIsCritFail = true;
+                keptWhich = "NEW ROLL — CRITICAL FAILURE (must be accepted!)";
+            } else if (newScore >= oldScore) {
+                keptResults = newOutcome.results;
+                keptIsCritFail = newOutcome.isCritFail;
+                keptWhich = "NEW ROLL";
+            } else {
+                keptResults = lastThreatRoll.results;
+                keptIsCritFail = lastThreatRoll.isCritFail;
+                keptWhich = "ORIGINAL ROLL";
+            }
+            applyThreatAttackSideEffects(keptResults, ctx);
+            setThreatPendingApplication(ctx, keptResults);
+            lastThreatRoll = {
+                ctx,
+                results: keptResults,
+                isCritFail: keptIsCritFail,
+                score: scoreThreatVolley(keptResults, keptIsCritFail),
+                usedReroll: true
+            };
+            document.querySelectorAll('.threat-reroll-btn').forEach(b => { b.disabled = true; });
+            let rerollInfo = {
+                which: keptWhich,
+                oldSummary: summarizeThreatVolley(lastThreatRoll.results, lastThreatRoll.isCritFail),
+                newSummary: summarizeThreatVolley(newOutcome.results, newOutcome.isCritFail)
+            };
+            renderThreatAttack(ctx, keptResults, keptIsCritFail, rerollInfo);
+        };
+        function renderThreatAttack(ctx, results, isCritFail, rerollInfo = null) {
             let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
-            let modStrDisplay = totalModifier !== 0 ? ` (${totalModifier > 0 ? '+' : ''}${totalModifier})` : "";
-            let title = `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
-            let termLog = `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
-            // B8: show the selected target and defender modifier breakdown
-            if (defenderDisplay) {
-                termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">${defenderDisplay}</span><br>`;
+            let modStrDisplay = ctx.totalModifier !== 0 ? ` (${ctx.totalModifier > 0 ? '+' : ''}${ctx.totalModifier})` : "";
+            let title = `${ctx.threatName} rolled Attack [${ctx.weapon ? ctx.weapon.name : 'Attack'}] via ${ctx.skillName}`;
+            document.querySelectorAll('.threat-reroll-btn').forEach(b => { b.disabled = true; });
+            let termLog = "";
+            if (rerollInfo) {
+                let bannerStyle = isCritFail ? "color:#ff3333; text-shadow:0 0 8px #ff3333;" : "color:#ffff00;";
+                termLog += `<span style="${bannerStyle}">> ⟳ REROLL (1 GM Benny spent) — ${title}<br>`;
+                termLog += `&nbsp;&nbsp;Original: ${rerollInfo.oldSummary}<br>`;
+                termLog += `&nbsp;&nbsp;New:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${rerollInfo.newSummary}<br>`;
+                termLog += `&nbsp;&nbsp;-> Keeping <b>${rerollInfo.which}</b>.</span><br>`;
+            }
+            termLog += `> ${title} vs TN ${ctx.targetNumber}${modStrDisplay}<br>`;
+            if (ctx.defenderDisplay) {
+                termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">${ctx.defenderDisplay}</span><br>`;
             }
             results.forEach(r => {
                 if (r.isSingle) {
                     termLog += `&nbsp;&nbsp;Trait: ${r.traitHistory.join(' + ')}<br>`;
                     if (r.wildHistory) termLog += `&nbsp;&nbsp;Wild:  ${r.wildHistory.join(' + ')}<br>`;
                     termLog += `&nbsp;&nbsp;Result: <b>${r.total}</b> -> ${r.outcome}<br>`;
-                } else termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
-                if (isSuppressive) {
-                    termLog += `&nbsp;&nbsp;<span style="color:#ff9900;">🟧 <b>SUPPRESSIVE FIRE:</b> Success = Distracted, Raise = Hit! (Max targets = weapon RoF)</span><br>`;
-                }
-                if (is3RB) {
-                    termLog += `&nbsp;&nbsp;<span style="color:#00aaff;">🟦 <b>3-ROUND BURST:</b> +1 Hit/Dmg (Damage bonus applied to next damage roll)</span><br>`;
+                } else {
+                    termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
                 }
                 if (r.bystander) {
                     termLog += `&nbsp;&nbsp;<span style="color:#ff3333;">⚠️ INNOCENT BYSTANDER HIT! (Trait die rolled ${r.initialTrait})</span><br>`;
                 }
             });
-            logToTerminal(termLog);
+            if (ctx.isSuppressive) {
+                termLog += `<span style="color:#ff9900;">🟧 <b>SUPPRESSIVE FIRE:</b> Success = Distracted, Raise = Hit! (Max targets = weapon RoF)</span><br>`;
+            }
+            if (ctx.is3RB) {
+                termLog += `<span style="color:#00aaff;">🟦 <b>3-ROUND BURST:</b> +1 Hit/Dmg (Damage bonus applied to next damage roll)</span><br>`;
+            }
+            let rerollBtnHtml = "";
+            if (rerollInfo === null && !isCritFail) {
+                let pool = (globalState.combatActive && globalState.combat) ? (globalState.combat.gmPool || 0) : 0;
+                let canReroll = pool > 0;
+                rerollBtnHtml = `<br><button class="die-btn threat-reroll-btn" onclick="rerollThreatAttack()" ${canReroll ? '' : 'disabled'}>⟳ REROLL ATTACK (1 BENNY — GM POOL: ${pool})</button>`;
+            }
+            logToTerminal(termLog + rerollBtnHtml);
             if (globalState && globalState.webhook) {
                 let desc = "";
-                if (defenderDisplay) {
-                    desc += `🎯 **${defenderDisplay}**\n`;
+                if (rerollInfo) {
+                    desc += `⟳ **REROLL (1 GM Benny spent)**
+Original: ${rerollInfo.oldSummary}
+New: ${rerollInfo.newSummary}
+**Keeping ${rerollInfo.which}**
+`;
+                }
+                if (ctx.defenderDisplay) {
+                    desc += `🎯 **${ctx.defenderDisplay}**
+`;
                 }
                 results.forEach(r => {
-                    if (r.isSingle) desc += `**Result: ${r.total}**\n${r.outcome}\n`;
-                    else desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
-                    if (isSuppressive) {
-                        desc += `🟧 **SUPPRESSIVE FIRE:** Success = Distracted, Raise = Hit! (Max targets = weapon RoF)\n`;
-                    }
-                    if (is3RB) {
-                        desc += `🟦 **3-ROUND BURST:** +1 Hit/Dmg (Damage bonus applied to next damage roll).\n`;
-                    }
-                    if (r.bystander) {
-                        desc += `⚠️ **INNOCENT BYSTANDER HIT!** (Trait die rolled ${r.initialTrait})\n`;
-                    }
-                    desc += `\n`;
+                    if (r.isSingle) desc += `**Result: ${r.total}**
+${r.outcome}
+`;
+                    else desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}
+`;
+                    if (r.bystander) desc += `⚠️ **INNOCENT BYSTANDER HIT!** (Trait die rolled ${r.initialTrait})
+`;
                 });
-                const embed = { title: title, description: desc.trim(), color: color, fields: [] };
+                if (ctx.isSuppressive) desc += `🟧 **SUPPRESSIVE FIRE:** Success = Distracted, Raise = Hit! (Max targets = weapon RoF)
+`;
+                if (ctx.is3RB) desc += `🟦 **3-ROUND BURST:** +1 Hit/Dmg (Damage bonus applied to next damage roll).
+`;
+                const embed = { title: title + (rerollInfo ? ' (REROLL)' : ''), description: desc.trim(), color: color, fields: [] };
                 if (results[0].isSingle) {
-                    embed.fields.push({ name: `Trait (d${sides})`, value: `${results[0].traitHistory.join(' + ')}`, inline: true });
+                    embed.fields.push({ name: `Trait (d${ctx.sides})`, value: `${results[0].traitHistory.join(' + ')}`, inline: true });
                     if (results[0].wildHistory) embed.fields.push({ name: "Wild (d6)", value: `${results[0].wildHistory.join(' + ')}`, inline: true });
-                } else results.forEach(r => embed.fields.push({ name: `Shot #${r.shotIndex}`, value: `${r.history.join(' + ')}`, inline: true }));
-                if (totalModifier !== 0) embed.fields.push({ name: "Modifier", value: `${totalModifier > 0 ? '+' : ''}${totalModifier}`, inline: true });
-                let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || defaultWeaponIcon;
-                embed.thumbnail = { url: imgUrl };
-                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${activeWeaponContext.range || "—"}\nDamage: ${activeWeaponContext.damage || "—"}\nAP: ${activeWeaponContext.ap || "0"}\nRoF: ${activeWeaponContext.rof || "1"}` });
-                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+                } else {
+                    results.forEach(r => embed.fields.push({ name: `Shot #${r.shotIndex}`, value: `${r.history.join(' + ')}`, inline: true }));
+                }
+                if (ctx.totalModifier !== 0) embed.fields.push({ name: "Modifier", value: `${ctx.totalModifier > 0 ? '+' : ''}${ctx.totalModifier}`, inline: true });
+                if (ctx.weapon) {
+                    let imgUrl = ctx.weapon.image || ctx.weapon.icon || defaultWeaponIcon;
+                    embed.thumbnail = { url: imgUrl };
+                    embed.fields.push({
+                        name: "Weapon Specifications",
+                        value: `Range: ${ctx.weapon.range || "—"}
+Damage: ${ctx.weapon.damage || "—"}
+AP: ${ctx.weapon.ap || "0"}
+RoF: ${ctx.weapon.rof || "1"}`
+                    });
+                }
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(() => { });
             }
         }
         function shouldPromptForContextualDamage(damageStr) {
             let cleaned = (damageStr || "").toString().replace(/\s/g, '').toLowerCase();
             return !cleaned.match(/(?:\d*d\d+|str|[+-]?\d+)/i);
         }
+        function parseAP(ap) {
+            if (ap === undefined || ap === null) return { value: 0, ignore: false, display: '0' };
+            let s = ap.toString().trim();
+            if (/ignore/i.test(s)) return { value: 0, ignore: true, display: 'Ignore Armor' };
+            let n = parseInt(s);
+            if (isNaN(n)) return { value: 0, ignore: false, display: s || '0' };
+            return { value: n, ignore: false, display: `${n}` };
+        }
+        function getWoundCap(target) {
+            return target.woundCap || (target.isWildCard ? 4 : 1);
+        }
+        function computeDamageOutcome(total, effToughness, preState, woundCap) {
+            if (total < effToughness) {
+                return { effect: false, shaken: false, wounds: 0, incapacitated: !!preState.incapacitated, raises: 0, report: `NO EFFECT — damage ${total} is below Effective Toughness ${effToughness}.`, newWounds: preState.wounds || 0 };
+            }
+            let raises = Math.floor((total - effToughness) / 4);
+            let wounds = 0;
+            let report = '';
+            if (preState.shaken) {
+                wounds = 1 + raises;
+                report = `Already Shaken — takes ${wounds} Wound(s)`;
+                if (raises > 0) report += ` (1 from success + ${raises} from raise${raises !== 1 ? 's' : ''})`;
+                report += '.';
+            } else {
+                wounds = raises;
+                if (raises === 0) report = `Target is Shaken.`;
+                else report = `Target is Shaken and takes ${wounds} Wound(s) from ${raises} raise${raises !== 1 ? 's' : ''}.`;
+            }
+            let newWounds = (preState.wounds || 0) + wounds;
+            let incapacitated = false;
+            if (wounds > 0) {
+                if (newWounds >= woundCap) {
+                    newWounds = woundCap;
+                    incapacitated = true;
+                    report += ` Wounds now ${newWounds}/${woundCap} — INCAPACITATED!`;
+                } else report += ` Wounds now ${newWounds}/${woundCap}.`;
+            } else if (preState.incapacitated) {
+                incapacitated = true;
+                report += ` Target remains Incapacitated.`;
+            }
+            return { effect: true, shaken: true, wounds, incapacitated, raises, report, newWounds };
+        }
+        function applyDamageOutcomeToParticipant(target, outcome) {
+            if (outcome.shaken) target.shaken = true;
+            if (outcome.wounds > 0) {
+                let cap = getWoundCap(target);
+                target.wounds = Math.min(cap, (parseInt(target.wounds) || 0) + outcome.wounds);
+                if (outcome.incapacitated || target.wounds >= cap) target.incapacitated = true;
+            }
+            if (outcome.incapacitated) target.incapacitated = true;
+        }
+        async function applyThreatDamageToTarget(pending, total, weaponObj) {
+            let result = { term: "", embedValue: null };
+            if (!pending) return result;
+            if (!globalState.combatActive || !globalState.combat || !globalState.combat.participants) {
+                result.term = `> [!] Combat tracker not active — damage not applied automatically.`;
+                return result;
+            }
+            let participants = globalState.combat.participants;
+            let idx = participants.findIndex(p => p.id === pending.targetId);
+            if (idx === -1) {
+                result.term = `> [!] Selected target is no longer on the tracker — damage not applied.`;
+                return result;
+            }
+            let target = participants[idx];
+            if (!pending.hit) {
+                result.term = `> [!] Attack missed ${target.name} — damage total not applied.`;
+                result.embedValue = `Attack missed — damage not applied.`;
+                return result;
+            }
+            if (target.incapacitated) {
+                result.term = `> [!] ${target.name} is already Incapacitated — no further effect from this damage.`;
+                result.embedValue = `Target already Incapacitated — no further effect.`;
+                return result;
+            }
+            let apInfo = parseAP(weaponObj?.ap);
+            let armor = parseInt(target.armor) || 0;
+            let effectiveArmor = apInfo.ignore ? 0 : Math.max(0, armor - apInfo.value);
+            let toughness = parseInt(target.toughness) || 0;
+            let effToughness = toughness + effectiveArmor;
+            let preState = { shaken: !!target.shaken, wounds: parseInt(target.wounds) || 0, incapacitated: !!target.incapacitated };
+            let cap = getWoundCap(target);
+            let outcome = computeDamageOutcome(total, effToughness, preState, cap);
+            applyDamageOutcomeToParticipant(target, outcome);
+            participants[idx] = target;
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+            let breakdown = `Damage ${total} vs Effective Toughness ${effToughness} (Toughness ${toughness} + Armor ${armor} − AP ${apInfo.display})`;
+            result.term = `> AUTO-DAMAGE → ${target.name.toUpperCase()}<br>&nbsp;&nbsp;${breakdown}<br>&nbsp;&nbsp;Result: <b style="color:${outcome.effect ? '#ff9900' : 'inherit'};">${outcome.report}</b>`;
+            result.embedValue = `${breakdown}
+Result: ${outcome.report}`;
+            return result;
+        }
         window.rollDamage = async function (wepIndex, addRaise = false) {
             let wep = activeThreat.weapons[wepIndex];
+            let storageKey = getThreatStorageKey(wep, wepIndex);
+            let pendingApp = pendingDamageApplication[storageKey] || null;
             let dmgStr = (wep.damage || "").toLowerCase().replace(/\s/g, '');
             if (shouldPromptForContextualDamage(dmgStr)) {
                 let custom = prompt(`Damage for ${wep.name} is '${wep.damage}'. Enter a dice formula (example: 4d10):`);
                 if (!custom) return;
                 dmgStr = custom.toLowerCase().replace(/\s/g, '');
             }
-            let total = 0; let rolls = []; let flatMod = 0;
+            let total = 0;
+            let rolls = [];
+            let flatMod = 0;
             const tokenRegex = /[+-]?\s*(?:\d*d\d+|str|\d+)/gi;
             let parts = dmgStr.match(tokenRegex) || [];
-            let bonusKey = `threat_pending_damage_bonus_${activeTemplateId || activeThreat.name}_${wep.id || wep.name}`;
-            let has3RBBonus = sessionStorage.getItem(bonusKey) === "3rb";
+            let pendingBonus = getThreatPendingBonus(storageKey);
+            let has3RBBonus = pendingBonus.threeRoundBurst === true;
             if (has3RBBonus) {
                 flatMod += 1;
-                sessionStorage.removeItem(bonusKey);
+                clearThreatPendingBonus(storageKey, ['threeRoundBurst']);
             }
             parts.forEach(rawPart => {
                 let part = rawPart.replace(/\s/g, '').toLowerCase();
@@ -1321,57 +1671,80 @@
                     rolls.push(`Str(d${sides}${strMod ? (strMod > 0 ? '+' : '') + strMod : ''}):[${r.history.join('+')}]`);
                 } else if (part.includes('d')) {
                     let [c, s] = part.split('d');
-                    let count = parseInt(c) || 1; let sides = parseInt(s);
+                    let count = parseInt(c) || 1;
+                    let sides = parseInt(s);
                     for (let i = 0; i < count; i++) {
                         let r = rollExploding(sides);
-                        total += r.total * sign; rolls.push(`${sign < 0 ? '-' : ''}d${sides}:[${r.history.join('+')}]`);
+                        total += r.total * sign;
+                        rolls.push(`${sign < 0 ? '-' : ''}d${sides}:[${r.history.join('+')}]`);
                     }
-                } else if (!isNaN(parseInt(part))) flatMod += parseInt(part) * sign;
+                } else if (!isNaN(parseInt(part))) {
+                    flatMod += parseInt(part) * sign;
+                }
             });
             if (rolls.length === 0 && flatMod === 0) {
                 alert(`No rollable damage formula found for '${wep.damage}'.`);
                 return;
             }
             total += flatMod;
-            let bonusStr = ""; let bonusRolls = [];
-            if (addRaise) {
+            let shouldAddRaise = addRaise || pendingBonus.raise === true;
+            let bonusStr = "";
+            let bonusRolls = [];
+            if (shouldAddRaise) {
                 let rRoll = rollExploding(6);
-                total += rRoll.total; bonusRolls = rRoll.history;
+                total += rRoll.total;
+                bonusRolls = rRoll.history;
                 bonusStr = ` + ${rRoll.history.join('+')} [Raise]`;
+                if (pendingBonus.raise === true) clearThreatPendingBonus(storageKey, ['raise']);
             }
+            if (pendingApp) delete pendingDamageApplication[storageKey];
+            let autoApp = { term: "", embedValue: null };
+            if (pendingApp) autoApp = await applyThreatDamageToTarget(pendingApp, total, wep);
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
             let termLog = `> ${activeThreat.name} dealt damage with ${wep.name.toUpperCase()}<br>&nbsp;&nbsp;Dmg Roll [${wep.damage}]: ${rolls.join(' + ')}${flatMod !== 0 ? (flatMod > 0 ? '+' + flatMod : flatMod) : ''}${trbStr}${bonusStr}<br>&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
+            if (autoApp.term) termLog += `<br>${autoApp.term}`;
             logToTerminal(termLog);
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${activeThreat.name} rolled damage with ${wep.name}`,
-                    description: `**Damage Total: ${total}**`, color: 0xff3333,
-                    fields: [{ name: "Dice History", value: rolls.join('\n'), inline: true }]
-                };
-                if (flatMod !== 0) embed.fields.push({ name: "Modifier", value: flatMod > 0 ? `+${flatMod}` : `${flatMod}`, inline: true });
-                if (addRaise) {
+                    description: `**Damage Total: ${total}**`,
+                    color: 0xff3333,
+                    fields: [{
+                        name: "Dice History", value: rolls.join('
+'), inline: true }]
+};
+                    if(flatMod !== 0) embed.fields.push({ name: "Modifier", value: flatMod > 0 ? `+${flatMod}` : `${flatMod}`, inline: true });
+                if (shouldAddRaise) {
                     embed.fields.push({ name: "Raise Bonus (+1d6)", value: `${bonusRolls.join(' + ')}`, inline: true });
-                    embed.description += `\n*(Includes +1d6 Raise Bonus)*`;
+                    embed.description += `
+*(Includes +1d6 Raise Bonus)*`;
                 }
                 if (has3RBBonus) {
                     embed.fields.push({ name: "Three-Round Burst", value: "+1 Damage", inline: true });
-                    embed.description += `\n*(Includes +1 Damage from 3-Round Burst)*`;
+                    embed.description += `
+*(Includes +1 Damage from 3-Round Burst)*`;
                 }
+                if (autoApp.embedValue) embed.fields.push({ name: "Auto-Applied Damage", value: autoApp.embedValue, inline: false });
                 let imgUrl = wep.image || wep.icon || defaultWeaponIcon;
                 embed.thumbnail = { url: imgUrl };
-                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${wep.range || "—"}\nDamage: ${wep.damage || "—"}\nAP: ${wep.ap || "0"}\nRoF: ${wep.rof || "1"}` });
-                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+                embed.fields.push({
+                    name: "Weapon Specifications",
+                    value: `Range: ${wep.range || "—"}
+Damage: ${wep.damage || "—"}
+AP: ${wep.ap || "0"}
+RoF: ${wep.rof || "1"}`
+                });
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(() => { });
             }
         };
         function logToTerminal(html) {
             const term = document.getElementById('roll-terminal');
             const div = document.createElement('div');
-            div.style.marginBottom = "8px"; div.innerHTML = html;
-            term.appendChild(div); term.scrollTop = term.scrollHeight;
+            div.style.marginBottom = "8px";
+            div.innerHTML = html;
+            term.appendChild(div);
+            term.scrollTop = term.scrollHeight;
         }
-        // ==========================================
-        // DEPLOYMENT LOGIC (B3 GM Pool + B14 Squad Grouping)
-        // ==========================================
         window.deployToTracker = async function () {
             if (!activeThreat) return alert("Select or create a template to deploy.");
             if (!globalState.combatActive || !globalState.combat) return alert("Combat Tracker is not active! Initialize it from the Tracker view first.");
@@ -1383,15 +1756,34 @@
             for (let i = 0; i < count; i++) {
                 let suffix = count > 1 ? ` ${letters[i % 26]}` : "";
                 let newNpc = {
-                    id: "npc_" + activeTemplateId + "_" + Date.now() + "_" + i, name: baseName + suffix, isPlayer: false,
-                    isWildCard: activeThreat.isWildCard, parry: activeThreat.parry, toughness: activeThreat.toughness,
-                    armor: activeThreat.armor || 0, scale: activeThreat.scale || "Normal", pace: activeThreat.pace || 6,
+                    id: "npc_" + activeTemplateId + "_" + Date.now() + "_" + i,
+                    name: baseName + suffix,
+                    isPlayer: false,
+                    isWildCard: activeThreat.isWildCard,
+                    parry: activeThreat.parry,
+                    toughness: activeThreat.toughness,
+                    armor: activeThreat.armor || 0,
+                    scale: activeThreat.scale || "Normal",
+                    pace: activeThreat.pace || 6,
                     bennies: activeThreat.isWildCard ? 3 : 0,
-                    groupId: batchGroupId, // B14
-                    groupName: baseName,   // B14
-                    hasDodge: false,       // B8: defender Dodge/Deflect flag (toggled from the TN modal)
-                    woundCap: activeThreat.isWildCard ? 4 : 1, incapacitated: false,
-                    wounds: 0, fatigue: 0, shaken: false, distracted: false, distractedTTL: 0, vulnerable: false, vulnerableTTL: 0, card: null
+                    groupId: batchGroupId,
+                    groupName: baseName,
+                    hasDodge: !!activeThreat.hasDodge,
+                    woundCap: activeThreat.isWildCard ? 4 : 1,
+                    incapacitated: false,
+                    wounds: 0,
+                    fatigue: 0,
+                    shaken: false,
+                    distracted: false,
+                    distractedTTL: 0,
+                    distractedAppliedRound: null,
+                    distractedSource: null,
+                    vulnerable: false,
+                    vulnerableTTL: 0,
+                    vulnerableAppliedRound: null,
+                    vulnerableSource: null,
+                    lastConditionTickRound: null,
+                    card: null
                 };
                 participants.push(newNpc);
             }
@@ -1411,9 +1803,10 @@
             }
             if (globalState && globalState.webhook) {
                 let desc = `${count} unit(s) of **${baseName}** spawned into the tactical net.`;
-                if (poolGrew) desc += `\n**GM Benny Pool +2** (Wild Card deployed) → now **${newGmPool}**.`;
+                if (poolGrew) desc += `
+**GM Benny Pool +2** (Wild Card deployed) → now **${newGmPool}**.`;
                 const embed = { title: "REINFORCEMENTS HAVE ARRIVED", description: desc, color: 0xff3333 };
-                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(() => { });
             }
         };
     </script>
