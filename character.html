@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LambdaOS - Character Sheet</title>
     <link rel="stylesheet" href="/style.css">
-    
     <script>
         // Security Check
         let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
@@ -18,11 +18,20 @@
             margin-bottom: 20px;
             border-bottom: 1px solid var(--theme-color);
             padding-bottom: 10px;
-            margin-right: 180px; 
+            margin-right: 180px;
             align-items: flex-end;
         }
-        .nav-link { color: var(--theme-color); text-decoration: none; cursor: pointer; }
-        .nav-link:hover { background: var(--theme-color); color: var(--bg-color); }
+
+        .nav-link {
+            color: var(--theme-color);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            background: var(--theme-color);
+            color: var(--bg-color);
+        }
 
         /* Navigation Tabs */
         .tab-bar {
@@ -32,6 +41,7 @@
             border-bottom: 1px solid var(--theme-color);
             padding-bottom: 10px;
         }
+
         .tab-btn {
             background: transparent;
             color: var(--theme-color);
@@ -42,7 +52,11 @@
             font-size: 1.1em;
             transition: 0.2s;
         }
-        .tab-btn:hover { background: rgba(128, 128, 128, 0.2); }
+
+        .tab-btn:hover {
+            background: rgba(128, 128, 128, 0.2);
+        }
+
         .tab-btn.active-tab {
             background: var(--theme-color) !important;
             color: var(--bg-color) !important;
@@ -54,14 +68,24 @@
             grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
-        @media (max-width: 800px) { .sheet-grid { grid-template-columns: 1fr; } }
+
+        @media (max-width: 800px) {
+            .sheet-grid {
+                grid-template-columns: 1fr;
+            }
+        }
 
         .section {
             border: 1px solid var(--theme-color);
             padding: 15px;
-            background: rgba(128, 128, 128, 0.1); 
+            background: rgba(128, 128, 128, 0.1);
         }
-        .section h3 { margin-top: 0; border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px; }
+
+        .section h3 {
+            margin-top: 0;
+            border-bottom: 1px dashed var(--theme-color);
+            padding-bottom: 5px;
+        }
 
         .stat-row {
             display: flex;
@@ -70,7 +94,10 @@
             align-items: center;
             border-bottom: 1px solid transparent;
         }
-        .stat-row:hover { border-bottom: 1px solid rgba(255, 153, 0, 0.2); }
+
+        .stat-row:hover {
+            border-bottom: 1px solid rgba(255, 153, 0, 0.2);
+        }
 
         .die-container {
             display: inline-flex;
@@ -86,12 +113,21 @@
             text-align: center;
             background: transparent;
         }
-        .editable:hover, .editable:focus {
+
+        .editable:hover,
+        .editable:focus {
             border-bottom: 1px dashed var(--theme-color);
             background: rgba(128, 128, 128, 0.2);
         }
-        .die-input { width: 30px; font-weight: bold; }
-        .mod-input { width: 40px; }
+
+        .die-input {
+            width: 30px;
+            font-weight: bold;
+        }
+
+        .mod-input {
+            width: 40px;
+        }
 
         .edit-area {
             width: 100%;
@@ -103,7 +139,12 @@
             font-size: 1em;
             resize: vertical;
         }
-        .edit-area:hover, .edit-area:focus { border: 1px dashed var(--theme-color); outline: none; }
+
+        .edit-area:hover,
+        .edit-area:focus {
+            border: 1px dashed var(--theme-color);
+            outline: none;
+        }
 
         /* Styled Weapon Cards */
         .weapon-card {
@@ -115,16 +156,19 @@
             gap: 20px;
             background: rgba(128, 128, 128, 0.05);
         }
+
         .weapon-card.out-of-ammo {
             border-color: #ff3333;
             background: rgba(255, 51, 51, 0.05);
         }
+
         .weapon-icon {
             width: 90px;
             height: 45px;
             object-fit: contain;
-            filter: drop-shadow(0px 0px 1px var(--theme-color)); 
+            filter: drop-shadow(0px 0px 1px var(--theme-color));
         }
+
         .weapon-details {
             flex-grow: 1;
             display: grid;
@@ -132,6 +176,7 @@
             gap: 8px;
             font-size: 0.9em;
         }
+
         .weapon-actions {
             display: flex;
             flex-direction: column;
@@ -150,15 +195,62 @@
             transition: 0.2s;
             outline: none;
         }
-        .die-btn:hover { background: var(--theme-color); color: var(--bg-color); text-shadow: none; }
-        .die-btn::before { content: "[ "; }
-        .die-btn::after { content: " ]"; }
-        .die-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .die-btn:disabled:hover { background: transparent; color: var(--theme-color); }
 
-        .del-btn { border-color: #ff3333; color: #ff3333; margin-left: 5px; }
-        .del-btn:hover { background: #ff3333; color: var(--bg-color); }
-        .del-btn::before { content: ""; } .del-btn::after { content: ""; }
+        .die-btn:hover {
+            background: var(--theme-color);
+            color: var(--bg-color);
+            text-shadow: none;
+        }
+
+        .die-btn::before {
+            content: "[ ";
+        }
+
+        .die-btn::after {
+            content: " ]";
+        }
+
+        .die-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .die-btn:disabled:hover {
+            background: transparent;
+            color: var(--theme-color);
+        }
+
+        .del-btn {
+            border-color: #ff3333;
+            color: #ff3333;
+            margin-left: 5px;
+        }
+
+        .del-btn:hover {
+            background: #ff3333;
+            color: var(--bg-color);
+        }
+
+        .del-btn::before {
+            content: "";
+        }
+
+        .del-btn::after {
+            content: "";
+        }
+
+        /* B3: Benny reroll button in terminal */
+        .reroll-btn {
+            margin-top: 6px;
+            font-size: 0.8em;
+            border-color: #ffff00;
+            color: #ffff00;
+        }
+
+        .reroll-btn:hover {
+            background: #ffff00;
+            color: var(--bg-color);
+        }
 
         /* Ammo System Styles */
         .ammo-tier-select {
@@ -171,38 +263,98 @@
             cursor: pointer;
             outline: none;
         }
-        .ammo-tier-select:disabled { cursor: not-allowed; opacity: 0.7; }
-        .ammo-tier-select option { background: var(--bg-color); }
-        .ammo-tier-Full { color: #00ff00; }
-        .ammo-tier-High { color: #88ff00; }
-        .ammo-tier-OK { color: #ffff00; }
-        .ammo-tier-Low { color: #ff9900; }
-        .ammo-tier-Very-Low { color: #ff6600; }
-        .ammo-tier-Out { color: #ff3333; font-weight: bold; }
-        .gm-ammo-check-btn { font-size: 0.75em; padding: 2px 8px; margin-left: 5px; }
-        .ammo-display, .projectile-count { display: inline-block; min-width: 20px; text-align: center; }
+
+        .ammo-tier-select:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .ammo-tier-select option {
+            background: var(--bg-color);
+        }
+
+        .ammo-tier-Full {
+            color: #00ff00;
+        }
+
+        .ammo-tier-High {
+            color: #88ff00;
+        }
+
+        .ammo-tier-OK {
+            color: #ffff00;
+        }
+
+        .ammo-tier-Low {
+            color: #ff9900;
+        }
+
+        .ammo-tier-Very-Low {
+            color: #ff6600;
+        }
+
+        .ammo-tier-Out {
+            color: #ff3333;
+            font-weight: bold;
+        }
+
+        .gm-ammo-check-btn {
+            font-size: 0.75em;
+            padding: 2px 8px;
+            margin-left: 5px;
+        }
+
+        .ammo-display,
+        .projectile-count {
+            display: inline-block;
+            min-width: 20px;
+            text-align: center;
+        }
 
         /* CRT Terminal Logs and Stacking contexts */
-        .term-header, #roll-terminal {
+        .term-header,
+        #roll-terminal {
             position: relative !important;
-            z-index: 999998 !important; 
+            z-index: 999998 !important;
             pointer-events: auto !important;
         }
-        .term-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px;}
+
+        .term-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+        }
+
         #roll-terminal {
             border: 1px solid var(--theme-color);
             padding: 10px;
             height: 200px;
             overflow-y: auto;
-            background: rgba(0,0,0,0.5); 
+            background: rgba(0, 0, 0, 0.5);
             color: var(--theme-color);
             margin-top: 5px;
         }
 
-        #admin-controls { display: none; margin-bottom: 15px; }
-        .admin-input { background: var(--bg-color); color: var(--theme-color); border: 1px solid var(--theme-color); padding: 5px; font-family: inherit; width: 300px; }
-        
-        #save-status { font-size: 0.8em; opacity: 0.8; margin-left: 15px; }
+        #admin-controls {
+            display: none;
+            margin-bottom: 15px;
+        }
+
+        .admin-input {
+            background: var(--bg-color);
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            padding: 5px;
+            font-family: inherit;
+            width: 300px;
+        }
+
+        #save-status {
+            font-size: 0.8em;
+            opacity: 0.8;
+            margin-left: 15px;
+        }
 
         /* Preset DB Config Table */
         .preset-table {
@@ -211,23 +363,51 @@
             font-size: 0.8em;
             margin-top: 15px;
         }
-        .preset-table th, .preset-table td {
+
+        .preset-table th,
+        .preset-table td {
             border: 1px solid var(--theme-color);
             padding: 6px;
             text-align: left;
         }
 
         /* Modals */
-        #tn-modal, #weapon-add-modal {
-            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px;
-            z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.9);
-            width: max-content; min-width: 350px;
+        #tn-modal,
+        #weapon-add-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid var(--theme-color);
+            background: var(--bg-color);
+            padding: 25px;
+            z-index: 999999 !important;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
+            width: max-content;
+            min-width: 350px;
             pointer-events: auto !important;
         }
-        #tn-modal h3, #weapon-add-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
-        #tn-modal p, #weapon-add-modal p { margin: 10px 0; }
-        .tn-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
+
+        #tn-modal h3,
+        #weapon-add-modal h3 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--theme-color);
+            padding-bottom: 10px;
+        }
+
+        #tn-modal p,
+        #weapon-add-modal p {
+            margin: 10px 0;
+        }
+
+        .tn-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
 
         .setting-row {
             display: flex;
@@ -238,24 +418,24 @@
         }
     </style>
 </head>
+
 <body>
-
-    <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
-
+    <img id="bg-lambda"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png"
+        alt="Lambda Logo">
     <div id="top-nav">
-        <a href="/dashboard.html" class="nav-link">< RETURN TO DASHBOARD</a>
-        <div>
-            <span id="char-name-display">LOADING...</span>
-            <span id="save-status"></span>
-        </div>
+        <a href="/dashboard.html" class="nav-link">
+            < RETURN TO DASHBOARD</a>
+                <div>
+                    <span id="char-name-display">LOADING...</span>
+                    <span id="save-status"></span>
+                </div>
     </div>
-
     <!-- Tab Navigation Bar -->
     <div class="tab-bar">
         <button id="tab-stats" class="tab-btn active-tab" onclick="switchTab('stats')">DIAGNOSTICS & STATUS</button>
         <button id="tab-armory" class="tab-btn" onclick="switchTab('armory')">TACTICAL ARMORY</button>
     </div>
-
     <!-- GM Controls -->
     <div id="admin-controls">
         <select id="admin-char-select" class="admin-input">
@@ -264,77 +444,91 @@
             <option value="trombley-hicks">View: Trombley Hicks</option>
         </select>
         <input type="text" id="discord-webhook" class="admin-input" placeholder="Paste Discord Webhook URL here...">
-        <button id="save-webhook" class="die-btn" style="border:none;" onclick="saveWebhook()">SAVE URL GLOBALLY</button>
+        <button id="save-webhook" class="die-btn" style="border:none;" onclick="saveWebhook()">SAVE URL
+            GLOBALLY</button>
+        <!-- B3: Discreet New Session reset (GM only) -->
+        <button class="die-btn" style="border:none; font-size:0.7em; opacity:0.6; margin-left:10px;"
+            onclick="gmNewSession()" title="Reset all PCs to 3 Bennies (use-it-or-lose-it, p.91)">NEW SESSION</button>
     </div>
-
     <!-- Tab Section 1: DIAGNOSTICS & STATUS -->
     <div id="section-stats" class="tab-content">
         <div class="sheet-grid">
             <!-- LEFT COLUMN -->
             <div>
-                <div class="section" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <div class="section"
+                    style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0; border: none; padding: 0;">BENNIES</h3>
                     <div class="die-container" style="font-size: 1.2em;">
                         <button class="die-btn" onclick="adjustBennies(-1)">-</button>
                         <span id="benny-count" style="font-weight: bold; width: 30px; text-align: center;">3</span>
                         <button class="die-btn" onclick="adjustBennies(1)">+</button>
-                        <button class="die-btn" id="soak-btn" style="margin-left: 15px;" onclick="soakWounds()" title="Spend a Benny: Vigor roll vs TN 4, each success/raise soaks 1 Wound">SOAK</button>
+                        <button class="die-btn" id="soak-btn" style="margin-left: 15px;" onclick="soakWounds()"
+                            title="Spend a Benny: Vigor roll vs TN 4, each success/raise soaks 1 Wound">SOAK</button>
                     </div>
                 </div>
-
                 <div class="section" id="combat-hud" style="display:none; margin-bottom: 20px; border-color: #ff3333;">
                     <h3 style="color:#ff3333;">TACTICAL STATUS</h3>
                     <div id="hud-stats" style="font-weight:bold; color:#ff9900;"></div>
                 </div>
-
-                <div class="section" id="shaken-banner" style="display:none; margin-bottom: 20px; border-color: #ff3333; background: rgba(255,51,51,0.08); text-align: center;">
-                    <div style="color:#ff3333; font-weight:bold; margin-bottom:10px;">[ SHAKEN — FREE ACTIONS ONLY ]</div>
-                    <button class="die-btn" style="border-color:#ff3333; color:#ff3333;" onclick="recoverFromShaken()">ROLL SPIRIT RECOVERY (TN 4)</button>
+                <div class="section" id="shaken-banner"
+                    style="display:none; margin-bottom: 20px; border-color: #ff3333; background: rgba(255,51,51,0.08); text-align: center;">
+                    <div style="color:#ff3333; font-weight:bold; margin-bottom:10px;">[ SHAKEN — FREE ACTIONS ONLY ]
+                    </div>
+                    <button class="die-btn" style="border-color:#ff3333; color:#ff3333;"
+                        onclick="recoverFromShaken()">ROLL SPIRIT RECOVERY (TN 4)</button>
+                    <!-- B3: Spend a Benny to remove Shaken instantly, any time (p.92) -->
+                    <button class="die-btn" id="unshake-btn"
+                        style="border-color:#ffff00; color:#ffff00; margin-left:10px;"
+                        onclick="unshakeWithBenny()">BENNY: UNSHAKE</button>
                 </div>
-
                 <div class="section" style="margin-bottom: 20px;">
                     <h3>ATTRIBUTES</h3>
                     <div id="attributes-container"></div>
                 </div>
-
                 <div class="section">
                     <h3>SKILLS (Wildcards)</h3>
                     <div id="skills-container"></div>
                     <div style="display: flex; justify-content: space-between; margin-top: 10px; gap: 10px;">
-                        <button class="die-btn" id="add-skill-btn" style="border:none; flex-grow: 1;" onclick="addSkill()">+ ADD SKILL</button>
-                        <button class="die-btn" onclick="prepareRoll('Unskilled Attempt', null)" style="border:none; flex-grow: 1;">UNSKILLED ATTEMPT</button>
+                        <button class="die-btn" id="add-skill-btn" style="border:none; flex-grow: 1;"
+                            onclick="addSkill()">+ ADD SKILL</button>
+                        <button class="die-btn" onclick="prepareRoll('Unskilled Attempt', null)"
+                            style="border:none; flex-grow: 1;">UNSKILLED ATTEMPT</button>
                     </div>
                 </div>
             </div>
-
             <!-- RIGHT COLUMN -->
             <div>
                 <div class="section" style="margin-bottom: 20px;">
                     <h3>DERIVED STATS</h3>
-                    <div class="stat-row"><span>Pace:</span> <span class="editable" id="der-pace" contenteditable="true"></span></div>
+                    <div class="stat-row"><span>Pace:</span> <span class="editable" id="der-pace"
+                            contenteditable="true"></span></div>
                     <div class="stat-row">
                         <span>Parry:</span>
                         <div style="display:flex; align-items:center; gap:5px;">
-                            <span id="der-parry-calc" style="border-bottom: 1px dashed var(--theme-color); padding: 2px 5px;"></span>
-                            <input type="number" id="der-parry-override" class="admin-input" value="0" style="width: 50px; padding: 2px; text-align: center;">
-                            <button id="reset-parry-btn" class="die-btn" style="padding: 2px 6px;" onclick="resetDerived('parry')" title="Reset Override">↺</button>
+                            <span id="der-parry-calc"
+                                style="border-bottom: 1px dashed var(--theme-color); padding: 2px 5px;"></span>
+                            <input type="number" id="der-parry-override" class="admin-input" value="0"
+                                style="width: 50px; padding: 2px; text-align: center;">
+                            <button id="reset-parry-btn" class="die-btn" style="padding: 2px 6px;"
+                                onclick="resetDerived('parry')" title="Reset Override">↺</button>
                         </div>
                     </div>
                     <div class="stat-row">
                         <span>Toughness:</span>
                         <div style="display:flex; align-items:center; gap:5px;">
-                            <span id="der-toughness-calc" style="border-bottom: 1px dashed var(--theme-color); padding: 2px 5px;"></span>
-                            <input type="number" id="der-toughness-override" class="admin-input" value="0" style="width: 50px; padding: 2px; text-align: center;">
-                            <button id="reset-toughness-btn" class="die-btn" style="padding: 2px 6px;" onclick="resetDerived('toughness')" title="Reset Override">↺</button>
+                            <span id="der-toughness-calc"
+                                style="border-bottom: 1px dashed var(--theme-color); padding: 2px 5px;"></span>
+                            <input type="number" id="der-toughness-override" class="admin-input" value="0"
+                                style="width: 50px; padding: 2px; text-align: center;">
+                            <button id="reset-toughness-btn" class="die-btn" style="padding: 2px 6px;"
+                                onclick="resetDerived('toughness')" title="Reset Override">↺</button>
                         </div>
                     </div>
                 </div>
-
                 <div class="section" style="margin-bottom: 20px;">
                     <h3>HINDRANCES & EDGES</h3>
                     <textarea class="edit-area" id="notes-edges"></textarea>
                 </div>
-
                 <div class="section">
                     <h3>GEAR, SPECIAL, & HISTORY</h3>
                     <textarea class="edit-area" id="notes-gear"></textarea>
@@ -342,21 +536,22 @@
             </div>
         </div>
     </div>
-
     <!-- Tab Section 2: TACTICAL ARMORY -->
     <div id="section-armory" class="tab-content" style="display: none;">
         <div class="section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px;">
                 <h3 style="margin: 0; border: none; padding: 0;">EQUIPPED WEAPONRY</h3>
                 <button class="die-btn" onclick="openEquipModal()" style="border: none;">+ EQUIP WEAPON</button>
             </div>
             <div id="weapons-list-container"></div>
         </div>
-
         <!-- Master Presets Database Configuration Panel (Admin Only) -->
         <div id="master-presets-panel" class="section" style="margin-top: 25px; display: none;">
             <h3>OVERWATCH ARMORY CONFIG (MASTER PRESETS)</h3>
-            <p style="font-size: 0.85em; opacity: 0.85; margin-bottom: 10px;">GM Mode: Changes made below update the presets database globally in real-time. Click values directly inside the database table below to live-edit weapon profiles.</p>
+            <p style="font-size: 0.85em; opacity: 0.85; margin-bottom: 10px;">GM Mode: Changes made below update the
+                presets database globally in real-time. Click values directly inside the database table below to
+                live-edit weapon profiles.</p>
             <div style="overflow-x: auto;">
                 <table class="preset-table">
                     <thead>
@@ -377,10 +572,10 @@
                     <tbody id="master-presets-body"></tbody>
                 </table>
             </div>
-            <button class="die-btn" onclick="addCustomPreset()" style="margin-top: 15px; border: none;">+ CREATE CUSTOM WEAPON PRESET</button>
+            <button class="die-btn" onclick="addCustomPreset()" style="margin-top: 15px; border: none;">+ CREATE CUSTOM
+                WEAPON PRESET</button>
         </div>
     </div>
-
     <!-- Live Roll Output -->
     <div class="term-header">
         <span>> TERMINAL OUTPUT</span>
@@ -389,20 +584,20 @@
     <div id="roll-terminal">
         <div>> TERMINAL READY. WAITING FOR INPUT...</div>
     </div>
-
     <!-- Target Number Modal -->
     <div id="tn-modal" style="pointer-events: auto !important;">
         <h3>TACTICAL ENGAGEMENT MONITOR</h3>
-        
         <div class="setting-row">
             <span>Target Number (TN):</span>
-            <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center; pointer-events: auto !important;">
+            <input type="number" id="tn-input" value="4" class="admin-input"
+                style="width:80px; text-align:center; pointer-events: auto !important;">
         </div>
-
-        <div id="ranged-options-container" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+        <div id="ranged-options-container"
+            style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <div class="setting-row">
                 <span>Range Bracket:</span>
-                <select id="range-select" class="admin-input" style="width:180px; pointer-events: auto !important;" onchange="updateRangePenalty()">
+                <select id="range-select" class="admin-input" style="width:180px; pointer-events: auto !important;"
+                    onchange="updateRangePenalty()">
                     <option value="0">Short Range (+0)</option>
                     <option value="-2">Medium Range (-2)</option>
                     <option value="-4">Long Range (-4)</option>
@@ -411,51 +606,64 @@
             </div>
             <div class="setting-row" id="scope-row" style="display:none;">
                 <span>Is Aiming? (takes your whole turn; benefit applies to your next attack)</span>
-                <input type="checkbox" id="scope-checkbox" onchange="updateRangePenalty()" style="width: 20px; height: 20px; pointer-events: auto !important;">
+                <input type="checkbox" id="scope-checkbox" onchange="updateRangePenalty()"
+                    style="width: 20px; height: 20px; pointer-events: auto !important;">
             </div>
             <div class="setting-row" id="aim-mode-row" style="display:none;">
                 <span>Aim Benefit:</span>
                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
-                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
-                        <input type="radio" name="aim-mode" id="aim-mode-ignore" value="ignore" checked onchange="updateRangePenalty()"> Ignore up to 4 pts of penalties
+                    <label
+                        style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                        <input type="radio" name="aim-mode" id="aim-mode-ignore" value="ignore" checked
+                            onchange="updateRangePenalty()"> Ignore up to 4 pts of penalties
                     </label>
-                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
-                        <input type="radio" name="aim-mode" id="aim-mode-plus2" value="plus2" onchange="updateRangePenalty()"> +2 to your roll
+                    <label
+                        style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                        <input type="radio" name="aim-mode" id="aim-mode-plus2" value="plus2"
+                            onchange="updateRangePenalty()"> +2 to your roll
                     </label>
                 </div>
             </div>
             <div class="setting-row" id="aim-scope-row" style="display:none;">
                 <span>Scoped weapon? (scope cancels 2 additional pts — ignore cap 6)</span>
-                <input type="checkbox" id="aim-scope-checkbox" onchange="updateRangePenalty()" style="width: 20px; height: 20px; pointer-events: auto !important;">
+                <input type="checkbox" id="aim-scope-checkbox" onchange="updateRangePenalty()"
+                    style="width: 20px; height: 20px; pointer-events: auto !important;">
             </div>
         </div>
-
-        <div id="rof-options-container" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+        <div id="rof-options-container"
+            style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <div class="setting-row">
                 <span>Shots Fired (RoF):</span>
-                <select id="rof-select" class="admin-input" style="width:180px; pointer-events: auto !important;" onchange="updateRecoilPenalty()">
+                <select id="rof-select" class="admin-input" style="width:180px; pointer-events: auto !important;"
+                    onchange="updateRecoilPenalty()">
                     <option value="1">Single Shot (1 Bullet)</option>
                 </select>
             </div>
             <div class="setting-row">
                 <span>Fire Mode:</span>
                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
-                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
-                        <input type="checkbox" id="suppressive-checkbox" onchange="updateRecoilPenalty()"> Suppressive Fire (x3 Ammo)
+                    <label
+                        style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                        <input type="checkbox" id="suppressive-checkbox" onchange="updateRecoilPenalty()"> Suppressive
+                        Fire (x3 Ammo)
                     </label>
-                    <label id="3rb-label" style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
-                        <input type="checkbox" id="3rb-checkbox" onchange="updateRecoilPenalty()"> 3-Round Burst (+1 Hit/Dmg)
+                    <label id="3rb-label"
+                        style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                        <input type="checkbox" id="3rb-checkbox" onchange="updateRecoilPenalty()"> 3-Round Burst (+1
+                        Hit/Dmg)
                     </label>
-                    <label id="doubletap-label" style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
-                        <input type="checkbox" id="doubletap-checkbox" onchange="updateRecoilPenalty()"> Double Tap (+1 Hit/Dmg)
+                    <label id="doubletap-label"
+                        style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                        <input type="checkbox" id="doubletap-checkbox" onchange="updateRecoilPenalty()"> Double Tap (+1
+                        Hit/Dmg)
                     </label>
                 </div>
             </div>
-            <div id="recoil-warning" style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">
+            <div id="recoil-warning"
+                style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">
                 * Firing at RoF > 1 incurs a -2 Recoil penalty.
             </div>
         </div>
-
         <div class="setting-row" id="map-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Actions this Turn:</span>
             <select id="map-select" class="admin-input" style="width:180px; pointer-events: auto !important;">
@@ -464,56 +672,60 @@
                 <option value="-4">3 Actions (-4 MAP)</option>
             </select>
         </div>
-
-        <div class="setting-row" id="wild-attack-row" style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+        <div class="setting-row" id="wild-attack-row"
+            style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Wild Attack:</span>
-            <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+            <label
+                style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
                 <input type="checkbox" id="wild-attack-checkbox"> Wild Attack (+2 Hit/Dmg, Vulnerable)
             </label>
         </div>
-
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Modifier Adjust:</span>
-            <input type="number" id="mod-override-input" value="0" class="admin-input" style="width:80px; text-align:center; pointer-events: auto !important;">
+            <input type="number" id="mod-override-input" value="0" class="admin-input"
+                style="width:80px; text-align:center; pointer-events: auto !important;">
         </div>
-
         <div class="tn-buttons">
-            <button class="die-btn" onclick="confirmRoll()" style="pointer-events: auto !important;">CONFIRM ROLL</button>
+            <button class="die-btn" onclick="confirmRoll()" style="pointer-events: auto !important;">CONFIRM
+                ROLL</button>
             <button class="die-btn" onclick="cancelRoll()" style="pointer-events: auto !important;">CANCEL</button>
         </div>
     </div>
-
     <!-- Equip Weapon Selection Modal -->
     <div id="weapon-add-modal" style="pointer-events: auto !important;">
         <h3>EQUIP ARMAMENT</h3>
         <p>Select weapon from master presets:</p>
-        <select id="equip-weapon-select" class="admin-input" style="width:100%; margin-bottom: 15px; pointer-events: auto !important;"></select>
+        <select id="equip-weapon-select" class="admin-input"
+            style="width:100%; margin-bottom: 15px; pointer-events: auto !important;"></select>
         <div class="tn-buttons">
-            <button class="die-btn" onclick="confirmEquip()" style="pointer-events: auto !important;">EQUIP WEAPON</button>
+            <button class="die-btn" onclick="confirmEquip()" style="pointer-events: auto !important;">EQUIP
+                WEAPON</button>
             <button class="die-btn" onclick="cancelEquip()" style="pointer-events: auto !important;">CANCEL</button>
         </div>
     </div>
-
     <!-- Minimum Strength Warning Modal -->
-    <div id="min-str-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid #ff3333; background: var(--bg-color); padding: 25px; z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(255,0,0,0.9); width: max-content; min-width: 350px; pointer-events: auto !important;">
-        <h3 style="color:#ff3333; margin-top:0; border-bottom: 1px solid #ff3333; padding-bottom: 10px;">STRENGTH REQUIREMENT NOT MET</h3>
-        <p id="min-str-modal-text">You do not meet the minimum strength requirement for this weapon.<br>Firing it will incur <b>automatic penalties</b> to your trait roll (-1 per die step below requirement).</p>
-        <label style="display:inline-flex; align-items:center; gap:8px; margin: 15px 0; font-size: 0.9em; cursor:pointer; pointer-events: auto !important;">
-            <input type="checkbox" id="never-show-min-str" style="width:16px; height:16px;"> Never show me again for future weapons
+    <div id="min-str-modal"
+        style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid #ff3333; background: var(--bg-color); padding: 25px; z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(255,0,0,0.9); width: max-content; min-width: 350px; pointer-events: auto !important;">
+        <h3 style="color:#ff3333; margin-top:0; border-bottom: 1px solid #ff3333; padding-bottom: 10px;">STRENGTH
+            REQUIREMENT NOT MET</h3>
+        <p id="min-str-modal-text">You do not meet the minimum strength requirement for this weapon.<br>Firing it will
+            incur <b>automatic penalties</b> to your trait roll (-1 per die step below requirement).</p>
+        <label
+            style="display:inline-flex; align-items:center; gap:8px; margin: 15px 0; font-size: 0.9em; cursor:pointer; pointer-events: auto !important;">
+            <input type="checkbox" id="never-show-min-str" style="width:16px; height:16px;"> Never show me again for
+            future weapons
         </label>
         <div class="tn-buttons">
-            <button class="die-btn" style="border-color:#ff3333; color:#ff3333; pointer-events: auto !important;" onclick="proceedMinStr()">PROCEED ANYWAY</button>
+            <button class="die-btn" style="border-color:#ff3333; color:#ff3333; pointer-events: auto !important;"
+                onclick="proceedMinStr()">PROCEED ANYWAY</button>
             <button class="die-btn" onclick="cancelMinStr()" style="pointer-events: auto !important;">CANCEL</button>
         </div>
     </div>
-
     <script src="/settings.js"></script>
-
     <!-- Firebase Realtime WebSockets Integration -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
         // ==========================================
         // 1. CONFIGURATION
         // ==========================================
@@ -526,9 +738,7 @@
             messagingSenderId: "62557473299",
             appId: "1:62557473299:web:e2ebf2ee2520a9189e8de6"
         };
-
         const isFirebaseConfigured = firebaseConfig.databaseURL && !firebaseConfig.databaseURL.includes("YOUR_PROJECT_ID");
-
         // ==========================================
         // 2. DEFAULT WEAPON PRESETS DATABASE
         // ==========================================
@@ -550,79 +760,73 @@
             { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "2", shots: "Unlimited", minStr: "d6", icon: "https://i.imgur.com/vhkAPmf.png" },
             { id: "bugbait", name: "Bugbait", range: "12/24/48", damage: "Special", ap: "—", rof: "1", shots: "1", minStr: "d4", icon: "https://i.imgur.com/gwitRFd.png" }
         ];
-
         // Strong projectile IDs — tracked individually by GM
         const strongProjectileIds = ["ar2-orb", "rpg", "grenade", "mine", "crossbow", "bugbait"];
-
         // Ammo tier hierarchy
         const ammoTiers = ["Full", "High", "OK", "Low", "Very Low", "Out"];
-
         // ==========================================
         // 3. DEFAULT CHARACTER DATA
         // ==========================================
         const defaultData = {
             "katey-commons": {
                 name: "Katey Commons", bennies: 3, weapons: [],
-                attributes: { Agility: {die:"6", mod:"+0"}, Smarts: {die:"8", mod:"+0"}, Spirit: {die:"8", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"8", mod:"+0"} },
-                skills: { Athletics: {die:"6", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Electronics: {die:"8", mod:"+0"}, Fighting: {die:"6", mod:"+0"}, Hacking: {die:"6", mod:"+0"}, Healing: {die:"8", mod:"+0"}, Notice: {die:"6", mod:"+0"}, Persuasion: {die:"6", mod:"+0"}, Repair: {die:"8", mod:"+0"}, Shooting: {die:"4", mod:"+0"}, Stealth: {die:"6", mod:"+0"} },
+                attributes: { Agility: { die: "6", mod: "+0" }, Smarts: { die: "8", mod: "+0" }, Spirit: { die: "8", mod: "+0" }, Strength: { die: "4", mod: "+0" }, Vigor: { die: "8", mod: "+0" } },
+                skills: { Athletics: { die: "6", mod: "+0" }, "Common Knowledge": { die: "6", mod: "+0" }, Electronics: { die: "8", mod: "+0" }, Fighting: { die: "6", mod: "+0" }, Hacking: { die: "6", mod: "+0" }, Healing: { die: "8", mod: "+0" }, Notice: { die: "6", mod: "+0" }, Persuasion: { die: "6", mod: "+0" }, Repair: { die: "8", mod: "+0" }, Shooting: { die: "4", mod: "+0" }, Stealth: { die: "6", mod: "+0" } },
                 derived: { pace: "6", parryOverride: 0, toughnessOverride: 0 },
-                edges: "Hindrances:\n- Ex-Drone (Major)\n- Heroic (Major)\n- Pacifist (Minor)\n- Vulnerability (Minor -- electrosensitivity)\n\nEdges:\n- Cyborg (Ex-Drone)\n- Healer\n- Mr. Fix It",
-                gear: "Cyberware [$20000/20000, Strain 6/8]:\n- Data Jack [$5000, 1]\n- Enhanced Hearing [$5000, 1]\n- Extra Limbs x2 [$10000, 4]\n\nAdvance History:\n1. Mr. Fix It\n2. Spirit d8\n3. Healer\n4. Vigor d8"
+                edges: "Hindrances:\n- Ex-Drone (Major)\n- Heroic (Major)\n- Pacifist (Minor)\n- Vulnerability (Minor -- electrosensitivity)\nEdges:\n- Cyborg (Ex-Drone)\n- Healer\n- Mr. Fix It",
+                gear: "Cyberware [$20000/20000, Strain 6/8]:\n- Data Jack [$5000, 1]\n- Enhanced Hearing [$5000, 1]\n- Extra Limbs x2 [$10000, 4]\nAdvance History:\n1. Mr. Fix It\n2. Spirit d8\n3. Healer\n4. Vigor d8"
             },
             "vesa-novik": {
                 name: "Vesa Novik", bennies: 3, weapons: [],
-                attributes: { Agility: {die:"12", mod:"+0"}, Smarts: {die:"6", mod:"+0"}, Spirit: {die:"4", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"6", mod:"+0"} },
-                skills: { Athletics: {die:"6", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Stealth: {die:"8", mod:"+0"}, Notice: {die:"8", mod:"+0"}, Persuasion: {die:"4", mod:"+0"}, Healing: {die:"6", mod:"+0"}, Driving: {die:"8", mod:"+0"}, Shooting: {die:"10", mod:"+0"}, Survival: {die:"6", mod:"+0"} },
+                attributes: { Agility: { die: "12", mod: "+0" }, Smarts: { die: "6", mod: "+0" }, Spirit: { die: "4", mod: "+0" }, Strength: { die: "4", mod: "+0" }, Vigor: { die: "6", mod: "+0" } },
+                skills: { Athletics: { die: "6", mod: "+0" }, "Common Knowledge": { die: "6", mod: "+0" }, Stealth: { die: "8", mod: "+0" }, Notice: { die: "8", mod: "+0" }, Persuasion: { die: "4", mod: "+0" }, Healing: { die: "6", mod: "+0" }, Driving: { die: "8", mod: "+0" }, Shooting: { die: "10", mod: "+0" }, Survival: { die: "6", mod: "+0" } },
                 derived: { pace: "8", parryOverride: 0, toughnessOverride: 0 },
-                edges: "Hindrances:\n- Yellow (Major)\n- Hesitant (Minor)\n- Cautious (Minor)\n\nEdges:\n- Double-Tap\n- Fleet-Footed\n- Free-Runner",
+                edges: "Hindrances:\n- Yellow (Major)\n- Hesitant (Minor)\n- Cautious (Minor)\nEdges:\n- Double-Tap\n- Fleet-Footed\n- Free-Runner",
                 gear: "Advance History:\n1. Agility +1 [To 4]\n2. Skill increase: Shooting [3 to 4], Driving [2 to 3]\n3. Edge: Fleet-Footed\n4. Edge: Free-Runner"
             },
             "trombley-hicks": {
                 name: "Trombley Hicks", bennies: 3, weapons: [],
-                attributes: { Agility: {die:"10", mod:"+0"}, Smarts: {die:"6", mod:"+0"}, Spirit: {die:"6", mod:"+0"}, Strength: {die:"4", mod:"+0"}, Vigor: {die:"8", mod:"+0"} },
-                skills: { Athletics: {die:"10", mod:"+0"}, "Common Knowledge": {die:"6", mod:"+0"}, Fighting: {die:"8", mod:"+0"}, Notice: {die:"6", mod:"+0"}, Persuasion: {die:"4", mod:"+0"}, Research: {die:"4", mod:"+0"}, Stealth: {die:"10", mod:"+0"}, Survival: {die:"6", mod:"+0"}, Thievery: {die:"8", mod:"+0"} },
+                attributes: { Agility: { die: "10", mod: "+0" }, Smarts: { die: "6", mod: "+0" }, Spirit: { die: "6", mod: "+0" }, Strength: { die: "4", mod: "+0" }, Vigor: { die: "8", mod: "+0" } },
+                skills: { Athletics: { die: "10", mod: "+0" }, "Common Knowledge": { die: "6", mod: "+0" }, Fighting: { die: "8", mod: "+0" }, Notice: { die: "6", mod: "+0" }, Persuasion: { die: "4", mod: "+0" }, Research: { die: "4", mod: "+0" }, Stealth: { die: "10", mod: "+0" }, Survival: { die: "6", mod: "+0" }, Thievery: { die: "8", mod: "+0" } },
                 derived: { pace: "6", parryOverride: 0, toughnessOverride: 0 },
-                edges: "Hindrances:\n- Mute (Major)\n- Can't Swim (Minor)\n- Mild Mannered (Minor)\n- Quirk (Minor - tooth rattle)\n\nEdges:\n- Dodge\n- Extraction\n- Thief",
+                edges: "Hindrances:\n- Mute (Major)\n- Can't Swim (Minor)\n- Mild Mannered (Minor)\n- Quirk (Minor - tooth rattle)\nEdges:\n- Dodge\n- Extraction\n- Thief",
                 gear: "Special Notes:\n- Mute: Cannot speak.\n- Thief: +1 Athletics climb urban, +1 Stealth urban, +1 Thievery.\n- Extraction: One opponent doesn't get free attack on move.\n- Dodge: Ranged attacks suffer -2."
             }
         };
-
         // Determine Admin context securely
         const isAdmin = (currentUser === "Administrator");
         let activeCharId = "katey-commons";
         if (currentUser && !isAdmin) {
             activeCharId = currentUser.toLowerCase().replace(' ', '-');
         }
-
         let charData = {};
         let globalState = { characters: {}, webhook: "", presets: defaultPresets };
         let pendingRoll = null;
         let activeWeaponContext = null;
         let activeWeaponIndex = -1; // NEW: Globally tracks the index of the weapon performing the action
-        let isEditing = false; 
+        let isEditing = false;
         let pendingMinStrPenalty = 0; // Auto-applied min-str penalty tracked here (ranged only)
         let combatParticipant = null;
         let isJoker = false;
         let lastCombatRound = null;
+        // B3: Benny reroll economy — captures the last trait roll and last damage rolls
+        let lastRollContext = null;
+        let lastDamageRolls = {};
         const pendingDamagePrefix = 'pending_damage_bonus_';
-
         function getWeaponBonusKey(weaponObj, fallback = '') {
             return weaponObj?.id || weaponObj?.name || fallback || 'Unarmed';
         }
-
         function getPendingDamageBonus(key) {
             if (!key) return {};
             let raw = sessionStorage.getItem(`${pendingDamagePrefix}${key}`);
             return raw ? JSON.parse(raw) : {};
         }
-
         function setPendingDamageBonus(key, updates) {
             if (!key) return;
             let current = getPendingDamageBonus(key);
             let next = { ...current, ...updates };
             sessionStorage.setItem(`${pendingDamagePrefix}${key}`, JSON.stringify(next));
         }
-
         function clearPendingDamageBonus(key, fields = null) {
             if (!key) return;
             if (!fields) {
@@ -634,14 +838,11 @@
             if (Object.keys(current).length === 0) sessionStorage.removeItem(`${pendingDamagePrefix}${key}`);
             else sessionStorage.setItem(`${pendingDamagePrefix}${key}`, JSON.stringify(current));
         }
-
         function clearAllPendingDamageBonuses() {
             Object.keys(sessionStorage)
                 .filter(key => key.startsWith(pendingDamagePrefix))
                 .forEach(key => sessionStorage.removeItem(key));
         }
-
-
         let db;
         if (isFirebaseConfigured) {
             const app = initializeApp(firebaseConfig);
@@ -650,7 +851,6 @@
             console.warn("Firebase not configured. Falling back to local storage.");
             logToTerminal("<span style='color:red;'>[ WARNING: FIREBASE CONFIGURATION MISSING. EDIT CODES TO SYNC. ]</span>");
         }
-
         // ==========================================
         // AMMO SYSTEM HELPER FUNCTIONS
         // ==========================================
@@ -659,7 +859,6 @@
             let match = shotsStr.toString().match(/\d+/);
             return match ? parseInt(match[0]) : 0;
         }
-
         function getAmmoType(weapon) {
             if (!weapon || !weapon.shots || weapon.shots === "—" || weapon.shots === "Unlimited" || weapon.shots === "Contact") {
                 return "none";
@@ -669,7 +868,6 @@
             }
             return "ballistic";
         }
-
         function normalizeWeaponAmmo(w) {
             const ammoType = getAmmoType(w);
             if (ammoType === 'none') return;
@@ -679,7 +877,6 @@
             if (ammoType === 'ballistic' && !w.ammoTier) w.ammoTier = "Full";
             if (ammoType === 'projectile' && w.projectileCount === undefined) w.projectileCount = maxAmmo;
         }
-
         // ==========================================
         // DIE STEP HELPER (for Min Str penalties)
         // ==========================================
@@ -689,37 +886,30 @@
             let parsed = parseInt(cleaned);
             return isNaN(parsed) ? 4 : parsed;
         }
-
         // Universal damage formula parser
         function parseDamageFormula(formulaStr, weaponObj = null) {
             if (!formulaStr) return { dice: [], modifier: 0 };
-            
             // Replace "Str" with the actual strength die and modifier
             let strDieRaw = charData.attributes?.Strength?.die || "4";
             let strDie = strDieRaw.toString().toLowerCase().startsWith('d') ? strDieRaw : `d${strDieRaw}`;
             let strModStr = charData.attributes?.Strength?.mod || "+0";
             let strModVal = parseInt(strModStr.replace('+', '')) || 0;
-            
             let strReplacement = strDie;
             if (strModVal > 0) strReplacement += `+${strModVal}`;
             else if (strModVal < 0) strReplacement += `${strModVal}`;
-            
             let processedFormula = formulaStr.toString().replace(/Str/i, strReplacement);
-            
             // Tokenize the formula into dice (e.g., 2d6, d4) and modifiers (e.g., +2, -1)
             let tokens = processedFormula.match(/[+-]?\s*\d*d\d+|[+-]?\s*\d+/gi) || [];
             let dice = [];
             let modifier = 0;
-            
             // Determine if we need to cap dice based on Min Str
             let damageCap = 0;
             if (weaponObj) {
                 let rangeStr = weaponObj.range || "";
-                let isMeleeOrThrown = rangeStr.toLowerCase().includes("melee") || 
-                                      rangeStr.toLowerCase().includes("contact") ||
-                                      rangeStr.toLowerCase().includes("throw") ||
-                                      weaponObj.name.toLowerCase().includes("grenade");
-                                      
+                let isMeleeOrThrown = rangeStr.toLowerCase().includes("melee") ||
+                    rangeStr.toLowerCase().includes("contact") ||
+                    rangeStr.toLowerCase().includes("throw") ||
+                    weaponObj.name.toLowerCase().includes("grenade");
                 if (isMeleeOrThrown && weaponObj.minStr && weaponObj.minStr !== "—" && weaponObj.minStr !== "-") {
                     let currentStrVal = parseInt(strDieRaw) || 4;
                     let reqStrMatch = weaponObj.minStr.match(/d?(\d+)/i);
@@ -731,25 +921,21 @@
                     }
                 }
             }
-            
             tokens.forEach(token => {
                 token = token.replace(/\s/g, '');
                 let sign = token.startsWith('-') ? -1 : 1;
                 token = token.replace(/^[+-]/, '');
-                
                 let match = token.match(/^(\d*)d(\d+)$/i);
                 if (match) {
                     let count = parseInt(match[1]) || 1;
                     let sides = parseInt(match[2]);
-                    
                     // Apply melee damage cap if user's Strength is below weapon's Min Str
                     // Only cap weapon damage dice, not the Strength die itself
-                    // The Str die is already substituted to its actual value (e.g. d4), 
+                    // The Str die is already substituted to its actual value (e.g. d4),
                     // so if sides === currentStrVal, it's the Str die and we DON'T cap it.
                     if (damageCap > 0 && sides > damageCap) {
                         sides = damageCap;
                     }
-                    
                     for (let i = 0; i < count; i++) {
                         dice.push({ sides: sides, sign: sign });
                     }
@@ -758,10 +944,8 @@
                     if (!isNaN(val)) modifier += val * sign;
                 }
             });
-            
             return { dice: dice, modifier: modifier };
         }
-
         function parseDamage(damageStr) {
             let parsed = parseDamageFormula(damageStr);
             // If it's "Special", "Varies", or empty, return null to trigger prompt
@@ -770,7 +954,6 @@
             }
             return parsed;
         }
-
         // Wrapper for parseDamage that accepts weaponObj for context (passes through to parseDamageFormula)
         function parseDamageWithContext(damageStr, weaponObj) {
             let parsed = parseDamageFormula(damageStr, weaponObj);
@@ -779,29 +962,23 @@
             }
             return parsed;
         }
-
         // Build dynamic unarmed formula display (e.g., d6+1+d4)
         function getUnarmedDamageDisplay() {
             let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
             let strDieRaw = charData.attributes?.Strength?.die || "4";
             let strDie = strDieRaw.toString().toLowerCase().startsWith('d') ? strDieRaw : `d${strDieRaw}`;
-            
             let strModStr = charData.attributes?.Strength?.mod || "+0";
             let strModVal = parseInt(strModStr.replace('+', '')) || 0;
-            
             let baseStrFormula = strDie;
             if (strModVal > 0) baseStrFormula += `+${strModVal}`;
             else if (strModVal < 0) baseStrFormula += `${strModVal}`;
-            
             return hasMA ? `${baseStrFormula}+d4` : baseStrFormula;
         }
-
         // ==========================================
         // 4. REAL-TIME EVENT-DRIVEN DATABASE SYNC
         // ==========================================
         function init() {
             document.getElementById('char-name-display').innerText = "CONNECTING TO COGNITIVE ARRAY...";
-            
             if (isFirebaseConfigured) {
                 onValue(ref(db, 'campaignState'), (snapshot) => {
                     const data = snapshot.val();
@@ -825,28 +1002,23 @@
                 loadCharacter();
             }
         }
-
         function loadCharacter() {
             if (globalState.characters && globalState.characters[activeCharId]) {
                 charData = globalState.characters[activeCharId];
             } else {
                 charData = JSON.parse(JSON.stringify(defaultData[activeCharId]));
             }
-            
             if (charData.bennies === undefined) charData.bennies = 3;
             if (!charData.weapons) charData.weapons = [];
             if (!charData.derived) charData.derived = { pace: "6", parryOverride: 0, toughnessOverride: 0 };
             if (charData.derived.parryOverride === undefined) charData.derived.parryOverride = 0;
             if (charData.derived.toughnessOverride === undefined) charData.derived.toughnessOverride = 0;
-
             // Normalize ammo data on all weapons
             charData.weapons.forEach(w => normalizeWeaponAmmo(w));
-
             document.getElementById('char-name-display').innerText = `SUBJECT: ${charData.name.toUpperCase()}`;
             if (isAdmin && globalState.webhook) {
                 document.getElementById('discord-webhook').value = globalState.webhook;
             }
-            
             // Combat HUD Integration
             combatParticipant = null;
             isJoker = false;
@@ -854,7 +1026,6 @@
             if (globalState.combatActive && globalState.combat?.participants) {
                 combatParticipant = globalState.combat.participants.find(p => p.id === activeCharId);
             }
-            
             if (combatParticipant) {
                 if (lastCombatRound !== null && globalState.combat.round !== lastCombatRound) {
                     clearAllPendingDamageBonuses();
@@ -865,7 +1036,6 @@
                 if (combatParticipant.shaken) statusHtml += ` <br><span style="color:#ff9900;">[ SHAKEN ]</span>`;
                 if (combatParticipant.distracted) statusHtml += ` <span style="color:#ff3333;">[ DISTRACTED ]</span>`;
                 if (combatParticipant.vulnerable) statusHtml += ` <span style="color:#00ff00;">[ VULNERABLE ]</span>`;
-                
                 // FIX: Only apply Joker bonus if the jokerRound matches the current combat round
                 if (combatParticipant.card && combatParticipant.card.isJoker && combatParticipant.jokerRound === globalState.combat.round) {
                     statusHtml += ` <br><span style="color:#ffff00; text-shadow: 0 0 5px #ffff00;">[ JOKER'S WILD: +2 APPLIED! ]</span>`;
@@ -875,26 +1045,24 @@
             } else {
                 hudEl.style.display = 'none';
             }
-
             // B1: Shaken banner — free actions only until a Spirit recovery succeeds
             const shakenBanner = document.getElementById('shaken-banner');
             shakenBanner.style.display = (combatParticipant && combatParticipant.shaken && !combatParticipant.incapacitated) ? 'block' : 'none';
-
+            // B3: Unshake button requires a Benny
+            const unshakeBtn = document.getElementById('unshake-btn');
+            if (unshakeBtn) unshakeBtn.disabled = (charData.bennies || 0) <= 0;
             renderSheet();
             renderWeapons();
         }
-
         async function saveCharacter() {
             let showSync = localStorage.getItem('lambdaSyncNotif') === 'on';
             if (showSync) document.getElementById('save-status').innerText = "[ SAVING... ]";
-            
             if (isFirebaseConfigured) {
                 await set(ref(db, `campaignState/characters/${activeCharId}`), charData);
             } else {
                 globalState.characters[activeCharId] = charData;
                 localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
             }
-            
             if (showSync) {
                 document.getElementById('save-status').innerText = "[ SYNCED ]";
                 setTimeout(() => { document.getElementById('save-status').innerText = ""; }, 1500);
@@ -902,7 +1070,6 @@
                 document.getElementById('save-status').innerText = "";
             }
         }
-
         async function saveGlobalPresets() {
             if (isFirebaseConfigured) {
                 await set(ref(db, 'campaignState/presets'), globalState.presets);
@@ -910,7 +1077,6 @@
                 localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
             }
         }
-
         // Focus listeners
         document.addEventListener('focusin', (e) => {
             if (e.target.classList.contains('editable') || e.target.classList.contains('edit-area') || e.target.classList.contains('preset-edit')) {
@@ -920,16 +1086,21 @@
         document.addEventListener('focusout', (e) => {
             isEditing = false;
         });
-
         async function adjustBennies(amount) {
             let val = (charData.bennies || 0) + amount;
             if (val < 0) val = 0;
             charData.bennies = val;
             document.getElementById('benny-count').innerText = val;
-            
+            // B3: Keep Soak/Unshake buttons and any pending reroll buttons in sync with the new count
+            const soakBtn = document.getElementById('soak-btn');
+            if (soakBtn) soakBtn.disabled = val <= 0;
+            const unshakeBtn = document.getElementById('unshake-btn');
+            if (unshakeBtn) unshakeBtn.disabled = val <= 0;
+            document.querySelectorAll('.reroll-btn').forEach(b => {
+                if (b.dataset.used !== "true") b.disabled = (val <= 0);
+            });
             // Push to personal sheet
             await saveCharacter();
-
             // Push to Combat Tracker if active
             if (globalState.combatActive && globalState.combat && globalState.combat.participants) {
                 let participants = globalState.combat.participants;
@@ -940,7 +1111,70 @@
                 }
             }
         }
-
+        // ==========================================
+        // B3. UNSHAKE WITH A BENNY (SWADE p.92)
+        // Spend a Benny to remove Shaken instantly, at any time. No roll.
+        // ==========================================
+        async function unshakeWithBenny() {
+            if (!combatParticipant || !combatParticipant.shaken) {
+                logToTerminal("> [!] Not currently Shaken.");
+                return;
+            }
+            if ((charData.bennies || 0) <= 0) {
+                logToTerminal("> [!] UNSHAKE FAILED: No Bennies remaining.");
+                return;
+            }
+            // Spend the Benny (syncs to sheet + tracker)
+            await adjustBennies(-1);
+            // Clear Shaken on the combat tracker
+            let participants = globalState.combat.participants;
+            let pIdx = participants.findIndex(p => p.id === activeCharId);
+            if (pIdx !== -1) {
+                participants[pIdx].shaken = false;
+                await set(ref(db, 'campaignState/combat/participants'), participants);
+            }
+            logToTerminal(`> ${charData.name} spent a Benny to <b style="color:#00ff00;">SHAKE OFF</b> the Shaken condition instantly. May act normally.`);
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} spent a Benny to Unshake`,
+                    description: `Removed **SHAKEN** instantly (no roll). May act normally.`,
+                    color: 0xffff00
+                };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
+            }
+        }
+        // ==========================================
+        // B3. NEW SESSION RESET (GM only, p.91)
+        // Bennies are use-it-or-lose-it: reset every PC to exactly 3.
+        // ==========================================
+        async function gmNewSession() {
+            if (!isAdmin) return;
+            if (!confirm("Start a NEW SESSION?\n\nThis resets EVERY player character to exactly 3 Bennies (use-it-or-lose-it, p.91).")) return;
+            let updates = {};
+            let names = [];
+            for (let [id, data] of Object.entries(globalState.characters || {})) {
+                updates[`campaignState/characters/${id}/bennies`] = 3;
+                names.push(data?.name || id);
+            }
+            if (Object.keys(updates).length === 0) {
+                logToTerminal("> [!] No characters found to reset.");
+                return;
+            }
+            await update(ref(db), updates);
+            logToTerminal(`> <b style="color:#ffff00;">NEW SESSION:</b> All Bennies reset to 3 for ${names.join(', ')}.`);
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: "NEW SESSION INITIALIZED",
+                    description: `All Bennies reset to **3** (use-it-or-lose-it, p.91).\n${names.join(', ')}`,
+                    color: 0xffff00
+                };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
+            }
+        }
         // ==========================================
         // B1. SHAKEN RECOVERY (SWADE p.94)
         // Free-action Spirit roll vs TN 4. Wound, Fatigue, and
@@ -949,17 +1183,14 @@
         async function recoverFromShaken() {
             if (!combatParticipant || !combatParticipant.shaken) return;
             if (!isFirebaseConfigured || !globalState.combat || !globalState.combat.participants) return;
-
             let spiritDie = parseInt(charData.attributes?.Spirit?.die) || 4;
             let spiritMod = parseInt(charData.attributes?.Spirit?.mod) || 0;
             let statusPenalty = -(Math.min(combatParticipant.wounds || 0, 3) + Math.min(combatParticipant.fatigue || 0, 2) + (combatParticipant.distracted ? 2 : 0));
             let totalMod = spiritMod + statusPenalty;
-
             let traitRoll = rollExploding(spiritDie);
             let wildRoll = rollExploding(6);
             let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
             let success = bestTotal >= 4;
-
             let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
             let termLog = `> ${charData.name} rolled SPIRIT RECOVERY vs TN 4${modStr}<br>`;
             termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
@@ -968,7 +1199,6 @@
                 ? `<span style="color:#00ff00;">RECOVERED! No longer Shaken — may act normally.</span>`
                 : `<span style="color:#ff3333;">STILL SHAKEN. Free actions only.</span>`;
             logToTerminal(termLog);
-
             if (success) {
                 let participants = globalState.combat.participants;
                 let pIdx = participants.findIndex(p => p.id === activeCharId);
@@ -977,7 +1207,6 @@
                     await set(ref(db, 'campaignState/combat/participants'), participants);
                 }
             }
-
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name} rolled Spirit Recovery`,
@@ -994,7 +1223,6 @@
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
         }
-
         // ==========================================
         // B2. SOAK ROLL (SWADE p.96)
         // Spend a Benny: Vigor vs TN 4, each success/raise soaks 1 Wound.
@@ -1006,7 +1234,6 @@
                 logToTerminal("> [!] SOAK FAILED: No Bennies remaining.");
                 return;
             }
-
             let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
             let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
             let statusPenalty = 0;
@@ -1014,24 +1241,19 @@
                 statusPenalty = -(Math.min(combatParticipant.wounds || 0, 3) + Math.min(combatParticipant.fatigue || 0, 2));
             }
             let totalMod = vigorMod + statusPenalty;
-
             let traitRoll = rollExploding(vigorDie);
             let wildRoll = rollExploding(6);
             let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
-
             let soaked = 0;
             if (bestTotal >= 4) soaked = 1 + Math.floor((bestTotal - 4) / 4);
-
             // Spend the Benny (also syncs the new count to the Combat Tracker)
             await adjustBennies(-1);
-
             let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
             let termLog = `> ${charData.name} spent a Benny to SOAK (Vigor) vs TN 4${modStr}<br>`;
             termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> <b style="color:#00ff00;">SOAKED ${soaked} WOUND(S)</b><br>`;
             termLog += `&nbsp;&nbsp;[ Report to the GM: remove ${soaked} Wound(s)${soaked > 0 ? " — if all Wounds are Soaked, Shaken is also removed" : ""}. ]`;
             logToTerminal(termLog);
-
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name} spent a Benny to Soak`,
@@ -1048,7 +1270,6 @@
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
         }
-
         function evaluateMinStr(weaponMinStr) {
             if (!weaponMinStr || weaponMinStr === "—" || weaponMinStr === "-") return false;
             let currentStrStr = charData.attributes.Strength ? charData.attributes.Strength.die : "4";
@@ -1058,35 +1279,29 @@
             let reqStrVal = parseInt(reqStrMatch[1]);
             return currentStrVal < reqStrVal;
         }
-
         // ==========================================
         // STRENGTH WARNING MODAL LOGIC (with auto-penalty)
         // ==========================================
         let pendingMinStrCallback = null;
         function checkMinStr(weapon, callback) {
             pendingMinStrPenalty = 0;
-
             if (!evaluateMinStr(weapon.minStr)) {
-                return callback(); 
+                return callback();
             }
-
             // Calculate auto penalty: -1 per die step below requirement
             let currentStr = getDieStep(charData.attributes.Strength.die);
             let reqStr = getDieStep(weapon.minStr);
             const dice = [4, 6, 8, 10, 12];
             let currIdx = dice.indexOf(currentStr);
             let reqIdx = dice.indexOf(reqStr);
-
             if (reqIdx > currIdx) {
                 // Determine if this is a melee/thrown weapon or a ranged weapon
                 let rangeStr = weapon.range || "";
-                let isMeleeOrThrown = rangeStr.toLowerCase().includes("melee") || 
-                                      rangeStr.toLowerCase().includes("contact") ||
-                                      rangeStr.toLowerCase().includes("throw") ||
-                                      weapon.name.toLowerCase().includes("grenade");
-                
+                let isMeleeOrThrown = rangeStr.toLowerCase().includes("melee") ||
+                    rangeStr.toLowerCase().includes("contact") ||
+                    rangeStr.toLowerCase().includes("throw") ||
+                    weapon.name.toLowerCase().includes("grenade");
                 let modalTextEl = document.getElementById('min-str-modal-text');
-                
                 if (isMeleeOrThrown) {
                     // MELEE/THROWN RULE: Damage die is capped at Strength die value, no attack penalty
                     modalTextEl.innerHTML = "You do not meet the minimum strength requirement for this weapon.<br>Wielding it will <b>cap your damage dice</b> at your Strength die type and you <b>do not benefit</b> from the weapon's positive abilities (Reach, Parry, etc.).";
@@ -1097,16 +1312,13 @@
                     modalTextEl.innerHTML = "You do not meet the minimum strength requirement for this weapon.<br>Firing it will incur <b>automatic penalties</b> to your trait roll (-1 per die step below requirement).";
                 }
             }
-
             if (localStorage.getItem('ignoreMinStrWarning') === 'true') {
-                return callback(); 
+                return callback();
             }
-            
             pendingMinStrCallback = callback;
             document.getElementById('never-show-min-str').checked = false;
             document.getElementById('min-str-modal').style.display = 'block';
         }
-
         function proceedMinStr() {
             if (document.getElementById('never-show-min-str').checked) {
                 localStorage.setItem('ignoreMinStrWarning', 'true');
@@ -1117,13 +1329,11 @@
                 pendingMinStrCallback = null;
             }
         }
-
         function cancelMinStr() {
             document.getElementById('min-str-modal').style.display = 'none';
             pendingMinStrCallback = null;
             pendingMinStrPenalty = 0;
         }
-
         // ==========================================
         // 5. UI COMPONENT RENDERING (SHEET & WEAPONS)
         // ==========================================
@@ -1131,37 +1341,36 @@
             const attrContainer = document.getElementById('attributes-container');
             const skillContainer = document.getElementById('skills-container');
             attrContainer.innerHTML = ''; skillContainer.innerHTML = '';
-
             document.getElementById('benny-count').innerText = charData.bennies;
             // B2: Soak requires at least one Benny
             const soakBtn = document.getElementById('soak-btn');
             if (soakBtn) soakBtn.disabled = (charData.bennies || 0) <= 0;
-
+            // B3: Unshake requires at least one Benny
+            const unshakeBtn = document.getElementById('unshake-btn');
+            if (unshakeBtn) unshakeBtn.disabled = (charData.bennies || 0) <= 0;
             for (let [attr, data] of Object.entries(charData.attributes)) {
                 attrContainer.innerHTML += `
-                    <div class="stat-row">
-                        <span>${attr}:</span>
-                        <div class="die-container">
-                            d<span class="editable die-input" data-cat="attributes" data-key="${attr}" contenteditable="true">${data.die}</span>
-                            <span class="editable mod-input" data-cat="attributes" data-key="${attr}" contenteditable="true">${data.mod}</span>
-                            <button class="die-btn" onclick="prepareRoll('${attr}', 'attributes')">ROLL</button>
-                        </div>
-                    </div>`;
+<div class="stat-row">
+<span>${attr}:</span>
+<div class="die-container">
+d<span class="editable die-input" data-cat="attributes" data-key="${attr}" contenteditable="true">${data.die}</span>
+<span class="editable mod-input" data-cat="attributes" data-key="${attr}" contenteditable="true">${data.mod}</span>
+<button class="die-btn" onclick="prepareRoll('${attr}', 'attributes')">ROLL</button>
+</div>
+</div>`;
             }
-
             for (let [skill, data] of Object.entries(charData.skills)) {
                 skillContainer.innerHTML += `
-                    <div class="stat-row">
-                        <span class="editable skill-name-edit" data-oldname="${skill}" contenteditable="true">${skill}</span>
-                        <div class="die-container">
-                            d<span class="editable die-input" data-cat="skills" data-key="${skill}" contenteditable="true">${data.die}</span>
-                            <span class="editable mod-input" data-cat="skills" data-key="${skill}" contenteditable="true">${data.mod}</span>
-                            <button class="die-btn" onclick="prepareRoll('${skill}', 'skills')">ROLL</button>
-                            <button class="die-btn del-btn" onclick="deleteSkill('${skill}')">X</button>
-                        </div>
-                    </div>`;
+<div class="stat-row">
+<span class="editable skill-name-edit" data-oldname="${skill}" contenteditable="true">${skill}</span>
+<div class="die-container">
+d<span class="editable die-input" data-cat="skills" data-key="${skill}" contenteditable="true">${data.die}</span>
+<span class="editable mod-input" data-cat="skills" data-key="${skill}" contenteditable="true">${data.mod}</span>
+<button class="die-btn" onclick="prepareRoll('${skill}', 'skills')">ROLL</button>
+<button class="die-btn del-btn" onclick="deleteSkill('${skill}')">X</button>
+</div>
+</div>`;
             }
-
             // Derived Stats Auto-Calc
             // SWADE: Parry = 2 + half Fighting die type (base 2 with NO Fighting skill).
             // Traits above d12 add half the fixed modifier (Fighting d12+2 -> Parry 9).
@@ -1169,7 +1378,6 @@
             let fightDie = fightSkill ? getDieStep(fightSkill.die) : 0;
             let fightMod = fightSkill ? (parseInt(fightSkill.mod) || 0) : 0;
             let parryOverride = parseInt(charData.derived.parryOverride) || 0;
-            
             // Weapon Parry Bonus (only applied if min Str is met)
             let weaponParryBonus = 0;
             if (charData.weapons) {
@@ -1182,26 +1390,21 @@
                     }
                 });
             }
-            
             let calcParry = 2 + Math.floor(fightDie / 2) + Math.floor(fightMod / 2) + weaponParryBonus + parryOverride;
             charData.derived.parry = calcParry;
-            
             let vigorDie = charData.attributes["Vigor"] ? getDieStep(charData.attributes["Vigor"].die) : 4;
             let toughOverride = parseInt(charData.derived.toughnessOverride) || 0;
             let calcToughness = 2 + (vigorDie / 2) + toughOverride;
             charData.derived.toughness = calcToughness;
-            
             // Update the HTML inputs with the Lambda theme class "admin-input" and a reset button
             document.getElementById('der-parry-calc').innerText = calcParry;
             document.getElementById('der-parry-override').className = "admin-input";
             document.getElementById('der-parry-override').style = "width: 50px; padding: 2px; text-align: center;";
             document.getElementById('der-parry-override').value = parryOverride;
-            
             document.getElementById('der-toughness-calc').innerText = calcToughness;
             document.getElementById('der-toughness-override').className = "admin-input";
             document.getElementById('der-toughness-override').style = "width: 50px; padding: 2px; text-align: center;";
             document.getElementById('der-toughness-override').value = toughOverride;
-
             // Ensure the Reset buttons exist in the HTML (Injecting them safely)
             if (!document.getElementById('reset-parry-btn')) {
                 document.getElementById('der-parry-override').insertAdjacentHTML('afterend', ` <button id="reset-parry-btn" class="die-btn" style="padding: 2px 6px;" onclick="resetDerived('parry')" title="Reset Override">↺</button>`);
@@ -1209,19 +1412,15 @@
             if (!document.getElementById('reset-toughness-btn')) {
                 document.getElementById('der-toughness-override').insertAdjacentHTML('afterend', ` <button id="reset-toughness-btn" class="die-btn" style="padding: 2px 6px;" onclick="resetDerived('toughness')" title="Reset Override">↺</button>`);
             }
-
             document.getElementById('der-pace').innerText = charData.derived.pace;
             document.getElementById('notes-edges').value = charData.edges;
             document.getElementById('notes-gear').value = charData.gear;
-
             attachEditListeners();
         }
-
         function attachEditListeners() {
             ['pace'].forEach(stat => {
                 document.getElementById(`der-${stat}`).addEventListener('blur', (e) => { charData.derived[stat] = e.target.innerText; saveCharacter(); });
             });
-            
             document.getElementById('der-parry-override').addEventListener('blur', (e) => {
                 charData.derived.parryOverride = parseInt(e.target.value) || 0;
                 saveCharacter();
@@ -1232,10 +1431,8 @@
                 saveCharacter();
                 renderSheet();
             });
-
             document.getElementById('notes-edges').addEventListener('blur', (e) => { charData.edges = e.target.value; saveCharacter(); });
             document.getElementById('notes-gear').addEventListener('blur', (e) => { charData.gear = e.target.value; saveCharacter(); });
-
             document.querySelectorAll('.die-input, .mod-input').forEach(el => {
                 el.addEventListener('blur', (e) => {
                     let cat = e.target.dataset.cat;
@@ -1250,7 +1447,6 @@
                     renderSheet();
                 });
             });
-
             document.querySelectorAll('.skill-name-edit').forEach(el => {
                 el.addEventListener('blur', (e) => {
                     let oldName = e.target.dataset.oldname;
@@ -1264,138 +1460,116 @@
                 });
             });
         }
-
         function addSkill() {
             charData.skills["New Skill"] = { die: "4", mod: "+0" };
             saveCharacter(); renderSheet();
         }
-
         function deleteSkill(skillName) {
-            if(confirm(`WARNING: Initialize deletion of ${skillName}?`)) {
+            if (confirm(`WARNING: Initialize deletion of ${skillName}?`)) {
                 delete charData.skills[skillName];
                 saveCharacter(); renderSheet();
             }
         }
-
         // ==========================================
         // 6. TACTICAL WEAPONS MANAGEMENT & AMMO HUD
         // ==========================================
         function renderWeapons() {
             const container = document.getElementById('weapons-list-container');
             container.innerHTML = '';
-
             // B1: Shaken characters may only take free actions — lock ATTACK buttons
             const isShakenLocked = !!(combatParticipant && combatParticipant.shaken && !combatParticipant.incapacitated);
             const shakenAttr = isShakenLocked ? 'disabled title="SHAKEN: Roll Spirit Recovery first"' : '';
-
             // --- Inject Unarmed Strike card at the top ---
             let unarmedDamage = getUnarmedDamageDisplay();
             let unarmedIcon = "https://i.imgur.com/TimqS8i.png";
-
             container.innerHTML += `
-                <div class="weapon-card">
-                    <img class="weapon-icon" src="${unarmedIcon}" alt="Unarmed">
-                    <div class="weapon-details">
-                        <div><b>UNARMED STRIKE</b></div>
-                        <div>Range: <i>Melee</i></div>
-                        <div>Damage: <b>${unarmedDamage}</b></div>
-                    </div>
-                    <div class="weapon-actions">
-                        <button class="die-btn" onclick="unarmedAttack()" ${shakenAttr}>ATTACK</button>
-                        <button class="die-btn" onclick="rollUnarmedDamage()">DAMAGE</button>
-                    </div>
-                </div>`;
-
+<div class="weapon-card">
+<img class="weapon-icon" src="${unarmedIcon}" alt="Unarmed">
+<div class="weapon-details">
+<div><b>UNARMED STRIKE</b></div>
+<div>Range: <i>Melee</i></div>
+<div>Damage: <b>${unarmedDamage}</b></div>
+</div>
+<div class="weapon-actions">
+<button class="die-btn" onclick="unarmedAttack()" ${shakenAttr}>ATTACK</button>
+<button class="die-btn" onclick="rollUnarmedDamage()">DAMAGE</button>
+<button class="die-btn reroll-btn" onclick="rerollWeaponDamage('unarmed')">REROLL DMG (1 BENNY)</button>
+</div>
+</div>`;
             if (charData.weapons.length === 0) {
                 container.innerHTML += `<div style="text-align: center; font-style: italic; opacity: 0.6; padding: 20px;">[ NO ADDITIONAL ARMAMENT MOUNTED TO SYSTEM ]</div>`;
                 return;
             }
-
             charData.weapons.forEach((w, index) => {
                 // Normalize ammo data
                 normalizeWeaponAmmo(w);
-
                 const ammoType = getAmmoType(w);
-
                 // Determine out-of-ammo state
                 let isOutOfAmmo = false;
                 if (ammoType === 'ballistic' && w.ammoTier === 'Out') isOutOfAmmo = true;
                 if (ammoType === 'projectile' && (w.projectileCount || 0) <= 0 && (w.magAmmo || 0) <= 0) isOutOfAmmo = true;
-
                 let cardClass = isOutOfAmmo ? 'weapon-card out-of-ammo' : 'weapon-card';
-
                 // Build ammo UI based on type
                 let ammoDetailsHTML = '';
                 let reloadBtn = '';
-
                 if (ammoType === 'ballistic') {
                     const currentMag = w.magAmmo || 0;
                     const maxMag = w.maxMag || parseMaxAmmo(w.shots);
                     const currentTier = w.ammoTier || "Full";
                     const tierClass = 'ammo-tier-' + currentTier.replace(/\s+/g, '-');
-
                     let tierOptions = '';
                     ammoTiers.forEach(t => {
                         tierOptions += `<option value="${t}"${t === currentTier ? ' selected' : ''}>${t}</option>`;
                     });
-
                     const selectDisabled = isAdmin ? '' : 'disabled';
                     const gmCheckBtn = isAdmin
                         ? `<button class="die-btn gm-ammo-check-btn" onclick="gmAmmoCheck(${index})">CHECK</button>`
                         : '';
-
                     ammoDetailsHTML = `
-                        <div>Ammo: <span class="editable ammo-display" data-index="${index}" contenteditable="true">${currentMag}</span>/${maxMag}</div>
-                        <div>Total: <select class="ammo-tier-select ${tierClass}" data-index="${index}" ${selectDisabled} onchange="updateAmmoTier(${index}, this.value)">${tierOptions}</select> ${gmCheckBtn}</div>`;
-
+<div>Ammo: <span class="editable ammo-display" data-index="${index}" contenteditable="true">${currentMag}</span>/${maxMag}</div>
+<div>Total: <select class="ammo-tier-select ${tierClass}" data-index="${index}" ${selectDisabled} onchange="updateAmmoTier(${index}, this.value)">${tierOptions}</select> ${gmCheckBtn}</div>`;
                     reloadBtn = `<button class="die-btn" onclick="reloadWeapon(${index})">RELOAD</button>`;
-
                 } else if (ammoType === 'projectile') {
                     const currentMag = w.magAmmo || 0;
                     const maxMag = w.maxMag || parseMaxAmmo(w.shots);
                     const count = w.projectileCount !== undefined ? w.projectileCount : parseMaxAmmo(w.shots);
-
                     if (isAdmin) {
                         ammoDetailsHTML = `
-                            <div>Ammo: <span class="editable ammo-display" data-index="${index}" contenteditable="true">${currentMag}</span>/${maxMag}</div>
-                            <div>Total: <span class="editable projectile-count" data-index="${index}" contenteditable="true">${count}</span></div>`;
+<div>Ammo: <span class="editable ammo-display" data-index="${index}" contenteditable="true">${currentMag}</span>/${maxMag}</div>
+<div>Total: <span class="editable projectile-count" data-index="${index}" contenteditable="true">${count}</span></div>`;
                     } else {
                         ammoDetailsHTML = `
-                            <div>Ammo: <span class="editable ammo-display" data-index="${index}" contenteditable="true">${currentMag}</span>/${maxMag}</div>
-                            <div>Total: <b>${count}</b></div>`;
+<div>Ammo: <span class="editable ammo-display" data-index="${index}" contenteditable="true">${currentMag}</span>/${maxMag}</div>
+<div>Total: <b>${count}</b></div>`;
                     }
-
                     reloadBtn = `<button class="die-btn" onclick="reloadWeapon(${index})">RELOAD</button>`;
                 }
-
                 // Damage button is always enabled so final shots can be resolved
                 const damageOnclick = `onclick="rollWeaponDamage(${index})"`;
-
                 container.innerHTML += `
-                    <div class="${cardClass}">
-                        <img class="weapon-icon" src="${w.icon || 'https://i.imgur.com/niLzrfW.png'}" alt="${w.name}">
-                        <div class="weapon-details">
-                            <div><b>${w.name.toUpperCase()}</b></div>
-                            <div>Range: <i>${w.range}</i></div>
-                            <div>Damage: <b>${w.damage}</b></div>
-                            <div>AP: <i>${w.ap}</i></div>
-                            <div>RoF: <i>${w.rof}</i></div>
-                            <div>Shots: <i>${w.shots}</i></div>
-                            <div>Min Str: <i>${w.minStr}</i></div>
-                            ${ammoDetailsHTML}
-                        </div>
-                        <div class="weapon-actions">
-                            <button class="die-btn" onclick="rollWeaponAttack(${index})" ${shakenAttr}>ATTACK</button>
-                            <button class="die-btn" ${damageOnclick}>DAMAGE</button>
-                            ${reloadBtn}
-                            <button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
-                        </div>
-                    </div>`;
+<div class="${cardClass}">
+<img class="weapon-icon" src="${w.icon || 'https://i.imgur.com/niLzrfW.png'}" alt="${w.name}">
+<div class="weapon-details">
+<div><b>${w.name.toUpperCase()}</b></div>
+<div>Range: <i>${w.range}</i></div>
+<div>Damage: <b>${w.damage}</b></div>
+<div>AP: <i>${w.ap}</i></div>
+<div>RoF: <i>${w.rof}</i></div>
+<div>Shots: <i>${w.shots}</i></div>
+<div>Min Str: <i>${w.minStr}</i></div>
+${ammoDetailsHTML}
+</div>
+<div class="weapon-actions">
+<button class="die-btn" onclick="rollWeaponAttack(${index})" ${shakenAttr}>ATTACK</button>
+<button class="die-btn" ${damageOnclick}>DAMAGE</button>
+<button class="die-btn reroll-btn" onclick="rerollWeaponDamage(${index})">REROLL DMG (1 BENNY)</button>
+${reloadBtn}
+<button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
+</div>
+</div>`;
             });
-
             attachWeaponAmmoListeners();
         }
-
         function attachWeaponAmmoListeners() {
             // Magazine ammo display editing
             document.querySelectorAll('.ammo-display').forEach(el => {
@@ -1410,7 +1584,6 @@
                     saveCharacter();
                 });
             });
-
             // Projectile count editing (GM only — element only exists for GM)
             document.querySelectorAll('.projectile-count').forEach(el => {
                 el.addEventListener('blur', (e) => {
@@ -1424,7 +1597,6 @@
                 });
             });
         }
-
         // Modal triggers for equipping weapons
         function openEquipModal() {
             const select = document.getElementById('equip-weapon-select');
@@ -1434,14 +1606,12 @@
             });
             document.getElementById('weapon-add-modal').style.display = 'block';
         }
-
         function removeWeaponFromCharacter(index) {
             charData.weapons.splice(index, 1);
             saveCharacter();
             renderWeapons();
             document.getElementById('tn-modal').style.display = 'none'; // Close modal to prevent index desync
         }
-
         // ==========================================
         // 7. AMMO SYSTEM — RELOAD, TIER, CHECK
         // ==========================================
@@ -1450,7 +1620,6 @@
             if (!weapon) return;
             const ammoType = getAmmoType(weapon);
             if (ammoType === 'none') return;
-
             if (ammoType === 'ballistic') {
                 if (weapon.ammoTier === 'Out') {
                     logToTerminal(`> [!] Cannot reload ${weapon.name.toUpperCase()} — total ammo is OUT!`);
@@ -1467,9 +1636,7 @@
                 weapon.projectileCount = Math.max(0, (weapon.projectileCount || 0) - 1);
                 weapon.magAmmo = maxMag;
             }
-
             logToTerminal(`> ${charData.name} is RELOADING ${weapon.name.toUpperCase()}! Magazine refilled to ${weapon.magAmmo}/${weapon.maxMag}.`);
-
             // Discord embed
             if (globalState && globalState.webhook) {
                 const embed = {
@@ -1482,11 +1649,9 @@
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
-
             await saveCharacter();
             renderWeapons();
         }
-
         function updateAmmoTier(index, value) {
             if (!isAdmin) return;
             charData.weapons[index].ammoTier = value;
@@ -1496,18 +1661,15 @@
             saveCharacter();
             renderWeapons();
         }
-
         async function gmAmmoCheck(index) {
             const weapon = charData.weapons[index];
             if (!weapon) return;
             const ammoType = getAmmoType(weapon);
             if (ammoType !== 'ballistic') return;
-
             // Determine relevant attack skill
             let isMelee = weapon.range.toLowerCase().includes("melee") || weapon.range.toLowerCase().includes("contact");
             let isThrown = weapon.range.toLowerCase().includes("throw") || weapon.name.toLowerCase().includes("grenade");
             let skillNeeded = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
-
             let sides, modifier, skillName;
             if (charData.skills[skillNeeded]) {
                 sides = parseInt(charData.skills[skillNeeded].die) || 4;
@@ -1518,18 +1680,15 @@
                 modifier = -2;
                 skillName = "Unskilled Attempt";
             }
-
             // Roll
             let traitRoll = rollExploding(sides);
             let wildRoll = rollExploding(6);
             let bestTotal = Math.max(traitRoll.total, wildRoll.total) + modifier;
-
             const TN = 4;
             let outcome = "";
             let tierChanged = false;
             let oldTier = weapon.ammoTier || "Full";
             let newTier = oldTier;
-
             if (bestTotal >= TN) {
                 // PASS: Ammo does NOT lower
                 let raises = Math.floor((bestTotal - TN) / 4);
@@ -1546,9 +1705,7 @@
                     tierChanged = true;
                 }
             }
-
             let modDisplay = modifier !== 0 ? ` (${modifier > 0 ? '+' : ''}${modifier})` : "";
-
             logToTerminal(`> GM AMMO CHECK for ${weapon.name.toUpperCase()}: ${charData.name} rolled ${skillName} (d${sides})${modDisplay}.`);
             logToTerminal(`&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}`);
             logToTerminal(`&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> ${outcome}`);
@@ -1557,12 +1714,11 @@
             } else {
                 logToTerminal(`&nbsp;&nbsp;Ammo Tier: ${oldTier} (unchanged)`);
             }
-
             // Discord embed
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `Ammo Check: ${charData.name}'s ${weapon.name}`,
-                    description: `Rolled ${skillName} (d${sides})${modDisplay}\n**Result: ${bestTotal}** → ${outcome}\n\n**Ammo Tier: ${oldTier} → ${newTier}**${!tierChanged ? ' (unchanged)' : ''}`,
+                    description: `Rolled ${skillName} (d${sides})${modDisplay}\n**Result: ${bestTotal}** → ${outcome}\n**Ammo Tier: ${oldTier} → ${newTier}**${!tierChanged ? ' (unchanged)' : ''}`,
                     color: tierChanged ? 0xff6600 : 0x00ff00,
                     thumbnail: { url: weapon.icon },
                     fields: [
@@ -1574,14 +1730,11 @@
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
-
             await saveCharacter();
             renderWeapons();
         }
-
         async function postOutofAmmoEmbed(weapon, reason) {
             logToTerminal(`> [!] ${charData.name}'s ${weapon.name.toUpperCase()} is OUT OF AMMO (${reason}). Attack aborted.`);
-
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `⚠️ ${charData.name} is OUT OF AMMO!`,
@@ -1598,10 +1751,8 @@
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
         }
-
         async function postEmptyMagEmbed(weapon) {
             logToTerminal(`> [!] ${charData.name}'s ${weapon.name.toUpperCase()} magazine is EMPTY. Press RELOAD to continue.`);
-
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name}'s magazine is empty!`,
@@ -1614,7 +1765,6 @@
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
         }
-
         // ==========================================
         // 8. MASTER PRESETS GENERATOR (ADMIN ONLY)
         // ==========================================
@@ -1622,24 +1772,22 @@
             document.getElementById('master-presets-panel').style.display = 'block';
             const tbody = document.getElementById('master-presets-body');
             tbody.innerHTML = '';
-
             globalState.presets.forEach((p, index) => {
                 tbody.innerHTML += `
-                    <tr>
-                        <td style="text-align:center;"><img style="width: 50px; height: 25px; object-fit: contain; filter: drop-shadow(0 0 1px var(--theme-color));" src="${p.icon}"></td>
-                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="name">${p.name}</td>
-                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="range">${p.range}</td>
-                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="damage">${p.damage}</td>
-                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="ap">${p.ap}</td>
-                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="rof">${p.rof}</td>
-                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="shots">${p.shots}</td>
-                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="minStr">${p.minStr}</td>
-                        <td style="text-align:center;"><input type="checkbox" class="burst-toggle" data-index="${index}" ${p.burst ? "checked" : ""} style="width:18px; height:18px;" title="Has Three-Round Burst ability"></td>
-                        <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="icon" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.icon}</td>
-                        <td><button class="die-btn del-btn" onclick="deletePreset(${index})">DELETE</button></td>
-                    </tr>`;
+<tr>
+<td style="text-align:center;"><img style="width: 50px; height: 25px; object-fit: contain; filter: drop-shadow(0 0 1px var(--theme-color));" src="${p.icon}"></td>
+<td class="preset-edit" contenteditable="true" data-index="${index}" data-field="name">${p.name}</td>
+<td class="preset-edit" contenteditable="true" data-index="${index}" data-field="range">${p.range}</td>
+<td class="preset-edit" contenteditable="true" data-index="${index}" data-field="damage">${p.damage}</td>
+<td class="preset-edit" contenteditable="true" data-index="${index}" data-field="ap">${p.ap}</td>
+<td class="preset-edit" contenteditable="true" data-index="${index}" data-field="rof">${p.rof}</td>
+<td class="preset-edit" contenteditable="true" data-index="${index}" data-field="shots">${p.shots}</td>
+<td class="preset-edit" contenteditable="true" data-index="${index}" data-field="minStr">${p.minStr}</td>
+<td style="text-align:center;"><input type="checkbox" class="burst-toggle" data-index="${index}" ${p.burst ? "checked" : ""} style="width:18px; height:18px;" title="Has Three-Round Burst ability"></td>
+<td class="preset-edit" contenteditable="true" data-index="${index}" data-field="icon" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.icon}</td>
+<td><button class="die-btn del-btn" onclick="deletePreset(${index})">DELETE</button></td>
+</tr>`;
             });
-
             document.querySelectorAll('.preset-edit').forEach(el => {
                 el.addEventListener('blur', async (e) => {
                     let idx = e.target.dataset.index;
@@ -1648,7 +1796,6 @@
                     await saveGlobalPresets();
                 });
             });
-
             document.querySelectorAll('.burst-toggle').forEach(el => {
                 el.addEventListener('change', async (e) => {
                     globalState.presets[e.target.dataset.index].burst = e.target.checked;
@@ -1656,7 +1803,6 @@
                 });
             });
         }
-
         function addCustomPreset() {
             let id = "custom_" + Date.now();
             globalState.presets.push({
@@ -1665,7 +1811,6 @@
             saveGlobalPresets();
             renderMasterPresets();
         }
-
         function deletePreset(index) {
             if (confirm("WARNING: Instigate erasure of this Weapon Preset from global system archives?")) {
                 globalState.presets.splice(index, 1);
@@ -1673,19 +1818,16 @@
                 renderMasterPresets();
             }
         }
-
         // ==========================================
         // 9. WEAPON ATTACK & EXPLODING DAMAGE ROLLS
         // ==========================================
         function rollWeaponAttack(index) {
             let weaponObj = charData.weapons[index];
             if (!weaponObj) return;
-
             checkMinStr(weaponObj, () => {
                 let rangeStr = weaponObj.range;
                 // Ensure no blocks if using a melee weapon
                 let isMelee = rangeStr.toLowerCase().includes("melee") || rangeStr.toLowerCase().includes("contact");
-                
                 if (!isMelee) {
                     const ammoType = getAmmoType(weaponObj);
                     // Ammo checks before allowing ranged attack
@@ -1709,10 +1851,8 @@
                         }
                     }
                 }
-
                 let isThrown = rangeStr.toLowerCase().includes("throw") || weaponObj.name.toLowerCase().includes("grenade");
                 let skillNeeded = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
-
                 if (charData.skills[skillNeeded]) {
                     prepareRoll(skillNeeded, "skills", weaponObj, index);
                 } else {
@@ -1721,12 +1861,10 @@
                 }
             });
         }
-
         // Unarmed Attack — bypasses charData.weapons lookup
         function unarmedAttack() {
             let unarmedDamage = getUnarmedDamageDisplay();
             let unarmedIcon = "https://i.imgur.com/TimqS8i.png";
-
             let unarmedWeapon = {
                 name: 'Unarmed',
                 range: 'Melee',
@@ -1737,7 +1875,6 @@
                 minStr: '—',
                 icon: unarmedIcon
             };
-
             checkMinStr(unarmedWeapon, () => {
                 if (charData.skills['Fighting']) {
                     prepareRoll('Fighting', 'skills', unarmedWeapon, -1);
@@ -1747,25 +1884,20 @@
                 }
             });
         }
-
         // Unarmed Damage — handles dynamic formula parsing universally
         async function rollUnarmedDamage() {
             let unarmedDamageFormula = getUnarmedDamageDisplay();
             let parsed = parseDamageFormula(unarmedDamageFormula);
-            
             let rolls = [];
             let total = 0;
-
             parsed.dice.forEach(d => {
                 let r = rollExploding(d.sides);
                 total += (r.total * d.sign);
                 rolls.push(...r.history);
             });
-
             if (parsed.modifier !== 0) {
                 total += parsed.modifier;
             }
-
             // Joker & Wild Attack Bonus
             let jokerBonus = isJoker ? 2 : 0;
             let storageKey = 'Unarmed';
@@ -1773,7 +1905,6 @@
             let wildAttackDmgBonus = pendingBonus.wildAttack ? 2 : 0;
             if (wildAttackDmgBonus) clearPendingDamageBonus(storageKey, ['wildAttack']);
             total += jokerBonus + wildAttackDmgBonus;
-
             // Check for raise bonus
             let hasRaiseBonus = pendingBonus.raise === true;
             let bonusRolls = [];
@@ -1783,12 +1914,20 @@
                 bonusRolls = bRoll.history;
                 clearPendingDamageBonus(storageKey, ['raise']);
             }
-
+            // B3: Capture this damage roll so it can be rerolled with a Benny
+            lastDamageRolls['unarmed'] = {
+                baseDice: parsed.dice,
+                baseModifier: parsed.modifier,
+                hasRaise: hasRaiseBonus,
+                staticBonus: jokerBonus + wildAttackDmgBonus,
+                total: total,
+                rolls: rolls,
+                formula: unarmedDamageFormula
+            };
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
             let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
             let waStr = wildAttackDmgBonus > 0 ? ` + ${wildAttackDmgBonus} (Wild Attack)` : "";
-
             let termLog = `> ${charData.name} dealt damage with UNARMED STRIKE<br>`;
             termLog += `&nbsp;&nbsp;Dmg Roll [${unarmedDamageFormula}]: ${rolls.join(' + ')}${modStr}${bonusStr}${jokerStr}${waStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
@@ -1799,7 +1938,6 @@
                 termLog += `<br>&nbsp;&nbsp;[ INCLUDES: ${bonuses.join(' & ')} ]`;
             }
             logToTerminal(termLog);
-
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name} rolled damage with Unarmed Strike`,
@@ -1824,13 +1962,11 @@
                     embed.fields.push({ name: "Wild Attack (+2)", value: "+2", inline: true });
                     embed.description += `\n*(Includes +2 Wild Attack Bonus)*`;
                 }
-
                 try {
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
         }
-
         async function rollWeaponDamage(index) {
             let weaponObj = charData.weapons[index];
             if (!weaponObj) return;
@@ -1838,7 +1974,6 @@
             let damageStr = weaponObj.damage;
             let storageKey = getWeaponBonusKey(weaponObj, index);
             let pendingBonus = getPendingDamageBonus(storageKey);
-            
             // Check if weapon is out of ammo — lock damage
             if (weaponObj) {
                 const ammoType = getAmmoType(weaponObj);
@@ -1851,12 +1986,10 @@
                     return;
                 }
             }
-
             // Use parseDamageWithContext to apply melee damage cap if applicable
             let parsed = parseDamageWithContext(damageStr, weaponObj);
             let total = 0;
             let rolls = [];
-
             if (!parsed) {
                 let customQuery = prompt(`Enter custom roll calculation for ${weaponName}:`, "2d8");
                 if (!customQuery) return;
@@ -1866,14 +1999,12 @@
                     return;
                 }
             }
-
             // Add 3-Round Burst modifier +1 before calculating
             let has3RBBonus = pendingBonus.threeRoundBurst === true;
             if (has3RBBonus) {
                 parsed.modifier += 1;
                 clearPendingDamageBonus(storageKey, ['threeRoundBurst']);
             }
-
             // Add Double Tap modifier before calculating (+1, or +2 on a 3RB-capable weapon)
             let dtBonusVal = parseInt(pendingBonus.doubleTap) || 0;
             let hasDTBonus = dtBonusVal > 0;
@@ -1881,7 +2012,6 @@
                 parsed.modifier += dtBonusVal;
                 clearPendingDamageBonus(storageKey, ['doubleTap']);
             }
-
             parsed.dice.forEach(d => {
                 let r = rollExploding(d.sides);
                 total += (r.total * d.sign);
@@ -1892,7 +2022,6 @@
                 }
             });
             total += parsed.modifier;
-
             let hasRaiseBonus = pendingBonus.raise === true;
             let bonusRolls = [];
             if (hasRaiseBonus) {
@@ -1901,20 +2030,28 @@
                 bonusRolls = bRoll.history;
                 clearPendingDamageBonus(storageKey, ['raise']);
             }
-
             // Joker & Wild Attack Bonus
             let jokerBonus = isJoker ? 2 : 0;
             let wildAttackDmgBonus = pendingBonus.wildAttack ? 2 : 0;
             if (wildAttackDmgBonus) clearPendingDamageBonus(storageKey, ['wildAttack']);
             total += jokerBonus + wildAttackDmgBonus;
-
+            // B3: Capture this damage roll so it can be rerolled with a Benny.
+            // baseModifier already includes 3RB/DT; staticBonus holds flat Joker/Wild Attack.
+            lastDamageRolls[index] = {
+                baseDice: parsed.dice,
+                baseModifier: parsed.modifier,
+                hasRaise: hasRaiseBonus,
+                staticBonus: jokerBonus + wildAttackDmgBonus,
+                total: total,
+                rolls: rolls,
+                formula: damageStr
+            };
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
             let dtStr = hasDTBonus ? ` (Includes +${dtBonusVal} from Double Tap)` : "";
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
             let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
             let waStr = wildAttackDmgBonus > 0 ? ` + ${wildAttackDmgBonus} (Wild Attack)` : "";
-
             let termLog = `> ${charData.name} dealt damage with ${weaponName.toUpperCase()}<br>`;
             termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}${trbStr}${dtStr}${bonusStr}${jokerStr}${waStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
@@ -1925,7 +2062,6 @@
                 termLog += `<br>&nbsp;&nbsp;[ INCLUDES: ${bonuses.join(' & ')} ]`;
             }
             logToTerminal(termLog);
-
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name} rolled damage with ${weaponName}`,
@@ -1956,7 +2092,6 @@
                     embed.fields.push({ name: "Wild Attack (+2)", value: "+2", inline: true });
                     embed.description += `\n*(Includes +2 Wild Attack Bonus)*`;
                 }
-
                 let weapon = charData.weapons.find(w => w.name === weaponName);
                 if (weapon) {
                     embed.thumbnail = { url: weapon.icon };
@@ -1965,38 +2100,106 @@
                         value: `Range: ${weapon.range}\nDamage: ${weapon.damage}\nAP: ${weapon.ap}\nRoF: ${weapon.rof}\nShots: ${weapon.shots}\nMin Str: ${weapon.minStr}`
                     });
                 }
-
                 try {
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
         }
-
+        // ==========================================
+        // B3. DAMAGE REROLL (SWADE p.92) — spend a Benny to reroll the
+        // damage dice for the last damage roll of a weapon, keeping the
+        // better total. Flat bonuses (Joker, Wild Attack, 3RB, DT) are not
+        // re-rolled; only the dice are. One reroll per damage roll.
+        // ==========================================
+        async function rerollWeaponDamage(key) {
+            let last = lastDamageRolls[key];
+            if (!last) {
+                logToTerminal("> [!] No damage roll to reroll for this weapon yet. Roll damage first.");
+                return;
+            }
+            if ((charData.bennies || 0) <= 0) {
+                logToTerminal("> [!] CANNOT REROLL DAMAGE: No Bennies remaining.");
+                return;
+            }
+            // Spend the Benny (syncs to sheet + tracker)
+            await adjustBennies(-1);
+            // Re-roll the base dice and the raise die (if any); keep flat bonuses identical
+            let newTotal = 0;
+            let newRolls = [];
+            last.baseDice.forEach(d => {
+                let r = rollExploding(d.sides);
+                newTotal += (r.total * d.sign);
+                if (d.sign > 0) newRolls.push(...r.history);
+                else r.history.forEach(roll => newRolls.push(`-${roll}`));
+            });
+            newTotal += last.baseModifier;
+            if (last.hasRaise) {
+                let bRoll = rollExploding(6);
+                newTotal += bRoll.total;
+                newRolls.push(`Raise:${bRoll.history.join('+')}`);
+            }
+            newTotal += last.staticBonus;
+            // Consume the stored roll — one reroll per damage roll
+            lastDamageRolls[key] = null;
+            let keptTotal, keptRolls, which;
+            if (newTotal >= last.total) {
+                keptTotal = newTotal; keptRolls = newRolls; which = "NEW ROLL";
+            } else {
+                keptTotal = last.total; keptRolls = last.rolls; which = "ORIGINAL ROLL";
+            }
+            // Resolve display name + icon
+            let weaponName, weaponIcon;
+            if (key === 'unarmed') {
+                weaponName = "Unarmed Strike";
+                weaponIcon = "https://i.imgur.com/TimqS8i.png";
+            } else {
+                let w = charData.weapons[key];
+                weaponName = w ? w.name : "Weapon";
+                weaponIcon = w ? (w.icon || "") : "";
+            }
+            let termLog = `> ${charData.name} spent a Benny to REROLL DAMAGE with ${weaponName.toUpperCase()}<br>`;
+            termLog += `&nbsp;&nbsp;Original [${last.formula}]: <b>${last.total}</b> | New: <b>${newTotal}</b><br>`;
+            termLog += `&nbsp;&nbsp;-> Keeping <b style="color:#00ff00;">${which}: ${keptTotal} Damage</b>.`;
+            logToTerminal(termLog);
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} rerolled damage with ${weaponName}`,
+                    description: `Spent a Benny to reroll damage.\nOriginal: **${last.total}** | New: **${newTotal}**\n**Keeping ${which}: ${keptTotal} Damage**`,
+                    color: 0xff3333,
+                    fields: [{ name: "Kept Dice History", value: keptRolls.join(' + '), inline: true }]
+                };
+                if (weaponIcon) embed.thumbnail = { url: weaponIcon };
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
+            }
+        }
         // ==========================================
         // 10. GLOBAL NAV TABS & HOOK TRIGGERS
         // ==========================================
         function switchTab(tabId) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active-tab'));
             document.querySelectorAll('.tab-content').forEach(content => content.style.display = 'none');
-
             document.getElementById(`tab-${tabId}`).classList.add('active-tab');
             document.getElementById(`section-${tabId}`).style.display = 'block';
             scrollToBottom();
         }
-
         function rollExploding(sides) {
             let total = 0; let currentRoll; let history = [];
             do {
                 currentRoll = Math.floor(Math.random() * sides) + 1;
                 total += currentRoll;
                 history.push(currentRoll);
-            } while (currentRoll === sides && sides > 1); 
+            } while (currentRoll === sides && sides > 1);
             return { total, history };
         }
-
-        async function executeRoll(name, cat, targetNumber) {
+        // ==========================================
+        // B3. ROLL CONTEXT + PURE ROLL ENGINE (powers Benny rerolls)
+        // buildRollContext captures every parameter of a roll so an identical
+        // reroll can be produced later. performRoll is a pure dice roller.
+        // ==========================================
+        function buildRollContext(name, cat, targetNumber) {
             let sides, traitModifier;
-            
             if (cat === null) {
                 sides = 4;
                 traitModifier = -2;
@@ -2005,7 +2208,6 @@
                 sides = parseInt(data.die) || 4;
                 traitModifier = parseInt(data.mod) || 0;
             }
-
             // Status & Combat Penalties/Bonuses
             let statusPenalty = 0;
             if (combatParticipant) {
@@ -2014,71 +2216,60 @@
                 let distPen = combatParticipant.distracted ? 2 : 0;
                 statusPenalty = -(woundPen + fatiguePen + distPen);
             }
-
             let jokerBonus = isJoker ? 2 : 0;
             let wildAttackBonus = 0;
+            let applyWildAttackVulnerable = false;
             let storageKey = activeWeaponContext ? getWeaponBonusKey(activeWeaponContext, activeWeaponIndex) : "";
-
             if (activeWeaponContext && document.getElementById('wild-attack-checkbox').checked) {
                 wildAttackBonus = 2;
+                applyWildAttackVulnerable = true;
                 setPendingDamageBonus(storageKey, { wildAttack: true });
-                if (combatParticipant) {
-                    let participants = globalState.combat.participants;
-                    let pIdx = participants.findIndex(p => p.id === activeCharId);
-                    if (pIdx !== -1) {
-                        participants[pIdx].vulnerable = true;
-                        // A12 FIX: Apply vulnerableTTL so it expires at the end of the character's next turn
-                        participants[pIdx].vulnerableTTL = (pIdx === globalState.combat.activeTurnIndex) ? 2 : 1;
-                        set(ref(db, 'campaignState/combat/participants'), participants);
-                    }
-                }
             }
-
             let baseMod = parseInt(document.getElementById('mod-override-input').value) || 0;
             let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
             let customModifier = baseMod + mapPenalty;
-
             let totalModifier = traitModifier + customModifier + statusPenalty + jokerBonus + wildAttackBonus;
-
             let is3RB = pendingRoll && pendingRoll.is3RB;
             let isDoubleTap = pendingRoll && pendingRoll.isDoubleTap;
-            let isSupp = pendingRoll && pendingRoll.isSupp; // Retrieve Suppressive Fire state
+            let isSupp = pendingRoll && pendingRoll.isSupp;
             let shotsFired = 1;
-
             if (activeWeaponContext && document.getElementById('rof-options-container').style.display !== 'none') {
                 if (is3RB || isDoubleTap || isSupp) {
-                    shotsFired = 1; // 3RB, DT, and Suppressive Fire all resolve with a single shooting die (+wild die)
+                    shotsFired = 1;
                 } else {
                     shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
                 }
             }
-
-            let results = [];
-            let isCritFail = false;
-            let bystanderHit = false;
-            let bystanderDieVal = 0;
-            let bystanderThreshold = 1;
             let isRanged = activeWeaponContext && !activeWeaponContext.range.toLowerCase().includes("melee") && !activeWeaponContext.range.toLowerCase().includes("contact");
-
+            let bystanderThreshold = 1;
             if (isRanged) {
                 if (shotsFired > 1 || isSupp || (activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun"))) {
                     bystanderThreshold = 2;
                 }
             }
-
+            return {
+                name, cat, targetNumber, sides, totalModifier, shotsFired,
+                is3RB, isDoubleTap, isSupp, isRanged, bystanderThreshold,
+                storageKey, activeWeaponContext, applyWildAttackVulnerable, jokerBonus
+            };
+        }
+        function performRoll(ctx) {
+            let { sides, totalModifier, targetNumber, shotsFired, isRanged, bystanderThreshold } = ctx;
+            let results = [];
+            let isCritFail = false;
+            let bystanderHit = false;
+            let bystanderDieVal = 0;
             if (shotsFired > 1) {
                 let traitRolls = [];
                 for (let i = 0; i < shotsFired; i++) {
                     traitRolls.push(rollExploding(sides));
                 }
                 let wildRoll = rollExploding(6);
-
                 let onesCount = 0;
-                traitRolls.forEach(r => { 
+                traitRolls.forEach(r => {
                     if (r.history[0] === 1) onesCount++;
                 });
                 if (wildRoll.history[0] === 1) onesCount++;
-
                 traitRolls.forEach(r => {
                     let skillScore = r.total + totalModifier;
                     if (isRanged && skillScore < targetNumber && r.history[0] <= bystanderThreshold) {
@@ -2086,25 +2277,20 @@
                         bystanderDieVal = r.history[0];
                     }
                 });
-
                 let totalDice = shotsFired + 1;
                 // SWADE: with multiple dice, a Critical Failure requires more than half the
                 // dice to be natural 1s AND the Wild Die itself must be a natural 1.
                 isCritFail = (onesCount > totalDice / 2) && wildRoll.history[0] === 1;
-
                 let traitTotals = traitRolls.map(r => r.total);
                 let minVal = Math.min(...traitTotals);
                 let minIdx = traitTotals.indexOf(minVal);
-
                 if (wildRoll.total > minVal) {
                     traitRolls[minIdx] = wildRoll;
                 }
-
                 traitRolls.forEach((r, idx) => {
                     let score = r.total + totalModifier;
                     let outcome = "";
                     let hasRaise = false;
-
                     if (isCritFail) {
                         outcome = "CRITICAL FAILURE!";
                     } else if (score < targetNumber) {
@@ -2114,7 +2300,6 @@
                         outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
                         if (raises > 0) hasRaise = true;
                     }
-
                     results.push({
                         shotIndex: idx + 1,
                         total: score,
@@ -2126,13 +2311,10 @@
             } else {
                 let traitRoll = rollExploding(sides);
                 let wildRoll = rollExploding(6);
-
                 let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalModifier;
                 isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
-                
                 let outcome = "";
                 let hasRaise = false;
-
                 if (isCritFail) {
                     outcome = "CRITICAL FAILURE!";
                 } else if (bestTotal < targetNumber) {
@@ -2142,12 +2324,10 @@
                     outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
                     if (raises > 0) hasRaise = true;
                 }
-
                 if (isRanged && bestTotal < targetNumber && traitRoll.history[0] <= bystanderThreshold && wildRoll.total + totalModifier < targetNumber) {
                     bystanderHit = true;
                     bystanderDieVal = traitRoll.history[0];
                 }
-
                 results.push({
                     shotIndex: 1,
                     total: bestTotal,
@@ -2159,47 +2339,159 @@
                     wildHistory: wildRoll.history
                 });
             }
-
+            return { results, isCritFail, bystanderHit, bystanderDieVal };
+        }
+        // Score a volley so "keep the best" is well-defined: hits dominate, then totals.
+        function scoreVolley(results, isCritFail) {
+            if (isCritFail) return -100000;
+            let hits = results.filter(r => r.outcome.includes("SUCCESS")).length;
+            let sum = results.reduce((acc, r) => acc + r.total, 0);
+            return hits * 100000 + sum;
+        }
+        function summarizeVolley(results, isCritFail) {
+            if (isCritFail) return "CRITICAL FAILURE";
+            let totals = results.map(r => r.total).join(", ");
+            let hits = results.filter(r => r.outcome.includes("SUCCESS")).length;
+            return `${totals} (${hits} hit${hits !== 1 ? 's' : ''})`;
+        }
+        // Apply the raise / 3RB / Double Tap pending-damage-bonus side effects
+        // based on the KEPT results of a roll (original or reroll).
+        function applyDamageBonusSideEffects(results, ctx) {
+            if (!ctx.activeWeaponContext) return;
+            let storageKey = ctx.storageKey;
             let hitWithRaise = results.some(r => r.hasRaise);
             let hit = results.some(r => r.outcome.includes("SUCCESS"));
-
-            if (activeWeaponContext) {
-                if (hitWithRaise) {
-                    setPendingDamageBonus(storageKey, { raise: true });
-                    logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${activeWeaponContext.name} will include +1d6 raise bonus.`);
-                } else {
-                    clearPendingDamageBonus(storageKey, ['raise']);
-                }
-
-                if (hit && is3RB) {
-                    setPendingDamageBonus(storageKey, { threeRoundBurst: true });
-                    logToTerminal(`> [!] 3-ROUND BURST: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +1 damage bonus.`);
-                } else {
-                    clearPendingDamageBonus(storageKey, ['threeRoundBurst']);
-                }
-
-                if (hit && isDoubleTap) {
-                    let dtDmgBonus = (activeWeaponContext.burst === true) ? 2 : 1;
-                    setPendingDamageBonus(storageKey, { doubleTap: dtDmgBonus });
-                    logToTerminal(`> [!] DOUBLE TAP: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +${dtDmgBonus} damage bonus.`);
-                } else {
-                    clearPendingDamageBonus(storageKey, ['doubleTap']);
+            if (hitWithRaise) {
+                setPendingDamageBonus(storageKey, { raise: true });
+                logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${ctx.activeWeaponContext.name} will include +1d6 raise bonus.`);
+            } else {
+                clearPendingDamageBonus(storageKey, ['raise']);
+            }
+            if (hit && ctx.is3RB) {
+                setPendingDamageBonus(storageKey, { threeRoundBurst: true });
+                logToTerminal(`> [!] 3-ROUND BURST: Attack hit! Next damage roll for ${ctx.activeWeaponContext.name} will include a +1 damage bonus.`);
+            } else {
+                clearPendingDamageBonus(storageKey, ['threeRoundBurst']);
+            }
+            if (hit && ctx.isDoubleTap) {
+                let dtDmgBonus = (ctx.activeWeaponContext.burst === true) ? 2 : 1;
+                setPendingDamageBonus(storageKey, { doubleTap: dtDmgBonus });
+                logToTerminal(`> [!] DOUBLE TAP: Attack hit! Next damage roll for ${ctx.activeWeaponContext.name} will include a +${dtDmgBonus} damage bonus.`);
+            } else {
+                clearPendingDamageBonus(storageKey, ['doubleTap']);
+            }
+        }
+        async function executeRoll(name, cat, targetNumber) {
+            // Build the full roll context (identical parameters can be reproduced for a reroll)
+            let ctx = buildRollContext(name, cat, targetNumber);
+            // Wild Attack makes the attacker Vulnerable — applied once, on the original roll only
+            if (ctx.applyWildAttackVulnerable && combatParticipant) {
+                let participants = globalState.combat.participants;
+                let pIdx = participants.findIndex(p => p.id === activeCharId);
+                if (pIdx !== -1) {
+                    participants[pIdx].vulnerable = true;
+                    // A12 FIX: Apply vulnerableTTL so it expires at the end of the character's next turn
+                    participants[pIdx].vulnerableTTL = (pIdx === globalState.combat.activeTurnIndex) ? 2 : 1;
+                    set(ref(db, 'campaignState/combat/participants'), participants);
                 }
             }
-
-            renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail, bystanderHit, bystanderDieVal);
+            // Roll the dice
+            let outcome = performRoll(ctx);
+            // Apply raise/3RB/DT pending damage bonuses based on these results
+            applyDamageBonusSideEffects(outcome.results, ctx);
+            // Store context + outcome so this roll can be rerolled with a Benny
+            lastRollContext = {
+                ...ctx,
+                results: outcome.results,
+                isCritFail: outcome.isCritFail,
+                bystanderHit: outcome.bystanderHit,
+                bystanderDieVal: outcome.bystanderDieVal,
+                score: scoreVolley(outcome.results, outcome.isCritFail),
+                usedReroll: false
+            };
+            renderRollResults(ctx, outcome.results, outcome.isCritFail, outcome.bystanderHit, outcome.bystanderDieVal, null);
         }
-
-        async function renderRollResults(name, sides, totalModifier, targetNumber, results, isCritFail, bystanderHit, bystanderDieVal) {
+        // ==========================================
+        // B3. BENNY REROLL (SWADE p.92) — reroll the last trait roll with
+        // identical parameters, keeping the better result. Crit Fails cannot
+        // be rerolled. One reroll per roll.
+        // ==========================================
+        async function rerollLastRoll() {
+            if (!lastRollContext) return;
+            if (lastRollContext.usedReroll) {
+                logToTerminal("> [!] This roll has already been rerolled (one Benny per roll).");
+                return;
+            }
+            if (lastRollContext.isCritFail) {
+                logToTerminal("> [!] CANNOT REROLL: Critical Failures cannot be rerolled (SWADE p.92).");
+                return;
+            }
+            if ((charData.bennies || 0) <= 0) {
+                logToTerminal("> [!] CANNOT REROLL: No Bennies remaining.");
+                return;
+            }
+            // Spend the Benny (syncs to sheet + tracker)
+            await adjustBennies(-1);
+            let ctx = lastRollContext;
+            // Re-roll with identical parameters
+            let newOutcome = performRoll(ctx);
+            let newScore = scoreVolley(newOutcome.results, newOutcome.isCritFail);
+            let oldScore = ctx.score;
+            let keptResults, keptIsCritFail, keptBystanderHit, keptBystanderDieVal, keptWhich;
+            if (newScore >= oldScore) {
+                keptResults = newOutcome.results;
+                keptIsCritFail = newOutcome.isCritFail;
+                keptBystanderHit = newOutcome.bystanderHit;
+                keptBystanderDieVal = newOutcome.bystanderDieVal;
+                keptWhich = "NEW ROLL";
+            } else {
+                keptResults = ctx.results;
+                keptIsCritFail = ctx.isCritFail;
+                keptBystanderHit = ctx.bystanderHit;
+                keptBystanderDieVal = ctx.bystanderDieVal;
+                keptWhich = "ORIGINAL ROLL";
+            }
+            // Apply damage-bonus side effects based on the KEPT result
+            applyDamageBonusSideEffects(keptResults, ctx);
+            // Mark this roll as rerolled (no further rerolls) and store the kept result
+            ctx.usedReroll = true;
+            lastRollContext = {
+                ...ctx,
+                results: keptResults,
+                isCritFail: keptIsCritFail,
+                bystanderHit: keptBystanderHit,
+                bystanderDieVal: keptBystanderDieVal,
+                score: scoreVolley(keptResults, keptIsCritFail)
+            };
+            // Invalidate all reroll buttons — this roll is final now
+            document.querySelectorAll('.reroll-btn').forEach(b => { b.dataset.used = "true"; b.disabled = true; });
+            let rerollInfo = {
+                which: keptWhich,
+                oldSummary: summarizeVolley(ctx.results, ctx.isCritFail),
+                newSummary: summarizeVolley(newOutcome.results, newOutcome.isCritFail)
+            };
+            renderRollResults(ctx, keptResults, keptIsCritFail, keptBystanderHit, keptBystanderDieVal, rerollInfo);
+        }
+        async function renderRollResults(ctx, results, isCritFail, bystanderHit, bystanderDieVal, rerollInfo = null) {
+            let name = ctx.name;
+            let sides = ctx.sides;
+            let totalModifier = ctx.totalModifier;
+            let targetNumber = ctx.targetNumber;
             let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
             let displayMod = totalModifier !== 0 ? (totalModifier > 0 ? `+${totalModifier}` : `${totalModifier}`) : "";
             let modStrDisplay = totalModifier !== 0 ? ` (${displayMod})` : "";
-
-            let termLog = `> ${charData.name} rolled ${name.toUpperCase()} vs TN ${targetNumber}${modStrDisplay}<br>`;
-            if (isJoker) {
+            let termLog = "";
+            // B3: Reroll banner showing both rolls and which was kept
+            if (rerollInfo) {
+                termLog += `<span style="color:#ffff00;">> ⟳ REROLL (1 Benny spent) — ${name.toUpperCase()}<br>`;
+                termLog += `&nbsp;&nbsp;Original: ${rerollInfo.oldSummary}<br>`;
+                termLog += `&nbsp;&nbsp;New:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${rerollInfo.newSummary}<br>`;
+                termLog += `&nbsp;&nbsp;-> Keeping <b>${rerollInfo.which}</b>.</span><br>`;
+            }
+            termLog += `> ${charData.name} rolled ${name.toUpperCase()} vs TN ${targetNumber}${modStrDisplay}<br>`;
+            if (ctx.jokerBonus > 0) {
                 termLog += `&nbsp;&nbsp;<span style="color:#ffff00; text-shadow: 0 0 5px #ffff00;">[ JOKER'S WILD: +2 APPLIED! ]</span><br>`;
             }
-
             results.forEach(r => {
                 if (r.isSingle) {
                     termLog += `&nbsp;&nbsp;Trait: ${r.traitHistory.join(' + ')}<br>`;
@@ -2209,24 +2501,32 @@
                     termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
                 }
             });
-
-            if (pendingRoll && pendingRoll.isSupp) {
+            if (ctx.isSupp) {
                 let suppText = "[ SUPPRESSIVE FIRE: Success = Distracted, Raise = Hit! (Max targets = weapon RoF) ]";
                 termLog += `<br><span style="color:#ff9900;">${suppText}</span>`;
             }
-
-            if (pendingRoll && pendingRoll.is3RB) {
+            if (ctx.is3RB) {
                 termLog += `<br><span style="color:#00aaff;">🟦 <b>3-ROUND BURST:</b> +1 Hit/Dmg (Damage bonus applied to next damage roll)</span>`;
             }
-
             if (bystanderHit) {
                 termLog += `<br><span style="color:#ff3333;">⚠️ INNOCENT BYSTANDER HIT! (Trait die rolled ${bystanderDieVal})</span>`;
             }
-
-            logToTerminal(termLog);
-
+            // B3: Offer a reroll button only on fresh (non-reroll) rolls that aren't crit fails.
+            // Any previous roll's reroll button is invalidated first (only the latest roll is rerollable).
+            let rerollBtnHtml = "";
+            if (rerollInfo === null) {
+                document.querySelectorAll('.reroll-btn').forEach(b => { b.disabled = true; });
+                if (!isCritFail) {
+                    let canReroll = (charData.bennies || 0) > 0;
+                    rerollBtnHtml = `<br><button class="die-btn reroll-btn" onclick="rerollLastRoll()" ${canReroll ? '' : 'disabled'}>⟳ REROLL (1 BENNY)</button>`;
+                }
+            }
+            logToTerminal(termLog + rerollBtnHtml);
             if (globalState && globalState.webhook) {
                 let desc = "";
+                if (rerollInfo) {
+                    desc += `⟳ **REROLL (1 Benny spent)**\nOriginal: ${rerollInfo.oldSummary}\nNew: ${rerollInfo.newSummary}\n**Keeping ${rerollInfo.which}**\n\n`;
+                }
                 results.forEach(r => {
                     if (r.isSingle) {
                         desc += `**Result: ${r.total}**\n${r.outcome}`;
@@ -2234,27 +2534,22 @@
                         desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
                     }
                 });
-                
-                if (pendingRoll && pendingRoll.isSupp) {
+                if (ctx.isSupp) {
                     desc += `\n🟧 **SUPPRESSIVE FIRE:** Success = Distracted, Raise = Hit! (Max targets = weapon RoF)`;
                 }
-
-                if (pendingRoll && pendingRoll.is3RB) {
+                if (ctx.is3RB) {
                     desc += `\n🟦 **3-ROUND BURST:** +1 Hit/Dmg (Damage bonus applied to next damage roll).`;
                 }
-
                 if (bystanderHit) {
                     desc += `\n⚠️ **INNOCENT BYSTANDER HIT!** (Trait die rolled ${bystanderDieVal})`;
                     color = 0xff3333;
                 }
-
                 const embed = {
-                    title: `${charData.name} rolled ${name}`,
+                    title: `${charData.name} rolled ${name}${rerollInfo ? ' (REROLL)' : ''}`,
                     description: desc,
                     color: color,
                     fields: []
                 };
-
                 if (results[0].isSingle) {
                     embed.fields.push({ name: `Trait (d${sides})`, value: `${results[0].traitHistory.join(' + ')}`, inline: true });
                     embed.fields.push({ name: "Wild (d6)", value: `${results[0].wildHistory.join(' + ')}`, inline: true });
@@ -2263,25 +2558,21 @@
                         embed.fields.push({ name: `Shot #${r.shotIndex} History`, value: `${r.history.join(' + ')}`, inline: true });
                     });
                 }
-
                 if (totalModifier !== 0) {
                     embed.fields.push({ name: "Modifier", value: `${displayMod}`, inline: true });
                 }
-
-                if (activeWeaponContext) {
-                    embed.thumbnail = { url: activeWeaponContext.icon };
+                if (ctx.activeWeaponContext) {
+                    embed.thumbnail = { url: ctx.activeWeaponContext.icon };
                     embed.fields.push({
                         name: "Weapon Specifications",
-                        value: `Range: ${activeWeaponContext.range}\nDamage: ${activeWeaponContext.damage}\nAP: ${activeWeaponContext.ap}\nRoF: ${activeWeaponContext.rof}\nShots: ${activeWeaponContext.shots}\nMin Str: ${activeWeaponContext.minStr}`
+                        value: `Range: ${ctx.activeWeaponContext.range}\nDamage: ${ctx.activeWeaponContext.damage}\nAP: ${ctx.activeWeaponContext.ap}\nRoF: ${ctx.activeWeaponContext.rof}\nShots: ${ctx.activeWeaponContext.shots}\nMin Str: ${ctx.activeWeaponContext.minStr}`
                     });
                 }
-
                 try {
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
         }
-
         function logToTerminal(htmlString) {
             const term = document.getElementById('roll-terminal');
             const div = document.createElement('div');
@@ -2290,33 +2581,27 @@
             term.appendChild(div);
             term.scrollTop = term.scrollHeight;
         }
-
         function prepareRoll(name, cat, weaponObj = null, weaponIndex = -1) {
             // Reset min-str penalty for non-weapon rolls
             if (!weaponObj) {
                 pendingMinStrPenalty = 0;
             }
-
             pendingRoll = { name, cat };
             activeWeaponContext = weaponObj;
             activeWeaponIndex = weaponIndex;
-
-            document.getElementById('tn-input').value = "4"; 
+            document.getElementById('tn-input').value = "4";
             document.getElementById('mod-override-input').value = "0";
             document.getElementById('map-select').value = "0";
-
             // Apply auto min-str penalty if applicable (set by checkMinStr before this call)
             if (weaponObj && pendingMinStrPenalty !== 0) {
                 let currentMod = parseInt(document.getElementById('mod-override-input').value) || 0;
                 document.getElementById('mod-override-input').value = currentMod + pendingMinStrPenalty;
                 logToTerminal(`> [!] STRENGTH REQUIREMENT NOT MET: Auto-applied ${pendingMinStrPenalty} penalty to attack roll.`);
             }
-
             const rangedOpts = document.getElementById('ranged-options-container');
             const rofOpts = document.getElementById('rof-options-container');
             const scopeRow = document.getElementById('scope-row');
             const wildAttackRow = document.getElementById('wild-attack-row');
-            
             document.getElementById('range-select').value = "0";
             document.getElementById('scope-checkbox').checked = false;
             document.getElementById('aim-mode-ignore').checked = true;
@@ -2324,7 +2609,6 @@
             document.getElementById('aim-mode-row').style.display = "none";
             document.getElementById('aim-scope-row').style.display = "none";
             document.getElementById('wild-attack-checkbox').checked = false;
-
             if (weaponObj) {
                 let isMelee = weaponObj.range.toLowerCase().includes("melee") || weaponObj.range.toLowerCase().includes("contact");
                 if (isMelee) {
@@ -2335,20 +2619,16 @@
                     rangedOpts.style.display = "block";
                     scopeRow.style.display = "flex";
                     wildAttackRow.style.display = "none";
-
                     let ammoType = getAmmoType(weaponObj);
                     if (ammoType === 'ballistic') {
                         rofOpts.style.display = "block";
-                        
                         let rofVal = parseInt(weaponObj.rof) || 1;
                         const rofSelect = document.getElementById('rof-select');
                         rofSelect.innerHTML = `<option value="1">Single Shot (1 Bullet)</option>`;
-                        const costMap = {2:5, 3:10, 4:20, 5:40, 6:50};
-                        
+                        const costMap = { 2: 5, 3: 10, 4: 20, 5: 40, 6: 50 };
                         for (let r = 2; r <= Math.min(rofVal, 6); r++) {
                             rofSelect.innerHTML += `<option value="${r}">RoF ${r} (${costMap[r]} Bullets)</option>`;
                         }
-
                         document.getElementById('suppressive-checkbox').checked = false;
                         document.getElementById('3rb-checkbox').checked = false;
                         document.getElementById('doubletap-checkbox').checked = false;
@@ -2356,13 +2636,11 @@
                         document.getElementById('suppressive-checkbox').disabled = false;
                         document.getElementById('3rb-checkbox').disabled = false;
                         document.getElementById('doubletap-checkbox').disabled = false;
-
                         // 3RB is a weapon-specific ability; Double Tap is an Edge and requires a RoF 1 weapon
                         const edgesNorm = (charData.edges || "").toLowerCase().replace(/[^a-z]/g, "");
                         const hasDoubleTapEdge = edgesNorm.includes("doubletap");
                         document.getElementById('3rb-label').style.display = (weaponObj.burst === true) ? "flex" : "none";
                         document.getElementById('doubletap-label').style.display = (hasDoubleTapEdge && (parseInt(weaponObj.rof) || 1) === 1) ? "flex" : "none";
-                        
                         const warning = document.getElementById('recoil-warning');
                         warning.style.display = 'none'; // reset visibility
                     } else {
@@ -2374,10 +2652,8 @@
                 rofOpts.style.display = "none";
                 wildAttackRow.style.display = "none";
             }
-
             document.getElementById('tn-modal').style.display = 'block';
         }
-
         function updateRangePenalty() {
             if (!activeWeaponContext) return;
             // Show/hide the Aim sub-options
@@ -2388,7 +2664,6 @@
             // Delegate so every modifier (range, recoil, fire modes, Aim) stays in sync
             updateRecoilPenalty();
         }
-
         // SWADE Aim (PAGE 99): spend the whole turn Aiming; on your next turn either ignore
         // up to 4 points of penalties (Range, Cover, Called Shot, Scale, Speed, etc.) OR add
         // +2 to the roll. A scope cancels 2 ADDITIONAL points when Aiming (ignore cap 6).
@@ -2399,10 +2674,8 @@
             let hasScope = document.getElementById('aim-scope-checkbox').checked;
             return { penalty: Math.min(0, basePenalty + (hasScope ? 6 : 4)), bonus: 0 };
         }
-
         function updateRecoilPenalty() {
             if (!activeWeaponContext) return;
-            
             let is3RB = document.getElementById('3rb-checkbox').checked;
             let isSupp = document.getElementById('suppressive-checkbox').checked;
             let isDT = document.getElementById('doubletap-checkbox')?.checked || false;
@@ -2410,7 +2683,6 @@
             let suppCheck = document.getElementById('suppressive-checkbox');
             let trbCheck = document.getElementById('3rb-checkbox');
             let dtCheck = document.getElementById('doubletap-checkbox');
-            
             // Mutual exclusivity enforcement
             if (is3RB) {
                 rofSelect.disabled = true;
@@ -2418,7 +2690,7 @@
                 dtCheck.disabled = true;
                 rofSelect.value = "1";
             } else if (isSupp) {
-                rofSelect.disabled = true; 
+                rofSelect.disabled = true;
                 trbCheck.disabled = true;
                 dtCheck.disabled = true;
                 rofSelect.value = "1";
@@ -2433,7 +2705,6 @@
                 trbCheck.disabled = false;
                 dtCheck.disabled = false;
             }
-
             let shots = parseInt(rofSelect.value) || 1;
             let recoilPenalty = 0;
             if (isSupp) {
@@ -2441,49 +2712,39 @@
             } else if (!is3RB && !isDT && shots > 1) {
                 recoilPenalty = -2;
             }
-            
             let trbBonus = is3RB ? 1 : 0;
             // Double Tap: +1 to hit, or +2 when the weapon also has Three-Round Burst
             let dtBonus = isDT ? ((activeWeaponContext.burst === true) ? 2 : 1) : 0;
-
             // Aim applies to the total situational penalty (not just Range); +2 mode
             // leaves penalties untouched and adds a flat +2 instead.
             let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
             let aim = getAimAdjustments(rangePenalty + recoilPenalty + pendingMinStrPenalty);
-
             const warning = document.getElementById('recoil-warning');
             if (recoilPenalty !== 0) {
                 warning.style.display = 'block';
             } else {
                 warning.style.display = 'none';
             }
-
             applyComputedModifiers(aim.penalty + aim.bonus + trbBonus + dtBonus);
         }
-
         function applyComputedModifiers(computedVal) {
             document.getElementById('mod-override-input').value = computedVal;
         }
-
         function scrollToBottom() { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
-
         // ==========================================
         // 11. MODAL INTERACTION HANDLERS
         // ==========================================
         function confirmRoll() {
             let tn = parseInt(document.getElementById('tn-input').value) || 4;
-
             let is3RB = false;
             let isSupp = false;
             let isDoubleTap = false;
             let shotsFired = 1;
             let bulletsExpended = 1;
-
             if (activeWeaponContext && document.getElementById('rof-options-container').style.display !== 'none') {
                 is3RB = document.getElementById('3rb-checkbox').checked;
                 isSupp = document.getElementById('suppressive-checkbox').checked;
                 isDoubleTap = document.getElementById('doubletap-checkbox')?.checked || false;
-
                 if (is3RB) {
                     shotsFired = 1;
                     bulletsExpended = 3;
@@ -2492,37 +2753,34 @@
                     // Double Tap costs 1 extra bullet — or expends 6 on a 3RB-capable weapon
                     bulletsExpended = (activeWeaponContext && activeWeaponContext.burst === true) ? 6 : 2;
                 } else if (isSupp) {
-                    // Fix: Suppressive Fire strictly uses 3x the max Weapon RoF 
+                    // Fix: Suppressive Fire strictly uses 3x the max Weapon RoF
                     let weaponRoF = parseInt(activeWeaponContext.rof) || 1;
-                    const costMap = {1:1, 2:5, 3:10, 4:20, 5:40, 6:50};
+                    const costMap = { 1: 1, 2: 5, 3: 10, 4: 20, 5: 40, 6: 50 };
                     let baseBullets = costMap[weaponRoF] || (weaponRoF * 10);
                     bulletsExpended = baseBullets * 3;
                     shotsFired = 1; // Force single roll for Suppressive Fire
                 } else {
                     shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
-                    const costMap = {1:1, 2:5, 3:10, 4:20, 5:40, 6:50};
+                    const costMap = { 1: 1, 2: 5, 3: 10, 4: 20, 5: 40, 6: 50 };
                     bulletsExpended = costMap[shotsFired] || (shotsFired * 10);
                 }
             }
-
             document.getElementById('tn-modal').style.display = 'none';
-
             // Decrement ammo after confirming the attack
             if (activeWeaponContext) {
                 const ammoType = getAmmoType(activeWeaponContext);
-                
                 if (activeWeaponIndex !== -1 && ammoType !== 'none') {
                     if (ammoType === 'ballistic') {
                         if (charData.weapons[activeWeaponIndex].magAmmo < bulletsExpended) {
                             alert(`Not enough ammo! This action requires ${bulletsExpended} bullets, but you only have ${charData.weapons[activeWeaponIndex].magAmmo} left.`);
-                            return; 
+                            return;
                         }
                         charData.weapons[activeWeaponIndex].magAmmo -= bulletsExpended;
                         logToTerminal(`> Magazine: ${charData.weapons[activeWeaponIndex].magAmmo}/${charData.weapons[activeWeaponIndex].maxMag}`);
                     } else if (ammoType === 'projectile') {
                         if (charData.weapons[activeWeaponIndex].magAmmo < bulletsExpended) {
                             alert(`Not enough ammo! This action requires ${bulletsExpended} shots, but you only have ${charData.weapons[activeWeaponIndex].magAmmo} left.`);
-                            return; 
+                            return;
                         }
                         charData.weapons[activeWeaponIndex].magAmmo -= bulletsExpended;
                         logToTerminal(`> ${activeWeaponContext.name} chamber: ${charData.weapons[activeWeaponIndex].magAmmo}/${charData.weapons[activeWeaponIndex].maxMag} | Total: ${charData.weapons[activeWeaponIndex].projectileCount}`);
@@ -2531,23 +2789,19 @@
                     renderWeapons();
                 }
             }
-
             pendingRoll.is3RB = is3RB;
             pendingRoll.isDoubleTap = isDoubleTap;
             pendingRoll.isSupp = isSupp; // Pass the Suppressive Fire state
             executeRoll(pendingRoll.name, pendingRoll.cat, tn);
         }
-
         function cancelRoll() {
             document.getElementById('tn-modal').style.display = 'none';
             pendingRoll = null;
             pendingMinStrPenalty = 0;
         }
-
         function confirmEquip() {
             let id = document.getElementById('equip-weapon-select').value;
             let preset = globalState.presets.find(p => p.id === id);
-            
             if (preset) {
                 let newWeapon = JSON.parse(JSON.stringify(preset));
                 normalizeWeaponAmmo(newWeapon);
@@ -2569,15 +2823,12 @@
             }
             document.getElementById('weapon-add-modal').style.display = 'none';
         }
-
         function cancelEquip() {
             document.getElementById('weapon-add-modal').style.display = 'none';
         }
-
         function clearLog() {
             document.getElementById('roll-terminal').innerHTML = '<div>> TERMINAL LOG CLEARED...</div>';
         }
-
         async function saveWebhook() {
             let url = document.getElementById('discord-webhook').value;
             if (isFirebaseConfigured) {
@@ -2588,14 +2839,12 @@
             }
             logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
         }
-
-        window.resetDerived = function(stat) {
+        window.resetDerived = function (stat) {
             if (stat === 'parry') charData.derived.parryOverride = 0;
             if (stat === 'toughness') charData.derived.toughnessOverride = 0;
             saveCharacter();
             renderSheet();
         };
-
         // ==========================================
         // 12. WINDOW EXPORTS
         // ==========================================
@@ -2604,6 +2853,10 @@
         window.adjustBennies = adjustBennies;
         window.recoverFromShaken = recoverFromShaken;
         window.soakWounds = soakWounds;
+        window.unshakeWithBenny = unshakeWithBenny;
+        window.gmNewSession = gmNewSession;
+        window.rerollLastRoll = rerollLastRoll;
+        window.rerollWeaponDamage = rerollWeaponDamage;
         window.switchTab = switchTab;
         window.openEquipModal = openEquipModal;
         window.removeWeaponFromCharacter = removeWeaponFromCharacter;
@@ -2627,7 +2880,6 @@
         window.proceedMinStr = proceedMinStr;
         window.cancelMinStr = cancelMinStr;
         window.resetDerived = resetDerived;
-
         // Admin controls
         if (isAdmin) {
             document.getElementById('admin-controls').style.display = 'block';
@@ -2646,8 +2898,8 @@
                 logToTerminal("> WEBHOOK GLOBALLY UPDATED.");
             });
         }
-
         init();
     </script>
 </body>
+
 </html>
