@@ -206,6 +206,13 @@
             color: #00ccff;
         }
 
+        /* B6: Stunned badge */
+        .badge.stunned {
+            border-color: #ff0055;
+            color: #ff0055;
+            animation: pulse 1.2s infinite;
+        }
+
         /* Detail Panel */
         .detail-panel {
             border: 1px solid var(--theme-color);
@@ -447,6 +454,14 @@
                         <button id="btn-vulnerable" class="die-btn" style="flex-grow: 1;"
                             onclick="toggleStatus('vulnerable')">VULNERABLE</button>
                     </div>
+                    <!-- B6: Stunned toggle + recovery -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button id="btn-stunned" class="die-btn" style="flex-grow: 1; border-color: #ff0055; color: #ff0055;"
+                            onclick="toggleStunned()">STUNNED</button>
+                        <button id="btn-stun-recover" class="die-btn"
+                            style="flex-grow: 1; border-color: #ff0055; color: #ff0055; display: none;"
+                            onclick="rollStunRecovery()">ROLL VIGOR RECOVERY</button>
+                    </div>
                     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                         <button id="btn-recover" class="die-btn"
                             style="flex-grow: 1; border-color: #ff9900; color: #ff9900; display: none;"
@@ -596,6 +611,10 @@
 
             const p = combat.participants[idx];
             if (!p) return;
+
+            // B6: Stunned characters do not decrement status TTLs; their statuses are
+            // pinned until Vigor recovery succeeds.
+            if (p.stunned) return;
 
             let changed = false;
 
@@ -838,6 +857,7 @@
                         distractedTTL: 0,
                         vulnerable: false,
                         vulnerableTTL: 0,
+                        stunned: false, // B6
                         initFlags: initFlags, // B5
                         onHold: false, // B5
                         card: null,
@@ -1202,6 +1222,7 @@
                 distractedTTL: 0,
                 vulnerable: false,
                 vulnerableTTL: 0,
+                stunned: false, // B6
                 initFlags: { hesitant: false, quick: false, levelHeaded: false, improvedLevelHeaded: false }, // B5
                 onHold: false, // B5
                 card: null,
@@ -1241,11 +1262,21 @@
             else if (idxValid(combat.holdActiveIndex)) activeIdx = combat.holdActiveIndex;
             else activeIdx = combat.activeTurnIndex || 0;
             let activeP = combat.participants[activeIdx];
-            if (activeP && activeP.shaken && !activeP.incapacitated) {
+            if (activeP && activeP.stunned && !activeP.incapacitated) {
+                // B6: Stunned takes priority — show Vigor recovery banner
                 banner.style.display = 'block';
+                banner.style.borderColor = '#ff0055';
+                banner.style.color = '#ff0055';
+                banner.innerHTML = `> STUNNED: ${activeP.name.toUpperCase()} CANNOT ACT — VIGOR RECOVERY REQUIRED (FREE ACTION). <button class="die-btn" style="margin-left: 10px; border-color: #ff0055; color: #ff0055;" onclick="event.stopPropagation(); rollStunRecovery('${activeP.id}')">ROLL VIGOR RECOVERY</button>`;
+            } else if (activeP && activeP.shaken && !activeP.incapacitated) {
+                banner.style.display = 'block';
+                banner.style.borderColor = '';
+                banner.style.color = '';
                 banner.innerHTML = `> SPIRIT RECOVERY REQUIRED: ${activeP.name.toUpperCase()} IS SHAKEN — FREE ACTIONS ONLY. <button class="die-btn" style="margin-left: 10px; border-color: #ff9900; color: #ff9900;" onclick="event.stopPropagation(); rollRecovery('${activeP.id}')">ROLL RECOVERY (TN 4)</button>`;
             } else {
                 banner.style.display = 'none';
+                banner.style.borderColor = '';
+                banner.style.color = '';
             }
             // Update NEXT TURN button text if a Joker or Hold interrupt is active
             const nextTurnBtn = document.getElementById('btn-next-turn');
@@ -1279,6 +1310,7 @@
                 // Status badges (shared by grouped and ungrouped rows)
                 let badges = "";
                 if (p.incapacitated) badges += `<span class="badge incap">INCAPACITATED</span>`;
+                if (p.stunned) badges += `<span class="badge stunned">STUNNED</span>`; // B6
                 if (p.onHold) badges += `<span class="badge onhold">ON HOLD</span>`; // B5
                 if (p.shaken) badges += `<span class="badge shaken">SHAKEN</span>`;
                 if (p.distracted) badges += `<span class="badge distracted">DISTRACTED [-2]</span>`;
@@ -1403,6 +1435,15 @@
             // B5: On Hold button visibility — GO ON HOLD when not holding, ACT NOW when holding
             document.getElementById('btn-hold').style.display = (!p.onHold && !p.incapacitated) ? 'block' : 'none';
             document.getElementById('btn-act').style.display = p.onHold ? 'block' : 'none';
+            // B6: Stunned button highlight + stun-recover visibility
+            let stunnedBtn = document.getElementById('btn-stunned');
+            let stunRecoverBtn = document.getElementById('btn-stun-recover');
+            if (stunnedBtn) {
+                stunnedBtn.className = `die-btn ${p.stunned ? 'active-toggle' : ''}`;
+                stunnedBtn.style.borderColor = '#ff0055';
+                stunnedBtn.style.color = '#ff0055';
+            }
+            if (stunRecoverBtn) stunRecoverBtn.style.display = p.stunned ? 'block' : 'none';
             // B5: Reflect initiative flags in the checkboxes
             let f = p.initFlags || {};
             document.getElementById('flag-hesitant').checked = !!f.hesitant;
@@ -1472,8 +1513,8 @@
             let p = participants[idx];
             let isOn = !p[status];
             p[status] = isOn;
-            // B5: A character who becomes Shaken (or Stunned) immediately loses their Hold (p.105).
-            if (status === 'shaken' && isOn && p.onHold) {
+            // B5/B6: A character who becomes Shaken or Stunned immediately loses their Hold (p.105).
+            if ((status === 'shaken' || status === 'stunned') && isOn && p.onHold) {
                 p.onHold = false;
             }
             if (isOn) {
@@ -1486,6 +1527,73 @@
             if (isOn) {
                 logToWebhook("STATUS UPDATE", `${p.name} is now **${status.toUpperCase()}**.`);
             }
+        };
+        // B6: Toggle stunned — forces distracted + vulnerable on, clears Hold
+        window.toggleStunned = async function () {
+            if (!selectedParticipantId) return;
+            let participants = globalState.combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+            let becomingStunned = !p.stunned;
+            p.stunned = becomingStunned;
+            if (becomingStunned) {
+                // Enforce Distracted + Vulnerable, clear Hold
+                p.distracted = true;
+                p.distractedTTL = 999; // pinned until stun clears
+                p.vulnerable = true;
+                p.vulnerableTTL = 999;
+                p.shaken = true;
+                p.onHold = false;
+                logToWebhook("STUNNED", `${p.name} is now **STUNNED** — Distracted, Vulnerable, Shaken, cannot act. Vigor recovery required.`);
+            } else {
+                // Manual removal: clear pinned TTLs (do not auto-clear statuses so GM decides)
+                if (p.distractedTTL === 999) { p.distractedTTL = 0; p.distracted = false; }
+                if (p.vulnerableTTL === 999) { p.vulnerableTTL = 0; p.vulnerable = false; }
+                logToWebhook("STATUS UPDATE", `${p.name} — STUNNED manually cleared.`);
+            }
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+        };
+        // B6: Vigor recovery roll while Stunned
+        window.rollStunRecovery = async function (participantId = selectedParticipantId) {
+            if (!participantId || !globalState.combat || !globalState.combat.participants) return;
+            let participants = globalState.combat.participants;
+            let idx = participants.findIndex(x => x.id === participantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+            if (!p.stunned) return;
+            // Determine Vigor die
+            let vigorDie = 6;
+            if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
+                vigorDie = parseInt(globalState.characters[p.id].attributes?.Vigor?.die) || 6;
+            }
+            let penalty = Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2);
+            let tRoll = rollExplodingDice(vigorDie);
+            let wRoll = p.isWildCard ? rollExplodingDice(6) : null;
+            let best = (wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total) - penalty;
+            let success = best >= 4;
+            let raise   = best >= 8;
+            let desc = `${p.name} rolled Vigor Recovery (d${vigorDie})${penalty > 0 ? ` at -${penalty}` : ''}: ${tRoll.history.join(' + ')}`;
+            if (wRoll) desc += ` | Wild: ${wRoll.history.join(' + ')}`;
+            if (success && raise) {
+                // Raise: no longer Stunned, Vulnerable ends this turn
+                p.stunned = false;
+                p.shaken = false;
+                p.distracted = false; p.distractedTTL = 0;
+                p.vulnerable = true;  p.vulnerableTTL = 1; // expires end of this turn
+                desc += ` = **${best}** (RAISE) → No longer Stunned. Vulnerable until end of THIS turn.`;
+            } else if (success) {
+                // Success: no longer Stunned, but Vulnerable until end of NEXT turn
+                p.stunned = false;
+                p.shaken = false;
+                p.distracted = false; p.distractedTTL = 0;
+                p.vulnerable = true;  p.vulnerableTTL = 2; // expires end of next turn
+                desc += ` = **${best}** (SUCCESS) → No longer Stunned. Vulnerable until end of NEXT turn.`;
+            } else {
+                desc += ` = **${best}** (FAILURE) → Still Stunned. Must try again next turn.`;
+            }
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+            logToWebhook("VIGOR RECOVERY (STUN)", desc);
         };
         // ==========================================
         // 6B. DICE HELPER, SPIRIT RECOVERY & SOAK (SWADE)
