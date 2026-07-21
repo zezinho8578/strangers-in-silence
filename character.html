@@ -2337,19 +2337,22 @@ window.onTargetChange = function () {
 
     updateDefenderModifierAndStatus();
 };
-        window.onTargetDodgeChange = async function () {
-            let target = getSelectedTarget();
-            if (!target) return;
-            if (!target.isPlayer && globalState.combat && globalState.combat.participants) {
-                let participants = globalState.combat.participants;
-                let idx = participants.findIndex(p => p.id === target.id);
-                if (idx !== -1) {
-                    participants[idx].hasDodge = document.getElementById('target-dodge-checkbox').checked;
-                    await set(ref(db, 'campaignState/combat/participants'), participants);
-                }
-            }
-            updateDefenderModifierAndStatus();
-        };
+window.onTargetDodgeChange = async function () {
+    let target = getSelectedTarget();
+    if (!target) return;
+
+    if (globalState.combat && globalState.combat.participants) {
+        let participants = globalState.combat.participants;
+        let idx = participants.findIndex(p => p.id === target.id);
+
+        if (idx !== -1) {
+            participants[idx].hasDodge = document.getElementById('target-dodge-checkbox').checked;
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+        }
+    }
+
+    updateDefenderModifierAndStatus();
+};
         // ==========================================
         // B3. ROLL CONTEXT + PURE ROLL ENGINE (powers Benny rerolls)
         // ==========================================
