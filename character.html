@@ -894,6 +894,239 @@
             console.warn("Firebase not configured. Falling back to local storage.");
             logToTerminal("<span style='color:red;'>[ WARNING: FIREBASE CONFIGURATION MISSING. EDIT CODES TO SYNC. ]</span>");
         }
+
+// ==========================================
+// AUTO-APPLY DAMAGE: ATTACK CONTEXT + TRACKER WRITE
+// ==========================================
+const pendingAttackPrefix = 'pending_attack_context_';
+
+function getAttackContext(key) {
+    if (!key) return null;
+    try {
+        return JSON.parse(sessionStorage.getItem(pendingAttackPrefix + key)) || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function setAttackContext(key, value) {
+    if (!key) return;
+    sessionStorage.setItem(pendingAttackPrefix + key, JSON.stringify(value));
+}
+
+function clearAttackContext(key) {
+    if (!key) return;
+    sessionStorage.removeItem(pendingAttackPrefix + key);
+}
+
+function clearAllAttackContexts() {
+    Object.keys(sessionStorage)
+        .filter(key => key.startsWith(pendingAttackPrefix))
+        .forEach(key => sessionStorage.removeItem(key));
+}
+
+function storeAttackContext(ctx, hit, results) {
+    if (!ctx || !ctx.storageKey || !ctx.activeWeaponContext) return;
+
+    const summary = (results || [])
+        .map(r => r.isSingle ? String(r.total) : `Shot ${r.shotIndex}: ${r.total}`)
+        .join(', ');
+
+    setAttackContext(ctx.storageKey, {
+        targetId: ctx.targetId || null,
+        targetName: ctx.targetName || "",
+        hit: !!hit,
+        ap: ctx.activeWeaponContext.ap ?? "0",
+        weaponName: ctx.activeWeaponContext.name || "Weapon",
+        attackSummary: summary,
+        round: globalState?.combat?.round ?? null,
+        savedAt: Date.now()
+    });
+}
+
+function parseApForDamage(ap) {
+    const raw = (ap === undefined || ap === null) ? "0" : String(ap);
+    const lower = raw.toLowerCase();
+
+    if (lower.includes("ignore")) {
+        return {
+            amount: 999,
+            ignore: true,
+            label: raw.trim() || "Ignore Armor"
+        };
+    }
+
+    const match = lower.match(/-?\d+/);
+    if (!match) {
+        return {
+            amount: 0,
+            ignore: false,
+            label: raw.trim() || "0"
+        };
+    }
+
+    return {
+        amount: parseInt(match[0], 10),
+        ignore: false,
+        label: raw.trim() || match[0]
+    };
+}
+
+function buildDamageBreakdown(damageTotal, toughness, armor, ap, effectiveToughness) {
+    let breakdown = `${damageTotal} damage vs Toughness ${toughness}`;
+
+    if (ap.ignore) {
+        if (armor > 0) breakdown += ` + Armor ${armor} (ignored by AP ${ap.label})`;
+    } else {
+        if (armor > 0) breakdown += ` + Armor ${armor} − AP ${Math.max(0, ap.amount)}`;
+        else if (ap.amount > 0) breakdown += ` − AP ${ap.amount}`;
+    }
+
+    breakdown += ` = ${effectiveToughness}`;
+    return breakdown;
+}
+
+async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
+    const result = {
+        applied: false,
+        message: "",
+        plainText: ""
+    };
+
+    const attack = getAttackContext(storageKey);
+    if (!attack) return result;
+
+    // Consume the attack context immediately.
+    // One attack = one auto-applied damage result.
+    clearAttackContext(storageKey);
+
+    if (!attack.hit) {
+        if (attack.targetName) {
+            result.message = `> No auto-application: attack vs ${attack.targetName} did not hit.`;
+            result.plainText = `No auto-application: attack vs ${attack.targetName} did not hit.`;
+        }
+        return result;
+    }
+
+    if (!attack.targetId) return result;
+
+    if (!globalState || !globalState.combatActive || !globalState.combat || !globalState.combat.participants) {
+        return result;
+    }
+
+    if (
+        attack.round !== null &&
+        globalState.combat.round !== undefined &&
+        attack.round !== globalState.combat.round
+    ) {
+        result.message = `> No auto-application: attack context is from another round.`;
+        result.plainText = `No auto-application: attack context is from another round.`;
+        return result;
+    }
+
+    const participants = globalState.combat.participants;
+    const idx = participants.findIndex(p => p.id === attack.targetId);
+    if (idx === -1) return result;
+
+    const target = JSON.parse(JSON.stringify(participants[idx]));
+
+    const toughness = parseInt(target.toughness) || 0;
+    const armor = parseInt(target.armor) || 0;
+
+    const apInput = (weaponObj && weaponObj.ap !== undefined && weaponObj.ap !== null)
+        ? weaponObj.ap
+        : attack.ap;
+
+    const ap = parseApForDamage(apInput);
+    const effectiveArmor = ap.ignore ? 0 : Math.max(0, armor - Math.max(0, ap.amount));
+    const effectiveToughness = toughness + effectiveArmor;
+
+    const breakdown = buildDamageBreakdown(
+        damageTotal,
+        toughness,
+        armor,
+        ap,
+        effectiveToughness
+    );
+
+    if (damageTotal < effectiveToughness) {
+        result.message = `> <b style="color:#ff9900;">AUTO-CHECK:</b> ${breakdown} → ${target.name} takes no effect.`;
+        result.plainText = `AUTO-CHECK: ${breakdown} → ${target.name} takes no effect.`;
+        return result;
+    }
+
+    const wasShaken = !!target.shaken;
+    const oldWounds = target.wounds || 0;
+    const raises = Math.floor((damageTotal - effectiveToughness) / 4);
+
+    let becameShaken = false;
+    let woundsAdded = 0;
+
+    if (!wasShaken) {
+        becameShaken = true;
+        target.shaken = true;
+        woundsAdded = raises;
+    } else {
+        woundsAdded = 1 + raises;
+    }
+
+    if (woundsAdded > 0) {
+        target.wounds = oldWounds + woundsAdded;
+    }
+
+    const woundCap = target.woundCap || (target.isWildCard ? 4 : 1);
+
+    if ((target.wounds || 0) >= woundCap) {
+        target.wounds = woundCap;
+        target.incapacitated = true;
+    } else if (
+        target.incapacitated &&
+        (target.wounds || 0) < woundCap &&
+        (target.fatigue || 0) < 3
+    ) {
+        target.incapacitated = false;
+    }
+
+    // If damage Shakes someone who was holding, they lose Hold.
+    if (target.shaken && target.onHold) {
+        target.onHold = false;
+    }
+
+    if (target.incapacitated) {
+        target.onHold = false;
+    }
+
+    participants[idx] = target;
+    globalState.combat.participants = participants;
+
+    if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
+        await set(ref(db, 'campaignState/combat/participants'), participants);
+    } else {
+        localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+    }
+
+    let sentence;
+
+    if (wasShaken && woundsAdded > 0) {
+        sentence = `${target.name} was already Shaken and takes ${woundsAdded} Wound${woundsAdded === 1 ? '' : 's'}.`;
+    } else if (becameShaken && woundsAdded > 0) {
+        sentence = `${target.name} is Shaken and takes ${woundsAdded} Wound${woundsAdded === 1 ? '' : 's'}.`;
+    } else if (becameShaken) {
+        sentence = `${target.name} is Shaken.`;
+    } else {
+        sentence = `${target.name} takes ${woundsAdded} Wound${woundsAdded === 1 ? '' : 's'}.`;
+    }
+
+    if (target.incapacitated) {
+        sentence += ` ${target.name} is INCAPACITATED.`;
+    }
+
+    result.applied = true;
+    result.message = `> <b style="color:#ff3333;">AUTO-APPLIED:</b> ${breakdown} → ${sentence}`;
+    result.plainText = `AUTO-APPLIED: ${breakdown} → ${sentence}`;
+
+    return result;
+}
         // ==========================================
         // AMMO SYSTEM HELPER FUNCTIONS
         // ==========================================
@@ -1056,6 +1289,7 @@
             if (combatParticipant) {
                 if (lastCombatRound !== null && globalState.combat.round !== lastCombatRound) {
                     clearAllPendingDamageBonuses();
+                    clearAllAttackContexts();
                 }
                 lastCombatRound = globalState.combat.round;
                 hudEl.style.display = 'block';
@@ -1915,6 +2149,16 @@ ${reloadBtn}
             };
             // Reveal the damage reroll button now that a damage roll is pending
             updateDamageRerollButton('unarmed');
+
+            let unarmedApplicationWeapon = {
+                name: 'Unarmed Strike',
+                ap: '0',
+                range: 'Melee',
+                icon: 'https://i.imgur.com/TimqS8i.png'
+            };
+
+            let application = await applyDamageToTracker(storageKey, unarmedApplicationWeapon, total);
+
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
             let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
@@ -1922,6 +2166,10 @@ ${reloadBtn}
             let termLog = `> ${charData.name} dealt damage with UNARMED STRIKE<br>`;
             termLog += `&nbsp;&nbsp;Dmg Roll [${unarmedDamageFormula}]: ${rolls.join(' + ')}${modStr}${bonusStr}${jokerStr}${waStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
+
+            if (application.message) {
+                termLog += `<br>&nbsp;&nbsp;${application.message}`;
+            }
             if (jokerBonus > 0 || wildAttackDmgBonus > 0) {
                 let bonuses = [];
                 if (jokerBonus > 0) bonuses.push("Joker's Wild (+2)");
@@ -1953,6 +2201,11 @@ ${reloadBtn}
                     embed.fields.push({ name: "Wild Attack (+2)", value: "+2", inline: true });
                     embed.description += `\n*(Includes +2 Wild Attack Bonus)*`;
                 }
+
+                if (application.plainText) {
+                    embed.description += `\n${application.plainText}`;
+                }
+
                 try {
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
@@ -2032,6 +2285,9 @@ ${reloadBtn}
             };
             // Reveal the damage reroll button now that a damage roll is pending
             updateDamageRerollButton(index);
+
+            let application = await applyDamageToTracker(storageKey, weaponObj, total);
+
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
             let dtStr = hasDTBonus ? ` (Includes +${dtBonusVal} from Double Tap)` : "";
@@ -2041,6 +2297,10 @@ ${reloadBtn}
             let termLog = `> ${charData.name} dealt damage with ${weaponName.toUpperCase()}<br>`;
             termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}${trbStr}${dtStr}${bonusStr}${jokerStr}${waStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
+
+            if (application.message) {
+                termLog += `<br>&nbsp;&nbsp;${application.message}`;
+            }
             if (jokerBonus > 0 || wildAttackDmgBonus > 0) {
                 let bonuses = [];
                 if (jokerBonus > 0) bonuses.push("Joker's Wild (+2)");
@@ -2086,6 +2346,11 @@ ${reloadBtn}
                         value: `Range: ${weapon.range}\nDamage: ${weapon.damage}\nAP: ${weapon.ap}\nRoF: ${weapon.rof}\nShots: ${weapon.shots}\nMin Str: ${weapon.minStr}`
                     });
                 }
+
+                if (application.plainText) {
+                    embed.description += `\n${application.plainText}`;
+                }
+
                 try {
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
@@ -2405,10 +2670,14 @@ window.onTargetDodgeChange = async function () {
                     bystanderThreshold = 2;
                 }
             }
+            let selectedTarget = getSelectedTarget();
+
             return {
                 name, cat, targetNumber, sides, totalModifier, shotsFired,
                 is3RB, isDoubleTap, isSupp, isRanged, bystanderThreshold,
-                storageKey, activeWeaponContext, applyWildAttackVulnerable, jokerBonus
+                storageKey, activeWeaponContext, applyWildAttackVulnerable, jokerBonus,
+                targetId: selectedTarget ? selectedTarget.id : null,
+                targetName: selectedTarget ? selectedTarget.name : ""
             };
         }
         function performRoll(ctx) {
@@ -2546,6 +2815,12 @@ window.onTargetDodgeChange = async function () {
                 }
             }
             let outcome = performRoll(ctx);
+
+            let attackHit = ctx.isSupp
+                ? outcome.results.some(r => r.hasRaise)
+                : outcome.results.some(r => r.outcome.includes("SUCCESS"));
+
+            storeAttackContext(ctx, attackHit, outcome.results);
             applyDamageBonusSideEffects(outcome.results, ctx);
             lastRollContext = {
                 ...ctx,
