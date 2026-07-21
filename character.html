@@ -506,6 +506,14 @@
                         style="border-color:#ffff00; color:#ffff00; margin-left:10px;"
                         onclick="unshakeWithBenny()">BENNY: UNSHAKE</button>
                 </div>
+                <!-- B6: Stunned banner -->
+                <div class="section" id="stunned-banner"
+                    style="display:none; margin-bottom: 20px; border-color: #ff0055; background: rgba(255,0,85,0.10); text-align: center;">
+                    <div style="color:#ff0055; font-weight:bold; margin-bottom:10px;">[ STUNNED — CANNOT ACT. VIGOR RECOVERY REQUIRED. ]
+                    </div>
+                    <button class="die-btn" style="border-color:#ff0055; color:#ff0055;"
+                        onclick="rollStunRecovery()">ROLL VIGOR RECOVERY (FREE ACTION)</button>
+                </div>
                 <div class="section" style="margin-bottom: 20px;">
                     <h3>ATTRIBUTES</h3>
                     <div id="attributes-container"></div>
@@ -1294,6 +1302,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 lastCombatRound = globalState.combat.round;
                 hudEl.style.display = 'block';
                 let statusHtml = `Wounds: ${combatParticipant.wounds || 0} | Fatigue: ${combatParticipant.fatigue || 0}`;
+                if (combatParticipant.stunned) statusHtml += ` <br><span style="color:#ff0055; font-weight:bold;">[ STUNNED — CANNOT ACT ]</span>`; // B6
                 if (combatParticipant.shaken) statusHtml += ` <br><span style="color:#ff9900;">[ SHAKEN ]</span>`;
                 if (combatParticipant.distracted) statusHtml += ` <span style="color:#ff3333;">[ DISTRACTED ]</span>`;
                 if (combatParticipant.vulnerable) statusHtml += ` <span style="color:#00ff00;">[ VULNERABLE ]</span>`;
@@ -1306,7 +1315,10 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 hudEl.style.display = 'none';
             }
             const shakenBanner = document.getElementById('shaken-banner');
-            shakenBanner.style.display = (combatParticipant && combatParticipant.shaken && !combatParticipant.incapacitated) ? 'block' : 'none';
+            shakenBanner.style.display = (combatParticipant && combatParticipant.shaken && !combatParticipant.stunned && !combatParticipant.incapacitated) ? 'block' : 'none';
+            // B6: Stunned banner
+            const stunnedBanner = document.getElementById('stunned-banner');
+            if (stunnedBanner) stunnedBanner.style.display = (combatParticipant && combatParticipant.stunned && !combatParticipant.incapacitated) ? 'block' : 'none';
             const unshakeBtn = document.getElementById('unshake-btn');
             if (unshakeBtn) unshakeBtn.disabled = (charData.bennies || 0) <= 0;
             renderSheet();
@@ -1459,6 +1471,62 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                     color: success ? 0x00ff00 : 0xff3333,
                     fields: [
                         { name: `Spirit (d${spiritDie})`, value: traitRoll.history.join(' + '), inline: true },
+                        { name: "Wild (d6)", value: wildRoll.history.join(' + '), inline: true }
+                    ]
+                };
+                if (totalMod !== 0) embed.fields.push({ name: "Modifier", value: `${totalMod > 0 ? '+' : ''}${totalMod}`, inline: true });
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
+            }
+        }
+        // B6: Player-side Vigor recovery from Stunned
+        async function rollStunRecovery() {
+            if (!combatParticipant || !combatParticipant.stunned) return;
+            if (!isFirebaseConfigured || !globalState.combat || !globalState.combat.participants) return;
+            let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
+            let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
+            let statusPenalty = -(Math.min(combatParticipant.wounds || 0, 3) + Math.min(combatParticipant.fatigue || 0, 2));
+            let totalMod = vigorMod + statusPenalty;
+            let traitRoll = rollExploding(vigorDie);
+            let wildRoll = rollExploding(6);
+            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
+            let success = bestTotal >= 4;
+            let raise   = bestTotal >= 8;
+            let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
+            let termLog = `> ${charData.name} rolled VIGOR RECOVERY (STUN) vs TN 4${modStr}<br>`;
+            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> `;
+            let resultText = "";
+            if (success && raise) {
+                resultText = `<span style="color:#00ff00;">RAISE! No longer Stunned. Vulnerable until end of THIS turn.</span>`;
+            } else if (success) {
+                resultText = `<span style="color:#00ff00;">SUCCESS! No longer Stunned. Vulnerable until end of NEXT turn.</span>`;
+            } else {
+                resultText = `<span style="color:#ff3333;">STILL STUNNED. Cannot act.</span>`;
+            }
+            termLog += resultText;
+            logToTerminal(termLog);
+            if (success) {
+                let participants = globalState.combat.participants;
+                let pIdx = participants.findIndex(p => p.id === activeCharId);
+                if (pIdx !== -1) {
+                    participants[pIdx].stunned = false;
+                    participants[pIdx].shaken  = false;
+                    participants[pIdx].distracted  = false;
+                    participants[pIdx].distractedTTL = 0;
+                    participants[pIdx].vulnerable  = true;
+                    participants[pIdx].vulnerableTTL = raise ? 1 : 2;
+                    await set(ref(db, 'campaignState/combat/participants'), participants);
+                }
+            }
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} rolled Vigor Recovery (Stun)`,
+                    description: `**Result: ${bestTotal}**\n${raise ? "RAISE: No longer Stunned. Vulnerable this turn." : success ? "SUCCESS: No longer Stunned. Vulnerable next turn." : "STILL STUNNED."}`,
+                    color: success ? 0x00ff00 : 0xff0055,
+                    fields: [
+                        { name: `Vigor (d${vigorDie})`, value: traitRoll.history.join(' + '), inline: true },
                         { name: "Wild (d6)", value: wildRoll.history.join(' + '), inline: true }
                     ]
                 };
@@ -1710,7 +1778,12 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
             const container = document.getElementById('weapons-list-container');
             container.innerHTML = '';
             const isShakenLocked = !!(combatParticipant && combatParticipant.shaken && !combatParticipant.incapacitated);
-            const shakenAttr = isShakenLocked ? 'disabled title="SHAKEN: Roll Spirit Recovery first"' : '';
+            const isStunnedLocked = !!(combatParticipant && combatParticipant.stunned && !combatParticipant.incapacitated); // B6
+            const shakenAttr = isStunnedLocked
+                ? 'disabled title="STUNNED: Roll Vigor Recovery first"'
+                : isShakenLocked
+                    ? 'disabled title="SHAKEN: Roll Spirit Recovery first"'
+                    : '';
             let unarmedDamage = getUnarmedDamageDisplay();
             let unarmedIcon = "https://i.imgur.com/TimqS8i.png";
             container.innerHTML += `
@@ -3294,6 +3367,7 @@ window.onTargetDodgeChange = async function () {
         window.deleteSkill = deleteSkill;
         window.adjustBennies = adjustBennies;
         window.recoverFromShaken = recoverFromShaken;
+        window.rollStunRecovery = rollStunRecovery; // B6
         window.soakWounds = soakWounds;
         window.unshakeWithBenny = unshakeWithBenny;
         window.gmNewSession = gmNewSession;
