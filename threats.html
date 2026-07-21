@@ -389,12 +389,22 @@
             border-bottom: 1px solid var(--theme-color);
             padding-bottom: 10px;
         }
-
         .tn-buttons {
             display: flex;
             justify-content: center;
             gap: 15px;
-            margin-top: 20px;
+            margin-top: 15px;
+        }
+
+        .reroll-btn {
+            margin-top: 6px;
+            font-size: 0.8em;
+            border-color: #ffff00;
+            color: #ffff00;
+        }
+        .reroll-btn:hover {
+            background: #ffff00;
+            color: var(--bg-color);
         }
 
         .setting-row {
@@ -542,18 +552,26 @@
                     <option value="-8">Extreme Range (-8)</option>
                 </select>
             </div>
-            <div class="setting-row">
-                <span>Is Aiming?</span>
-                <input type="checkbox" id="aim-checkbox" onchange="updateModifierAdjust()"
-                    style="width: 20px; height: 20px;">
-            </div>
-            <div class="setting-row">
-                <span>Aim Benefit:</span>
-                <select id="aim-mode-select" class="form-input" onchange="updateModifierAdjust()">
-                    <option value="ignore">Ignore up to 4 pts of penalties</option>
-                    <option value="plus2">+2 to roll</option>
-                </select>
-            </div>
+<!-- Replace the old "Is Aiming?" and "Aim Benefit" rows with these: -->
+<div class="setting-row" id="scope-row" style="display:none;">
+    <span>Is Aiming? (takes your whole turn; benefit applies to your next attack)</span>
+    <input type="checkbox" id="scope-checkbox" onchange="updateModifierAdjust()" style="width: 20px; height: 20px;">
+</div>
+<div class="setting-row" id="aim-mode-row" style="display:none;">
+    <span>Aim Benefit:</span>
+    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+        <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+            <input type="radio" name="aim-mode" id="aim-mode-ignore" value="ignore" checked onchange="updateModifierAdjust()"> Ignore up to 4 pts of penalties
+        </label>
+        <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+            <input type="radio" name="aim-mode" id="aim-mode-plus2" value="plus2" onchange="updateModifierAdjust()"> +2 to your roll
+        </label>
+    </div>
+</div>
+<div class="setting-row" id="aim-scope-row" style="display:none;">
+    <span>Scoped weapon? (scope cancels 2 additional pts — ignore cap 6)</span>
+    <input type="checkbox" id="aim-scope-checkbox" onchange="updateModifierAdjust()" style="width: 20px; height: 20px;">
+</div>
         </div>
         <div id="rof-options-container"
             style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
@@ -579,6 +597,13 @@
             <div id="recoil-warning"
                 style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">* Firing at RoF >
                 1 incurs a -2 Recoil penalty.</div>
+        </div>
+        <!-- Add this right before the "Actions this Turn" (MAP) row for Wild Attacks: -->
+        <div class="setting-row" id="wild-attack-row" style="display:none;">
+            <span>Wild Attack:</span>
+            <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                <input type="checkbox" id="wild-attack-checkbox"> Wild Attack (+2 Hit/Dmg, Vulnerable)
+            </label>
         </div>
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Actions this Turn:</span>
@@ -618,6 +643,7 @@
         let activeThreat = null;
         let pendingRoll = null;
         let activeWeaponContext = null;
+        let lastRollContext = null;
         // B8: Defender/target integration state
         let defenderModifier = 0;
         let defenderDisplay = "";
@@ -756,6 +782,12 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     if (idx === -1) return result;
 
     const target = JSON.parse(JSON.stringify(participants[idx]));
+
+    if (target.incapacitated) {
+        result.message = `> <b style="color:#ff9900;">AUTO-CHECK:</b> ${target.name} is already INCAPACITATED. No further effect.`;
+        result.plainText = `AUTO-CHECK: ${target.name} is already INCAPACITATED. No further effect.`;
+        return result;
+    }
 
     const toughness = parseInt(target.toughness) || 0;
     const armor = parseInt(target.armor) || 0;
@@ -1282,7 +1314,7 @@ window.onTargetChange = function () {
     let target = getSelectedTarget();
     let dodgeRow = document.getElementById('target-dodge-row');
     let dodgeCheckbox = document.getElementById('target-dodge-checkbox');
-
+    
     if (!target) {
         document.getElementById('tn-input').value = "4";
         dodgeRow.style.display = "none";
@@ -1291,10 +1323,10 @@ window.onTargetChange = function () {
         document.getElementById('target-status').innerHTML = "";
         return;
     }
-
+    
     let melee = isMeleeWeapon(activeWeaponContext);
     document.getElementById('tn-input').value = melee ? target.parry : "4";
-
+    
     if (!melee) {
         dodgeCheckbox.checked = targetHasDodge(target);
         dodgeCheckbox.disabled = false;
@@ -1302,8 +1334,17 @@ window.onTargetChange = function () {
     } else {
         dodgeRow.style.display = "none";
     }
-
+    
     updateDefenderModifierAndStatus();
+
+    // --- TROMBLEY DODGE REMINDER ---
+    if (target.id === 'trombley-hicks' || target.name.toLowerCase().includes('trombley')) {
+        if (!melee && !dodgeCheckbox.checked) {
+            dodgeCheckbox.checked = true;
+            onTargetDodgeChange(); // Recalculate modifiers
+        }
+        logToTerminal(`> <span style="color:#00ccff;">[ REMINDER: ${target.name} has the DODGE edge. Ranged attacks suffer -2. Checkbox auto-enabled.]</span>`);
+    }
 };
 window.onTargetDodgeChange = async function () {
     let target = getSelectedTarget();
@@ -1350,11 +1391,15 @@ window.onTargetDodgeChange = async function () {
             const rangedOpts = document.getElementById('ranged-options-container');
             const rofOpts = document.getElementById('rof-options-container');
             document.getElementById('range-select').value = "0";
-            document.getElementById('aim-checkbox').checked = false;
-            document.getElementById('aim-mode-select').value = 'ignore';
+            document.getElementById('scope-checkbox').checked = false;
+            document.getElementById('aim-mode-ignore').checked = true;
+            document.getElementById('aim-scope-checkbox').checked = false;
+            document.getElementById('wild-attack-checkbox').checked = false;
             if (!isMelee) {
                 rangedOpts.style.display = "block";
                 rofOpts.style.display = "block";
+                document.getElementById('scope-row').style.display = "flex";
+                document.getElementById('wild-attack-row').style.display = "none";
                 let rofVal = parseInt(wep.rof) || 1;
                 const rofSelect = document.getElementById('rof-select');
                 rofSelect.innerHTML = `<option value="1">Single Shot (1 Bullet)</option>`;
@@ -1371,6 +1416,10 @@ window.onTargetDodgeChange = async function () {
             } else {
                 rangedOpts.style.display = "none";
                 rofOpts.style.display = "none";
+                document.getElementById('scope-row').style.display = "none";
+                document.getElementById('aim-mode-row').style.display = "none";
+                document.getElementById('aim-scope-row').style.display = "none";
+                document.getElementById('wild-attack-row').style.display = "flex";
             }
             document.getElementById('tn-modal').style.display = 'block';
         };
@@ -1410,12 +1459,20 @@ window.onTargetDodgeChange = async function () {
             }
             let aimBonus = 0;
             let computedRangePenalty = rangePenalty;
-            if (isRanged && document.getElementById('aim-checkbox').checked) {
-                let aimMode = document.getElementById('aim-mode-select')?.value || 'ignore';
-                if (aimMode === 'plus2') {
+            let isAiming = document.getElementById('scope-checkbox')?.checked || false;
+            let aimModeRow = document.getElementById('aim-mode-row');
+            let aimScopeRow = document.getElementById('aim-scope-row');
+            if (aimModeRow) aimModeRow.style.display = (isRanged && isAiming) ? "flex" : "none";
+            if (aimScopeRow) aimScopeRow.style.display = (isRanged && isAiming) ? "flex" : "none";
+
+            if (isRanged && isAiming) {
+                let isPlus2 = document.getElementById('aim-mode-plus2')?.checked || false;
+                if (isPlus2) {
                     aimBonus = 2;
                 } else {
-                    computedRangePenalty = Math.min(0, rangePenalty + 4);
+                    let isScoped = document.getElementById('aim-scope-checkbox')?.checked || false;
+                    let cap = isScoped ? 6 : 4;
+                    computedRangePenalty = Math.min(0, rangePenalty + cap);
                 }
             }
             document.getElementById('mod-override-input').value = computedRangePenalty + recoilPenalty + trbBonus + aimBonus;
@@ -1450,168 +1507,260 @@ window.onTargetDodgeChange = async function () {
             defenderModifier = 0;
             defenderDisplay = "";
         };
-        function executeThreatRoll(skillName, targetNumber, shotsFired, is3RB, isSuppressive, wepRoF) {
-            let dieValue = activeThreat.skills[skillName] || "d4";
-            let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
-            let sides = match ? parseInt(match[1]) : 4;
-            let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
-            let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
-            let customMod = parseInt(document.getElementById('mod-override-input').value) || 0;
-            let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
-            // B8: include the defender modifier (Vulnerable/Dodge)
-            let totalModifier = intrinsicMod + unskilledMod + customMod + mapPenalty + defenderModifier;
-            let results = []; let isCritFail = false;
-            let isShotgun = activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun");
-            let isFullAutoMode = is3RB || isSuppressive || shotsFired > 1;
-            let bThresh = (isShotgun || isFullAutoMode) ? 2 : 1;
-            if (shotsFired > 1) {
-                let traitRolls = [];
-                for (let i = 0; i < shotsFired; i++) {
-                    let r = rollExploding(sides);
-                    r.originalTraitFirst = r.history[0];
-                    traitRolls.push(r);
-                }
-                let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
-                let onesCount = 0;
-                traitRolls.forEach(r => { if (r.originalTraitFirst === 1) onesCount++; });
-                if (wildRoll && wildRoll.history[0] === 1) onesCount++;
-                let overHalf = (onesCount > (wildRoll ? shotsFired + 1 : shotsFired) / 2);
-                if (wildRoll) {
-                    isCritFail = overHalf && wildRoll.history[0] === 1;
-                } else if (overHalf) {
-                    let confirmRoll = rollExploding(6);
-                    isCritFail = (confirmRoll.history[0] === 1);
-                    logToTerminal(`> Extra rolled 1s on over half the dice — confirming d6: ${confirmRoll.history.join(' + ')} → ${isCritFail ? "CRITICAL FAILURE CONFIRMED" : "normal failure"}`);
-                }
-                let minVal = Math.min(...traitRolls.map(r => r.total));
-                let minIdx = traitRolls.findIndex(r => r.total === minVal);
-                if (wildRoll && wildRoll.total > minVal) {
-                    let replaced = wildRoll;
-                    replaced.originalTraitFirst = traitRolls[minIdx].originalTraitFirst;
-                    traitRolls[minIdx] = replaced;
-                }
-                traitRolls.forEach((r, idx) => {
-                    let score = r.total + totalModifier;
-                    let outcome = ""; let hasRaise = false;
-                    if (isCritFail) outcome = "CRITICAL FAILURE!";
-                    else if (score < targetNumber) outcome = "FAILURE.";
-                    else {
-                        let raises = Math.floor((score - targetNumber) / 4);
-                        outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
-                        if (raises > 0) hasRaise = true;
-                    }
-                    let isBystander = (!outcome.includes("SUCCESS") && r.originalTraitFirst <= bThresh);
-                    results.push({
-                        shotIndex: idx + 1, total: score, history: r.history, outcome: outcome,
-                        hasRaise: hasRaise, bystander: isBystander, initialTrait: r.originalTraitFirst
-                    });
-                });
-            } else {
-                let traitRoll = rollExploding(sides);
-                traitRoll.originalTraitFirst = traitRoll.history[0];
-                let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
-                let bestTotal = traitRoll.total;
-                if (wildRoll) {
-                    bestTotal = Math.max(traitRoll.total, wildRoll.total);
-                    isCritFail = (traitRoll.originalTraitFirst === 1 && wildRoll.history[0] === 1);
-                } else if (traitRoll.originalTraitFirst === 1) {
-                    let confirmRoll = rollExploding(6);
-                    isCritFail = (confirmRoll.history[0] === 1);
-                    logToTerminal(`> Extra rolled natural 1 — confirming d6: ${confirmRoll.history.join(' + ')} → ${isCritFail ? "CRITICAL FAILURE CONFIRMED" : "normal failure"}`);
-                }
-                bestTotal += totalModifier;
-                let outcome = ""; let hasRaise = false;
-                if (isCritFail) outcome = "CRITICAL FAILURE!";
-                else if (bestTotal < targetNumber) outcome = "FAILURE.";
-                else {
-                    let raises = Math.floor((bestTotal - targetNumber) / 4);
-                    outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
-                    if (raises > 0) hasRaise = true;
-                }
-                let isBystander = (!outcome.includes("SUCCESS") && traitRoll.originalTraitFirst <= bThresh);
-                results.push({
-                    shotIndex: 1, total: bestTotal,
-                    history: wildRoll && wildRoll.total > traitRoll.total ? wildRoll.history : traitRoll.history,
-                    outcome: outcome, hasRaise: hasRaise, isSingle: true,
-                    traitHistory: traitRoll.history, wildHistory: wildRoll ? wildRoll.history : null,
-                    bystander: isBystander,
-                    initialTrait: traitRoll.originalTraitFirst
-                });
-            }
-            let hit = results.some(r => r.outcome.includes("SUCCESS"));
-            if (activeWeaponContext && hit && pendingRoll.is3RB) {
-                let bonusKey = `threat_pending_damage_bonus_${activeTemplateId || activeThreat.name}_${activeWeaponContext.id || activeWeaponContext.name}`;
-                sessionStorage.setItem(bonusKey, "3rb");
-                logToTerminal(`> [!] 3-ROUND BURST: Attack hit! Next damage roll for ${activeWeaponContext.name} will include a +1 damage bonus.`);
-            } else if (activeWeaponContext) {
-                let bonusKey = `threat_pending_damage_bonus_${activeTemplateId || activeThreat.name}_${activeWeaponContext.id || activeWeaponContext.name}`;
-                sessionStorage.removeItem(bonusKey);
-            }
-            let attackHit = isSuppressive
-                ? results.some(r => r.hasRaise)
-                : results.some(r => r.outcome.includes("SUCCESS"));
+function performThreatRoll(sides, totalModifier, targetNumber, shotsFired, is3RB, isSuppressive) {
+    let results = []; 
+    let isCritFail = false;
+    let isShotgun = activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun");
+    let isFullAutoMode = is3RB || isSuppressive || shotsFired > 1;
+    let bThresh = (isShotgun || isFullAutoMode) ? 2 : 1;
 
-            storeThreatAttackContext(attackHit, results);
+    if (shotsFired > 1) {
+        let traitRolls = [];
+        for (let i = 0; i < shotsFired; i++) {
+            let r = rollExploding(sides);
+            r.originalTraitFirst = r.history[0];
+            traitRolls.push(r);
+        }
+        let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
+        let onesCount = 0;
+        traitRolls.forEach(r => { if (r.originalTraitFirst === 1) onesCount++; });
+        if (wildRoll && wildRoll.history[0] === 1) onesCount++;
+        let overHalf = (onesCount > (wildRoll ? shotsFired + 1 : shotsFired) / 2);
+        
+        if (wildRoll) isCritFail = overHalf && wildRoll.history[0] === 1;
+        else if (overHalf) {
+            let confirmRoll = rollExploding(6);
+            isCritFail = (confirmRoll.history[0] === 1);
+        }
 
-            renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, wepRoF);
+        let minVal = Math.min(...traitRolls.map(r => r.total));
+        let minIdx = traitRolls.findIndex(r => r.total === minVal);
+        if (wildRoll && wildRoll.total > minVal) {
+            let replaced = wildRoll;
+            replaced.originalTraitFirst = traitRolls[minIdx].originalTraitFirst;
+            traitRolls[minIdx] = replaced;
         }
-        async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, wepRoF) {
-            let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
-            let modStrDisplay = totalModifier !== 0 ? ` (${totalModifier > 0 ? '+' : ''}${totalModifier})` : "";
-            let title = `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
-            let termLog = `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
-            // B8: show the selected target and defender modifier breakdown
-            if (defenderDisplay) {
-                termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">${defenderDisplay}</span><br>`;
+
+        traitRolls.forEach((r, idx) => {
+            let score = r.total + totalModifier;
+            let outcome = ""; let hasRaise = false;
+            if (isCritFail) outcome = "CRITICAL FAILURE!";
+            else if (score < targetNumber) outcome = "FAILURE.";
+            else {
+                let raises = Math.floor((score - targetNumber) / 4);
+                outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                if (raises > 0) hasRaise = true;
             }
-            results.forEach(r => {
-                if (r.isSingle) {
-                    termLog += `&nbsp;&nbsp;Trait: ${r.traitHistory.join(' + ')}<br>`;
-                    if (r.wildHistory) termLog += `&nbsp;&nbsp;Wild:  ${r.wildHistory.join(' + ')}<br>`;
-                    termLog += `&nbsp;&nbsp;Result: <b>${r.total}</b> -> ${r.outcome}<br>`;
-                } else termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
-                if (isSuppressive) {
-                    termLog += `&nbsp;&nbsp;<span style="color:#ff9900;">🟧 <b>SUPPRESSIVE FIRE:</b> Success = Distracted, Raise = Hit! (Max targets = weapon RoF)</span><br>`;
-                }
-                if (is3RB) {
-                    termLog += `&nbsp;&nbsp;<span style="color:#00aaff;">🟦 <b>3-ROUND BURST:</b> +1 Hit/Dmg (Damage bonus applied to next damage roll)</span><br>`;
-                }
-                if (r.bystander) {
-                    termLog += `&nbsp;&nbsp;<span style="color:#ff3333;">⚠️ INNOCENT BYSTANDER HIT! (Trait die rolled ${r.initialTrait})</span><br>`;
-                }
-            });
-            logToTerminal(termLog);
-            if (globalState && globalState.webhook) {
-                let desc = "";
-                if (defenderDisplay) {
-                    desc += `🎯 **${defenderDisplay}**\n`;
-                }
-                results.forEach(r => {
-                    if (r.isSingle) desc += `**Result: ${r.total}**\n${r.outcome}\n`;
-                    else desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
-                    if (isSuppressive) {
-                        desc += `🟧 **SUPPRESSIVE FIRE:** Success = Distracted, Raise = Hit! (Max targets = weapon RoF)\n`;
-                    }
-                    if (is3RB) {
-                        desc += `🟦 **3-ROUND BURST:** +1 Hit/Dmg (Damage bonus applied to next damage roll).\n`;
-                    }
-                    if (r.bystander) {
-                        desc += `⚠️ **INNOCENT BYSTANDER HIT!** (Trait die rolled ${r.initialTrait})\n`;
-                    }
-                    desc += `\n`;
-                });
-                const embed = { title: title, description: desc.trim(), color: color, fields: [] };
-                if (results[0].isSingle) {
-                    embed.fields.push({ name: `Trait (d${sides})`, value: `${results[0].traitHistory.join(' + ')}`, inline: true });
-                    if (results[0].wildHistory) embed.fields.push({ name: "Wild (d6)", value: `${results[0].wildHistory.join(' + ')}`, inline: true });
-                } else results.forEach(r => embed.fields.push({ name: `Shot #${r.shotIndex}`, value: `${r.history.join(' + ')}`, inline: true }));
-                if (totalModifier !== 0) embed.fields.push({ name: "Modifier", value: `${totalModifier > 0 ? '+' : ''}${totalModifier}`, inline: true });
-                let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || defaultWeaponIcon;
-                embed.thumbnail = { url: imgUrl };
-                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${activeWeaponContext.range || "—"}\nDamage: ${activeWeaponContext.damage || "—"}\nAP: ${activeWeaponContext.ap || "0"}\nRoF: ${activeWeaponContext.rof || "1"}` });
-                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
-            }
+            let isBystander = (!outcome.includes("SUCCESS") && r.originalTraitFirst <= bThresh);
+            results.push({ shotIndex: idx + 1, total: score, history: r.history, outcome: outcome, hasRaise: hasRaise, bystander: isBystander, initialTrait: r.originalTraitFirst });
+        });
+    } else {
+        let traitRoll = rollExploding(sides);
+        traitRoll.originalTraitFirst = traitRoll.history[0];
+        let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
+        let bestTotal = traitRoll.total;
+        
+        if (wildRoll) {
+            bestTotal = Math.max(traitRoll.total, wildRoll.total);
+            isCritFail = (traitRoll.originalTraitFirst === 1 && wildRoll.history[0] === 1);
+        } else if (traitRoll.originalTraitFirst === 1) {
+            let confirmRoll = rollExploding(6);
+            isCritFail = (confirmRoll.history[0] === 1);
         }
+        
+        bestTotal += totalModifier;
+        let outcome = ""; let hasRaise = false;
+        if (isCritFail) outcome = "CRITICAL FAILURE!";
+        else if (bestTotal < targetNumber) outcome = "FAILURE.";
+        else {
+            let raises = Math.floor((bestTotal - targetNumber) / 4);
+            outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+            if (raises > 0) hasRaise = true;
+        }
+        let isBystander = (!outcome.includes("SUCCESS") && traitRoll.originalTraitFirst <= bThresh);
+        results.push({
+            shotIndex: 1, total: bestTotal,
+            history: wildRoll && wildRoll.total > traitRoll.total ? wildRoll.history : traitRoll.history,
+            outcome: outcome, hasRaise: hasRaise, isSingle: true,
+            traitHistory: traitRoll.history, wildHistory: wildRoll ? wildRoll.history : null,
+            bystander: isBystander, initialTrait: traitRoll.originalTraitFirst
+        });
+    }
+    return { results, isCritFail };
+}
+
+function scoreVolley(results, isCritFail) {
+    if (isCritFail) return -100000;
+    let hits = results.filter(r => r.outcome.includes("SUCCESS")).length;
+    let sum = results.reduce((acc, r) => acc + r.total, 0);
+    return hits * 100000 + sum;
+}
+
+function summarizeVolley(results, isCritFail) {
+    if (isCritFail) return "CRITICAL FAILURE";
+    let totals = results.map(r => r.total).join(", ");
+    let hits = results.filter(r => r.outcome.includes("SUCCESS")).length;
+    return `${totals} (${hits} hit${hits !== 1 ? 's' : ''})`;
+}
+
+window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, is3RB, isSuppressive, wepRoF) {
+    let dieValue = activeThreat.skills[skillName] || "d4";
+    let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
+    let sides = match ? parseInt(match[1]) : 4;
+    let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
+    let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
+    let customMod = parseInt(document.getElementById('mod-override-input').value) || 0;
+    let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
+    let totalModifier = intrinsicMod + unskilledMod + customMod + mapPenalty + defenderModifier;
+    
+    let isWildAttack = !isMeleeWeapon(activeWeaponContext) ? false : document.getElementById('wild-attack-checkbox').checked;
+    if (isWildAttack) {
+        totalModifier += 2;
+        logToTerminal(`> <span style="color:#ff3333;">[!] WILD ATTACK: +2 to hit. Attacker is now VULNERABLE until next turn.</span>`);
+    }
+
+    let outcome = performThreatRoll(sides, totalModifier, targetNumber, shotsFired, is3RB, isSuppressive);
+    
+    // Save context for reroll
+    lastRollContext = {
+        skillName, targetNumber, shotsFired, is3RB, isSuppressive, wepRoF,
+        sides, totalModifier, isWildAttack,
+        results: outcome.results,
+        isCritFail: outcome.isCritFail,
+        score: scoreVolley(outcome.results, outcome.isCritFail),
+        usedReroll: false
+    };
+
+    let hit = outcome.results.some(r => r.outcome.includes("SUCCESS"));
+    if (activeWeaponContext && hit && is3RB) {
+        let bonusKey = `threat_pending_damage_bonus_${activeTemplateId || activeThreat.name}_${activeWeaponContext.id || activeWeaponContext.name}`;
+        sessionStorage.setItem(bonusKey, "3rb");
+    }
+
+    let attackHit = isSuppressive ? outcome.results.some(r => r.hasRaise) : hit;
+    storeThreatAttackContext(attackHit, outcome.results);
+    renderAttackEmbed(skillName, sides, totalModifier, targetNumber, outcome.results, outcome.isCritFail, is3RB, isSuppressive, wepRoF);
+};
+
+window.rerollLastRoll = async function () {
+    if (!lastRollContext) return;
+    if (lastRollContext.usedReroll) {
+        logToTerminal("> [!] This roll has already been rerolled (one Benny per roll).");
+        return;
+    }
+    if (lastRollContext.isCritFail) {
+        logToTerminal("> [!] CANNOT REROLL: Critical Failures cannot be rerolled (SWADE p.92).");
+        return;
+    }
+    let gmPool = globalState.combat?.gmPool || 0;
+    if (gmPool <= 0) {
+        logToTerminal("> [!] CANNOT REROLL: GM Benny Pool is empty.");
+        return;
+    }
+
+    // Deduct Benny
+    globalState.combat.gmPool = gmPool - 1;
+    await set(ref(db, 'campaignState/combat/gmPool'), globalState.combat.gmPool);
+
+    // Re-roll
+    let newOutcome = performThreatRoll(lastRollContext.sides, lastRollContext.totalModifier, lastRollContext.targetNumber, lastRollContext.shotsFired, lastRollContext.is3RB, lastRollContext.isSuppressive);
+    let newScore = scoreVolley(newOutcome.results, newOutcome.isCritFail);
+    let oldScore = lastRollContext.score;
+
+    let keptResults, keptIsCritFail, keptWhich;
+    if (newOutcome.isCritFail) {
+        keptResults = newOutcome.results;
+        keptIsCritFail = true;
+        keptWhich = "NEW ROLL — CRITICAL FAILURE (must be accepted!)";
+    } else if (newScore >= oldScore) {
+        keptResults = newOutcome.results;
+        keptIsCritFail = newOutcome.isCritFail;
+        keptWhich = "NEW ROLL";
+    } else {
+        keptResults = lastRollContext.results;
+        keptIsCritFail = lastRollContext.isCritFail;
+        keptWhich = "ORIGINAL ROLL";
+    }
+
+    lastRollContext.usedReroll = true;
+    let attackHit = lastRollContext.isSuppressive
+        ? keptResults.some(r => r.hasRaise)
+        : keptResults.some(r => r.outcome.includes("SUCCESS"));
+    storeThreatAttackContext(attackHit, keptResults);
+
+    renderAttackEmbed(lastRollContext.skillName, lastRollContext.sides, lastRollContext.totalModifier, lastRollContext.targetNumber, keptResults, keptIsCritFail, lastRollContext.is3RB, lastRollContext.isSuppressive, lastRollContext.wepRoF, {
+        which: keptWhich,
+        oldSummary: summarizeVolley(lastRollContext.results, lastRollContext.isCritFail),
+        newSummary: summarizeVolley(newOutcome.results, newOutcome.isCritFail)
+    });
+};
+
+async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, wepRoF, rerollInfo = null) {
+    let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
+    let modStrDisplay = totalModifier !== 0 ? ` (${totalModifier > 0 ? '+' : ''}${totalModifier})` : "";
+    let title = `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
+    
+    let termLog = "";
+    if (rerollInfo) {
+        let bannerStyle = isCritFail ? "color:#ff3333; text-shadow: 0 0 8px #ff3333; animation: pulse 1s infinite;" : "color:#ffff00;";
+        termLog += `<span style="${bannerStyle}">> ⟳ REROLL (1 Benny spent) — ${activeThreat.name.toUpperCase()}<br>`;
+        termLog += `&nbsp;&nbsp;Original: ${rerollInfo.oldSummary}<br>`;
+        termLog += `&nbsp;&nbsp;New:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${rerollInfo.newSummary}<br>`;
+        termLog += `&nbsp;&nbsp;-> Keeping <b>${rerollInfo.which}</b>.</span><br>`;
+    }
+    
+    termLog += `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
+    if (defenderDisplay) termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">${defenderDisplay}</span><br>`;
+
+    results.forEach(r => {
+        if (r.isSingle) {
+            termLog += `&nbsp;&nbsp;Trait: ${r.traitHistory.join(' + ')}<br>`;
+            if (r.wildHistory) termLog += `&nbsp;&nbsp;Wild:  ${r.wildHistory.join(' + ')}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${r.total}</b> -> ${r.outcome}<br>`;
+        } else {
+            termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
+        }
+        if (isSuppressive) termLog += `&nbsp;&nbsp;<span style="color:#ff9900;">🟧 <b>SUPPRESSIVE FIRE:</b> Success = Distracted, Raise = Hit!</span><br>`;
+        if (is3RB) termLog += `&nbsp;&nbsp;<span style="color:#00aaff;">🟦 <b>3-ROUND BURST:</b> +1 Hit/Dmg</span><br>`;
+        if (r.bystander) termLog += `&nbsp;&nbsp;<span style="color:#ff3333;">⚠️ INNOCENT BYSTANDER HIT!</span><br>`;
+    });
+
+    // Reroll Button Logic
+    let gmPool = globalState.combat?.gmPool || 0;
+    let rerollBtnHtml = "";
+    if (rerollInfo === null && !isCritFail) {
+        let canReroll = gmPool > 0;
+        rerollBtnHtml = `<br><button class="die-btn reroll-btn" onclick="rerollLastRoll()" ${canReroll ? '' : 'disabled'}>⟳ REROLL (1 BENNY — GM POOL: ${gmPool})</button>`;
+    }
+    
+    logToTerminal(termLog + rerollBtnHtml);
+
+    // Discord Embed Logic (Updated for Reroll Info)
+    if (globalState && globalState.webhook) {
+        let desc = "";
+        if (rerollInfo) {
+            desc += `⟳ **REROLL (1 Benny spent)**\nOriginal: ${rerollInfo.oldSummary}\nNew: ${rerollInfo.newSummary}\n**Keeping ${rerollInfo.which}**\n\n`;
+        }
+        if (defenderDisplay) desc += `🎯 **${defenderDisplay}**\n`;
+        
+        results.forEach(r => {
+            if (r.isSingle) desc += `**Result: ${r.total}**\n${r.outcome}\n`;
+            else desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
+        });
+        
+        const embed = { title: `${title}${rerollInfo ? ' (REROLL)' : ''}`, description: desc.trim(), color: color, fields: [] };
+        if (results[0].isSingle) {
+            embed.fields.push({ name: `Trait (d${sides})`, value: `${results[0].traitHistory.join(' + ')}`, inline: true });
+            if (results[0].wildHistory) embed.fields.push({ name: "Wild (d6)", value: `${results[0].wildHistory.join(' + ')}`, inline: true });
+        }
+        if (totalModifier !== 0) embed.fields.push({ name: "Modifier", value: `${totalModifier > 0 ? '+' : ''}${totalModifier}`, inline: true });
+        
+        let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || defaultWeaponIcon;
+        embed.thumbnail = { url: imgUrl };
+        
+        fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+    }
+}
         function shouldPromptForContextualDamage(damageStr) {
             let cleaned = (damageStr || "").toString().replace(/\s/g, '').toLowerCase();
             return !cleaned.match(/(?:\d*d\d+|str|[+-]?\d+)/i);
