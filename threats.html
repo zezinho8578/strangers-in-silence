@@ -514,6 +514,23 @@
             <span>Target Number (TN):</span>
             <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center;">
         </div>
+        <!-- B8: Target selection (auto Parry for melee, defender modifiers) -->
+        <div id="target-select-container"
+            style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px; margin-top: 10px;">
+            <div class="setting-row">
+                <span>Target:</span>
+                <select id="target-select" class="admin-input" style="width:240px;" onchange="onTargetChange()">
+                    <option value="">-- No Target (TN 4) --</option>
+                </select>
+            </div>
+            <div id="target-status"
+                style="font-size:0.85em; opacity:0.9; text-align:left; min-height:1.2em; margin: 4px 0;"></div>
+            <div class="setting-row" id="target-dodge-row" style="display:none;">
+                <span>Target has Dodge/Deflect (-2):</span>
+                <input type="checkbox" id="target-dodge-checkbox" onchange="onTargetDodgeChange()"
+                    style="width:20px; height:20px;">
+            </div>
+        </div>
         <div id="ranged-options-container"
             style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <div class="setting-row">
@@ -601,6 +618,9 @@
         let activeThreat = null;
         let pendingRoll = null;
         let activeWeaponContext = null;
+        // B8: Defender/target integration state
+        let defenderModifier = 0;
+        let defenderDisplay = "";
         const defaultAttributes = { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" };
         const defaultSkills = { Athletics: "d6", Fighting: "d6", Notice: "d6" };
         const defaultWeaponIcon = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png";
@@ -860,6 +880,129 @@
                 fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
             }
         };
+        // ==========================================
+        // B8. TARGET / DEFENDER INTEGRATION (SWADE p.95)
+        // Melee TN = defender's Parry. Ranged TN 4. Defender modifiers
+        // (Vulnerable +2, Dodge -2) kept separate from the Modifier Adjust box.
+        // ==========================================
+        function isMeleeWeapon(weaponObj) {
+            if (!weaponObj) return false;
+            let r = (weaponObj.range || "").toLowerCase();
+            return r.includes("melee") || r.includes("contact");
+        }
+        function targetHasDodge(target) {
+            if (target.isPlayer) {
+                let sheet = globalState.characters && globalState.characters[target.id];
+                if (sheet && sheet.edges) return /\bdodge\b/i.test(sheet.edges);
+                return false;
+            }
+            return !!target.hasDodge;
+        }
+        function attackerHasMarksman() {
+            // NPC attacker: Marksman listed in the template's abilities
+            return !!(activeThreat && activeThreat.abilities && /\bmarksman\b/i.test(activeThreat.abilities));
+        }
+        function getSelectedTarget() {
+            let id = document.getElementById('target-select').value;
+            if (!id || !globalState.combat || !globalState.combat.participants) return null;
+            return globalState.combat.participants.find(p => p.id === id) || null;
+        }
+        function computeDefenderModifier() {
+            let target = getSelectedTarget();
+            if (!target) return { modifier: 0, notes: "" };
+            let melee = isMeleeWeapon(activeWeaponContext);
+            let mod = 0;
+            let notes = [];
+            if (target.vulnerable) {
+                mod += 2;
+                notes.push("Vulnerable +2");
+            }
+            if (!melee) {
+                let dodge = targetHasDodge(target);
+                if (dodge && !attackerHasMarksman()) {
+                    mod -= 2;
+                    notes.push("Dodge -2");
+                } else if (dodge && attackerHasMarksman()) {
+                    notes.push("Dodge ignored (Marksman)");
+                }
+            }
+            return { modifier: mod, notes: notes.join(", ") };
+        }
+        function updateDefenderModifierAndStatus() {
+            let target = getSelectedTarget();
+            let statusEl = document.getElementById('target-status');
+            let result = computeDefenderModifier();
+            defenderModifier = result.modifier;
+            if (!target) {
+                defenderDisplay = "";
+                statusEl.innerHTML = "";
+                return;
+            }
+            let melee = isMeleeWeapon(activeWeaponContext);
+            let tnLabel = melee ? `Parry ${target.parry}` : `TN 4`;
+            let conds = [];
+            if (target.incapacitated) conds.push("INCAPACITATED");
+            if (target.shaken) conds.push("SHAKEN");
+            if (target.distracted) conds.push("DISTRACTED");
+            if (target.vulnerable) conds.push("VULNERABLE");
+            let html = `Target: <b>${target.name}</b> — ${tnLabel} | Toughness ${target.toughness}`;
+            if (conds.length) html += ` | ${conds.join(", ")}`;
+            if (result.notes) html += ` | <span style="color:#00ff00;">${result.notes}</span>`;
+            statusEl.innerHTML = html;
+            defenderDisplay = `Target: ${target.name}` + (defenderModifier !== 0 ? ` (${defenderModifier > 0 ? '+' : ''}${defenderModifier} defender mod)` : "");
+        }
+        function populateTargetSelect() {
+            let select = document.getElementById('target-select');
+            select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
+            if (!globalState.combat || !globalState.combat.participants) return;
+            globalState.combat.participants.forEach(p => {
+                select.innerHTML += `<option value="${p.id}">${p.name} (Parry ${p.parry})</option>`;
+            });
+        }
+        window.onTargetChange = function () {
+            let target = getSelectedTarget();
+            let dodgeRow = document.getElementById('target-dodge-row');
+            let dodgeCheckbox = document.getElementById('target-dodge-checkbox');
+            if (!target) {
+                document.getElementById('tn-input').value = "4";
+                dodgeRow.style.display = "none";
+                defenderModifier = 0;
+                defenderDisplay = "";
+                document.getElementById('target-status').innerHTML = "";
+                return;
+            }
+            let melee = isMeleeWeapon(activeWeaponContext);
+            document.getElementById('tn-input').value = melee ? target.parry : "4";
+            if (!melee) {
+                if (target.isPlayer) {
+                    dodgeCheckbox.checked = targetHasDodge(target);
+                    dodgeCheckbox.disabled = true;
+                } else {
+                    dodgeCheckbox.checked = !!target.hasDodge;
+                    dodgeCheckbox.disabled = false;
+                }
+                dodgeRow.style.display = "flex";
+            } else {
+                dodgeRow.style.display = "none";
+            }
+            updateDefenderModifierAndStatus();
+        };
+        window.onTargetDodgeChange = async function () {
+            let target = getSelectedTarget();
+            if (!target) return;
+            if (!target.isPlayer && globalState.combat && globalState.combat.participants) {
+                let participants = globalState.combat.participants;
+                let idx = participants.findIndex(p => p.id === target.id);
+                if (idx !== -1) {
+                    participants[idx].hasDodge = document.getElementById('target-dodge-checkbox').checked;
+                    await set(ref(db, 'campaignState/combat/participants'), participants);
+                }
+            }
+            updateDefenderModifierAndStatus();
+        };
+        // ==========================================
+        // WEAPON ATTACKS & MODALS
+        // ==========================================
         window.prepareAttack = function (wepIndex) {
             let wep = activeThreat.weapons[wepIndex];
             let isMelee = wep.range.toLowerCase().includes("melee") || wep.range.toLowerCase().includes("contact");
@@ -870,6 +1013,19 @@
             document.getElementById('tn-input').value = "4";
             document.getElementById('mod-override-input').value = "0";
             document.getElementById('map-select').value = "0";
+            // B8: Reset defender state and populate the target list when combat is live
+            defenderModifier = 0;
+            defenderDisplay = "";
+            let targetContainer = document.getElementById('target-select-container');
+            if (globalState.combatActive && globalState.combat && globalState.combat.participants && globalState.combat.participants.length > 0) {
+                populateTargetSelect();
+                targetContainer.style.display = "block";
+            } else {
+                targetContainer.style.display = "none";
+                document.getElementById('target-select').value = "";
+                document.getElementById('target-status').innerHTML = "";
+                document.getElementById('target-dodge-row').style.display = "none";
+            }
             const rangedOpts = document.getElementById('ranged-options-container');
             const rofOpts = document.getElementById('rof-options-container');
             document.getElementById('range-select').value = "0";
@@ -965,7 +1121,14 @@
             let wepRoF = activeWeaponContext ? (activeWeaponContext.rof || 1) : 1;
             executeThreatRoll(pendingRoll.skill, tn, shotsFired, is3RB, isSupp, wepRoF);
         };
-        window.cancelRoll = function () { document.getElementById('tn-modal').style.display = 'none'; pendingRoll = null; activeWeaponContext = null; };
+        window.cancelRoll = function () {
+            document.getElementById('tn-modal').style.display = 'none';
+            pendingRoll = null;
+            activeWeaponContext = null;
+            // B8: clear defender state on cancel
+            defenderModifier = 0;
+            defenderDisplay = "";
+        };
         function executeThreatRoll(skillName, targetNumber, shotsFired, is3RB, isSuppressive, wepRoF) {
             let dieValue = activeThreat.skills[skillName] || "d4";
             let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
@@ -974,7 +1137,8 @@
             let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
             let customMod = parseInt(document.getElementById('mod-override-input').value) || 0;
             let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
-            let totalModifier = intrinsicMod + unskilledMod + customMod + mapPenalty;
+            // B8: include the defender modifier (Vulnerable/Dodge)
+            let totalModifier = intrinsicMod + unskilledMod + customMod + mapPenalty + defenderModifier;
             let results = []; let isCritFail = false;
             let isShotgun = activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun");
             let isFullAutoMode = is3RB || isSuppressive || shotsFired > 1;
@@ -1069,6 +1233,10 @@
             let modStrDisplay = totalModifier !== 0 ? ` (${totalModifier > 0 ? '+' : ''}${totalModifier})` : "";
             let title = `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
             let termLog = `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
+            // B8: show the selected target and defender modifier breakdown
+            if (defenderDisplay) {
+                termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">${defenderDisplay}</span><br>`;
+            }
             results.forEach(r => {
                 if (r.isSingle) {
                     termLog += `&nbsp;&nbsp;Trait: ${r.traitHistory.join(' + ')}<br>`;
@@ -1088,12 +1256,21 @@
             logToTerminal(termLog);
             if (globalState && globalState.webhook) {
                 let desc = "";
+                if (defenderDisplay) {
+                    desc += `🎯 **${defenderDisplay}**\n`;
+                }
                 results.forEach(r => {
                     if (r.isSingle) desc += `**Result: ${r.total}**\n${r.outcome}\n`;
                     else desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
-                    if (isSuppressive) desc += `🟧 **SUPPRESSIVE FIRE:** Success = Distracted, Raise = Hit! (Max targets = weapon RoF)\n`;
-                    if (is3RB) desc += `🟦 **3-ROUND BURST:** +1 Hit/Dmg (Damage bonus applied to next damage roll).\n`;
-                    if (r.bystander) desc += `⚠️ **INNOCENT BYSTANDER HIT!** (Trait die rolled ${r.initialTrait})\n`;
+                    if (isSuppressive) {
+                        desc += `🟧 **SUPPRESSIVE FIRE:** Success = Distracted, Raise = Hit! (Max targets = weapon RoF)\n`;
+                    }
+                    if (is3RB) {
+                        desc += `🟦 **3-ROUND BURST:** +1 Hit/Dmg (Damage bonus applied to next damage roll).\n`;
+                    }
+                    if (r.bystander) {
+                        desc += `⚠️ **INNOCENT BYSTANDER HIT!** (Trait die rolled ${r.initialTrait})\n`;
+                    }
                     desc += `\n`;
                 });
                 const embed = { title: title, description: desc.trim(), color: color, fields: [] };
@@ -1202,9 +1379,6 @@
             let participants = globalState.combat.participants || [];
             let baseName = activeThreat.name;
             const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            // B14: One shared groupId per deployment batch so Extras act on a single card
-            // (SWADE p.94). Wild Cards are individuals and never share a group card.
-            // Deploying the same template again creates a NEW groupId (a separate squad).
             let batchGroupId = activeThreat.isWildCard ? null : ("grp_" + activeTemplateId + "_" + Date.now());
             for (let i = 0; i < count; i++) {
                 let suffix = count > 1 ? ` ${letters[i % 26]}` : "";
@@ -1215,12 +1389,12 @@
                     bennies: activeThreat.isWildCard ? 3 : 0,
                     groupId: batchGroupId, // B14
                     groupName: baseName,   // B14
+                    hasDodge: false,       // B8: defender Dodge/Deflect flag (toggled from the TN modal)
                     woundCap: activeThreat.isWildCard ? 4 : 1, incapacitated: false,
                     wounds: 0, fatigue: 0, shaken: false, distracted: false, distractedTTL: 0, vulnerable: false, vulnerableTTL: 0, card: null
                 };
                 participants.push(newNpc);
             }
-            // B3: Deploying a Wild Card villain adds +2 to the GM Benny Pool (p.91)
             let newGmPool = globalState.combat.gmPool || 0;
             let poolGrew = false;
             if (activeThreat.isWildCard) {
