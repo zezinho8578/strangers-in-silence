@@ -182,6 +182,12 @@
             animation: pulse 1.5s infinite;
         }
 
+        /* B5: On Hold badge */
+        .badge.onhold {
+            border-color: #00ccff;
+            color: #00ccff;
+        }
+
         /* Detail Panel */
         .detail-panel {
             border: 1px solid var(--theme-color);
@@ -277,6 +283,60 @@
             gap: 10px;
             flex-wrap: wrap;
         }
+
+        /* B5: Picker / Yes-No Modals */
+        .picker-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid var(--theme-color);
+            background: var(--bg-color);
+            padding: 25px;
+            z-index: 999999 !important;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
+            min-width: 350px;
+            max-width: 90vw;
+            pointer-events: auto !important;
+        }
+
+        .picker-modal h3 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--theme-color);
+            padding-bottom: 10px;
+        }
+
+        .card-option {
+            display: block;
+            width: 100%;
+            margin: 8px 0;
+            padding: 10px;
+            background: transparent;
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            font-family: inherit;
+            font-size: 1em;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .card-option:hover {
+            background: var(--theme-color);
+            color: var(--bg-color);
+            text-shadow: none;
+        }
+
+        .card-option.joker-option {
+            border-color: #ffff00;
+            color: #ffff00;
+        }
+
+        .card-option.joker-option:hover {
+            background: #ffff00;
+            color: var(--bg-color);
+        }
     </style>
 </head>
 
@@ -304,13 +364,6 @@
         </div>
         <div class="tracker-header">
             <span id="round-display">ROUND: --</span>
-            <!-- B3: GM Benny Pool (1 per player, +2 per WC villain, Joker's Wild) -->
-            <span id="gm-pool-display" style="display: none; align-items: center; gap: 6px;">
-                GM POOL:
-                <button class="die-btn" style="padding: 2px 8px;" onclick="adjustGmPool(-1)">-</button>
-                <span id="gm-pool-count" style="display:inline-block; min-width: 24px; text-align: center;">0</span>
-                <button class="die-btn" style="padding: 2px 8px;" onclick="adjustGmPool(1)">+</button>
-            </span>
             <span id="deck-display">ACTIVE DECK: --/54 CARDS</span>
         </div>
         <div id="recovery-banner"
@@ -376,17 +429,41 @@
                         <button id="btn-soak" class="die-btn" style="flex-grow: 1;" onclick="soakWounds()">SOAK (1
                             BENNY)</button>
                     </div>
-                    <!-- B3: Benny Unshake + Draw New Card -->
+                    <!-- B5: On Hold controls -->
                     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                        <button id="btn-unshake" class="die-btn"
-                            style="flex-grow: 1; border-color: #ffff00; color: #ffff00; display: none;"
-                            onclick="unshakeWithBenny()">BENNY: UNSHAKE</button>
-                        <button id="btn-newcard" class="die-btn" style="flex-grow: 1; display: none;"
-                            onclick="drawNewCard()">NEW CARD (1 BENNY)</button>
+                        <button id="btn-hold" class="die-btn"
+                            style="flex-grow: 1; border-color: #00ccff; color: #00ccff;" onclick="goOnHold()">GO ON
+                            HOLD</button>
+                        <button id="btn-act" class="die-btn"
+                            style="flex-grow: 1; border-color: #00ff00; color: #00ff00; display: none;"
+                            onclick="actFromHold()">ACT NOW (FROM HOLD)</button>
                     </div>
                     <div style="font-size: 0.9em; opacity: 0.8;">
                         Parry: <span id="detail-parry">--</span> | Toughness: <span id="detail-toughness">--</span> |
                         Pace: <span id="detail-pace">--</span>
+                    </div>
+                    <!-- B5: Initiative Edges / Hindrances toggles -->
+                    <div style="margin-top: 15px; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+                        <div style="font-size: 0.85em; margin-bottom: 8px; opacity: 0.8;">INITIATIVE EDGES / HINDRANCES:
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.85em;">
+                            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                                <input type="checkbox" id="flag-hesitant"
+                                    onchange="toggleInitFlag('hesitant', this.checked)"> Hesitant
+                            </label>
+                            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                                <input type="checkbox" id="flag-quick" onchange="toggleInitFlag('quick', this.checked)">
+                                Quick
+                            </label>
+                            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                                <input type="checkbox" id="flag-levelheaded"
+                                    onchange="toggleInitFlag('levelHeaded', this.checked)"> Level Headed
+                            </label>
+                            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                                <input type="checkbox" id="flag-improvedlh"
+                                    onchange="toggleInitFlag('improvedLevelHeaded', this.checked)"> Improved LH
+                            </label>
+                        </div>
                     </div>
                     <div id="remove-btn-container" style="margin-top: 15px; display: none;">
                         <button class="die-btn danger" style="width: 100%; border-color: #ff3333; color: #ff3333;"
@@ -426,6 +503,21 @@
             </div>
         </div>
     </div>
+    <!-- B5: LEVEL HEADED CARD PICKER MODAL -->
+    <div id="card-picker-modal" class="picker-modal">
+        <h3 id="card-picker-title">CHOOSE ACTION CARD</h3>
+        <p style="font-size:0.9em; opacity:0.8;">Select the card to keep. The rest are discarded.</p>
+        <div id="card-picker-options"></div>
+    </div>
+    <!-- B5: QUICK REDRAW YES/NO MODAL -->
+    <div id="yesno-modal" class="picker-modal">
+        <h3>QUICK — REDRAW?</h3>
+        <p id="yesno-message" style="font-size:0.95em;"></p>
+        <div style="display:flex; gap:15px; justify-content:center; margin-top:15px;">
+            <button class="die-btn" onclick="resolveYesNo(true)">YES — REDRAW</button>
+            <button class="die-btn" onclick="resolveYesNo(false)">NO — KEEP</button>
+        </div>
+    </div>
     <script src="/settings.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -452,6 +544,8 @@
         if (isAdmin) {
             document.getElementById('gm-controls').style.display = 'flex';
         }
+        // B5: Small helper — is an index a valid (non-null, >= 0) value?
+        function idxValid(x) { return x !== undefined && x !== null && x >= 0; }
         // ==========================================
         // 2. FIREBASE SYNC & GATEKEEPER
         // ==========================================
@@ -534,13 +628,65 @@
             }
             return deck;
         }
+        // B5: Safe draw — reshuffles automatically if the deck ever runs dry mid-deal
+        function drawCard(combat) {
+            if (!combat.deck || combat.deck.length === 0) {
+                combat.deck = createDeck();
+                combat.needsReshuffle = false;
+            }
+            return combat.deck.pop();
+        }
+        // B5: Hesitant helper — return the LOWEST card (lowest rank, then lowest suit)
+        function pickLowest(cards) {
+            let sorted = [...cards].sort((a, b) => {
+                if (a.rank !== b.rank) return a.rank - b.rank;
+                return a.suit - b.suit;
+            });
+            return sorted[0];
+        }
+        // ==========================================
+        // B5. MODAL HELPERS (Level Headed picker + Quick redraw)
+        // ==========================================
+        let cardPickerResolve = null;
+        function showCardPicker(cards, name, isImproved) {
+            return new Promise((resolve) => {
+                cardPickerResolve = resolve;
+                let label = isImproved ? "IMPROVED LEVEL HEADED" : "LEVEL HEADED";
+                document.getElementById('card-picker-title').innerText = `${name} — ${label}`;
+                let opts = document.getElementById('card-picker-options');
+                opts.innerHTML = '';
+                cards.forEach((c, i) => {
+                    let btn = document.createElement('button');
+                    btn.className = 'card-option' + (c.isJoker ? ' joker-option' : '');
+                    btn.innerText = c.label + (c.isJoker ? '  [+2 ALL ROLLS]' : '');
+                    btn.onclick = () => {
+                        document.getElementById('card-picker-modal').style.display = 'none';
+                        if (cardPickerResolve) cardPickerResolve(i);
+                        cardPickerResolve = null;
+                    };
+                    opts.appendChild(btn);
+                });
+                document.getElementById('card-picker-modal').style.display = 'block';
+            });
+        }
+        let yesNoResolve = null;
+        function showYesNo(message) {
+            return new Promise((resolve) => {
+                yesNoResolve = resolve;
+                document.getElementById('yesno-message').innerText = message;
+                document.getElementById('yesno-modal').style.display = 'block';
+            });
+        }
+        window.resolveYesNo = function (val) {
+            document.getElementById('yesno-modal').style.display = 'none';
+            if (yesNoResolve) yesNoResolve(val);
+            yesNoResolve = null;
+        };
         // ==========================================
         // 4. COMBAT INITIALIZATION & ACTIONS
         // ==========================================
         window.initializeCombat = async function () {
             let participants = [];
-            // B3: Count players to seed the GM Benny Pool (1 per player, p.91)
-            let playerCount = 0;
             // Pull players from global characters
             if (globalState.characters) {
                 for (const [id, rawData] of Object.entries(globalState.characters)) {
@@ -550,6 +696,16 @@
                     let woundCap = 4; // A11 Fix: Wild Cards can take 3 wounds, incap on 4th
                     if (edgesNorm.includes("improvedtoughasnails")) woundCap = 6;
                     else if (edgesNorm.includes("toughasnails")) woundCap = 5;
+                    // B5: Detect initiative Edges/Hindrances from the sheet's edges text.
+                    // "Quick" uses a word-boundary regex (and excludes "Quick Draw") to avoid false positives.
+                    let edgesLower = (data.edges || "").toLowerCase();
+                    let hasQuick = /\bquick\b/.test(edgesLower) && !/\bquick\s*draw\b/.test(edgesLower);
+                    let initFlags = {
+                        hesitant: edgesNorm.includes("hesitant"),
+                        quick: hasQuick,
+                        levelHeaded: edgesNorm.includes("levelheaded"),
+                        improvedLevelHeaded: edgesNorm.includes("improvedlevelheaded")
+                    };
                     participants.push({
                         id: id,
                         name: characterName,
@@ -570,26 +726,28 @@
                         distractedTTL: 0, // A12 Fix
                         vulnerable: false,
                         vulnerableTTL: 0, // A12 Fix
+                        initFlags: initFlags, // B5
+                        onHold: false, // B5
                         card: null,
                         jokerRound: null
                     });
-                    playerCount++;
                 }
             }
             const initialCombatState = {
                 round: 0, // Start at 0, dealInitiative will bump to 1 on the very first deal
                 activeTurnIndex: 0,
                 jokerActiveIndex: -1,
+                holdActiveIndex: -1, // B5
                 deck: createDeck(),
                 needsReshuffle: false,
-                gmPool: playerCount, // B3: GM starts with 1 Benny per player (p.91)
+                gmPool: 0,
                 participants: participants
             };
             await update(ref(db, 'campaignState'), {
                 combatActive: true,
                 combat: initialCombatState
             });
-            logToWebhook("TACTICAL ENGAGEMENT INITIATED", `Combat has begun. GM Benny Pool seeded with **${playerCount}** (1 per player).`);
+            logToWebhook("TACTICAL ENGAGEMENT INITIATED", "Combat has begun.");
         };
         window.endCombat = async function () {
             if (confirm("End combat? This will wipe the tracker and return players to dashboard.")) {
@@ -605,7 +763,20 @@
             if (combat.round === undefined || combat.round === null || combat.round === 0) {
                 combat.round = 1;
             }
-            if (combat.needsReshuffle || !combat.deck || combat.deck.length < combat.participants.length) {
+            // B5: A new deal ends any pending Hold and resets the interrupt slot
+            combat.holdActiveIndex = -1;
+            combat.participants.forEach(p => { p.onHold = false; });
+            // B5: Compute total cards needed so the reshuffle check accounts for multi-card draws
+            let totalNeeded = 0;
+            combat.participants.forEach(p => {
+                let f = p.initFlags || {};
+                if (f.hesitant) totalNeeded += 2;
+                else if (f.improvedLevelHeaded) totalNeeded += 3;
+                else if (f.levelHeaded) totalNeeded += 2;
+                else totalNeeded += 1;
+                if (f.quick) totalNeeded += 1; // Quick may need one extra card
+            });
+            if (combat.needsReshuffle || !combat.deck || combat.deck.length < totalNeeded) {
                 combat.deck = createDeck();
                 combat.needsReshuffle = false;
                 logToWebhook("DECK RESHUFFLED", "A new 54-card deck was initialized.");
@@ -613,12 +784,35 @@
             let jokerDrawnBy = [];
             let playerDrewJoker = false;
             let villainDrewJoker = false;
-            // Deal cards
-            combat.participants.forEach(p => {
-                let drawn = combat.deck.pop();
-                p.card = drawn;
+            // B5: Deal cards one combatant at a time so Hesitant / Level Headed / Quick resolve correctly
+            for (let p of combat.participants) {
+                let f = p.initFlags || {};
+                let finalCard = null;
+                if (f.hesitant) {
+                    // HESITANT (Minor, p.27): draw two, act on the lowest. A Joker overrides.
+                    let drawn = [drawCard(combat), drawCard(combat)];
+                    let jokerCard = drawn.find(c => c.isJoker);
+                    finalCard = jokerCard ? jokerCard : pickLowest(drawn);
+                } else if (f.improvedLevelHeaded || f.levelHeaded) {
+                    // LEVEL HEADED (p.45): draw an extra card and choose. Improved draws two extra.
+                    let count = f.improvedLevelHeaded ? 3 : 2;
+                    let drawn = [];
+                    for (let i = 0; i < count; i++) drawn.push(drawCard(combat));
+                    let chosenIdx = await showCardPicker(drawn, p.name, f.improvedLevelHeaded);
+                    finalCard = drawn[chosenIdx];
+                } else {
+                    finalCard = drawCard(combat);
+                }
+                // QUICK (p.45): may redraw any card of Five or lower (one redraw).
+                if (f.quick && finalCard && !finalCard.isJoker && finalCard.rank <= 5) {
+                    let redraw = await showYesNo(`${p.name} drew the ${finalCard.label} and has QUICK. Redraw it?`);
+                    if (redraw) {
+                        finalCard = drawCard(combat);
+                    }
+                }
+                p.card = finalCard;
                 p.jokerRound = null; // Clear previous round's joker status
-                if (drawn.isJoker) {
+                if (finalCard.isJoker) {
                     combat.needsReshuffle = true;
                     jokerDrawnBy.push(p.name);
                     p.jokerRound = combat.round; // Store the active round on the participant!
@@ -629,7 +823,7 @@
                         villainDrewJoker = true;
                     }
                 }
-            });
+            }
             // --- JOKER'S WILD BENNY DISTRIBUTION LOGIC ---
             let playerBennyUpdates = {}; // Used to batch update character sheets
             if (playerDrewJoker) {
@@ -662,10 +856,11 @@
                     return b.card.suit - a.card.suit; // Tie-breaker by suit
                 }
             });
-            // Set active turn to the first non-Joker, non-Incapacitated participant
-            let firstValidIdx = combat.participants.findIndex(p => !p.card.isJoker && !p.incapacitated);
+            // Set active turn to the first non-Joker, non-Incapacitated, non-Holding participant
+            let firstValidIdx = combat.participants.findIndex(p => !p.card.isJoker && !p.incapacitated && !p.onHold);
             combat.activeTurnIndex = firstValidIdx !== -1 ? firstValidIdx : 0;
             combat.jokerActiveIndex = -1; // Reset Joker interrupt state
+            combat.holdActiveIndex = -1; // B5: Reset Hold interrupt state
             // Save the updated combat state (including new bennies and gmPool) to Firebase
             await set(ref(db, 'campaignState/combat'), combat);
             let desc = `Round ${combat.round} turn order established.`;
@@ -680,8 +875,13 @@
         window.nextTurn = async function () {
             let combat = globalState.combat;
             // If a Joker is currently interrupting, end the interrupt and resume normal turn order
-            if (combat.jokerActiveIndex !== undefined && combat.jokerActiveIndex !== null && combat.jokerActiveIndex >= 0) {
+            if (idxValid(combat.jokerActiveIndex)) {
                 await set(ref(db, 'campaignState/combat/jokerActiveIndex'), -1);
+                return;
+            }
+            // B5: If a held character is currently interrupting, end it and resume normal turn order
+            if (idxValid(combat.holdActiveIndex)) {
+                await set(ref(db, 'campaignState/combat/holdActiveIndex'), -1);
                 return;
             }
             // A12 Fix: Decrement TTLs for the participant whose turn is ending
@@ -708,8 +908,8 @@
                 }
             }
             let nextIdx = oldIdx + 1;
-            // A11 Fix: Skip Jokers AND Incapacitated participants in the normal turn order progression
-            while (nextIdx < combat.participants.length && combat.participants[nextIdx].card && (combat.participants[nextIdx].card.isJoker || combat.participants[nextIdx].incapacitated)) {
+            // A11 Fix + B5: Skip Jokers, Incapacitated, AND On-Hold participants in normal progression
+            while (nextIdx < combat.participants.length && combat.participants[nextIdx].card && (combat.participants[nextIdx].card.isJoker || combat.participants[nextIdx].incapacitated || combat.participants[nextIdx].onHold)) {
                 nextIdx++;
             }
             if (nextIdx >= combat.participants.length) {
@@ -717,9 +917,9 @@
                 // INCREMENT ROUND HERE so the gap between rounds invalidates the old Joker
                 if (combat.round === undefined || combat.round === null) combat.round = 1;
                 else combat.round += 1;
-                // Cap at last valid (non-joker, non-incapacitated)
+                // Cap at last valid (non-joker, non-incapacitated, non-holding)
                 let lastValid = combat.participants.length - 1;
-                while (lastValid >= 0 && combat.participants[lastValid].card && (combat.participants[lastValid].card.isJoker || combat.participants[lastValid].incapacitated)) {
+                while (lastValid >= 0 && combat.participants[lastValid].card && (combat.participants[lastValid].card.isJoker || combat.participants[lastValid].incapacitated || combat.participants[lastValid].onHold)) {
                     lastValid--;
                 }
                 combat.activeTurnIndex = lastValid >= 0 ? lastValid : 0;
@@ -740,6 +940,46 @@
         };
         window.endJokerInterrupt = async function () {
             await set(ref(db, 'campaignState/combat/jokerActiveIndex'), -1);
+        };
+        // ==========================================
+        // B5. ON HOLD (p.105) — park a turn, act later, lose Hold if Shaken
+        // ==========================================
+        window.goOnHold = async function () {
+            if (!selectedParticipantId) return;
+            let combat = globalState.combat;
+            let participants = combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+            if (p.incapacitated) return;
+            if (p.onHold) return;
+            p.onHold = true;
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+            logToWebhook("ON HOLD", `${p.name} is holding their turn. They will be skipped until they ACT.`);
+        };
+        window.actFromHold = async function () {
+            if (!selectedParticipantId) return;
+            let combat = globalState.combat;
+            let participants = combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+            if (!p.onHold) return;
+            // Reinsert before the pending turn: they interrupt now, then play resumes where it was
+            p.onHold = false;
+            combat.holdActiveIndex = idx;
+            await set(ref(db, 'campaignState/combat'), combat);
+            logToWebhook("ACTING FROM HOLD", `${p.name} interrupts and acts NOW, before the pending turn!`);
+        };
+        window.toggleInitFlag = async function (flag, val) {
+            if (!selectedParticipantId) return;
+            let participants = globalState.combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+            if (!p.initFlags) p.initFlags = { hesitant: false, quick: false, levelHeaded: false, improvedLevelHeaded: false };
+            p.initFlags[flag] = val;
+            await set(ref(db, 'campaignState/combat/participants'), participants);
         };
         window.addNpc = async function () {
             let name = prompt("Enter NPC/Group Name:");
@@ -770,104 +1010,14 @@
                 distractedTTL: 0, // A12 Fix
                 vulnerable: false,
                 vulnerableTTL: 0, // A12 Fix
+                initFlags: { hesitant: false, quick: false, levelHeaded: false, improvedLevelHeaded: false }, // B5
+                onHold: false, // B5
                 card: null,
                 jokerRound: null
             };
             let participants = globalState.combat.participants || [];
             participants.push(newNpc);
-            // B3: Deploying a Wild Card villain adds +2 to the GM Benny Pool (p.91)
-            let poolUpdate = {};
-            if (isWildCard) {
-                let newPool = (globalState.combat.gmPool || 0) + 2;
-                poolUpdate = {
-                    participants: participants,
-                    gmPool: newPool
-                };
-                logToWebhook("GM POOL +2", `Wild Card **${name}** deployed. GM Benny Pool is now **${newPool}**.`);
-            } else {
-                poolUpdate = { participants: participants };
-            }
-            await update(ref(db, 'campaignState/combat'), poolUpdate);
-        };
-        // ==========================================
-        // B3. GM BENNY POOL — manual adjust (GM only)
-        // ==========================================
-        window.adjustGmPool = async function (amount) {
-            if (!isAdmin) return;
-            if (!globalState.combat) return;
-            let newPool = (globalState.combat.gmPool || 0) + amount;
-            if (newPool < 0) newPool = 0;
-            await set(ref(db, 'campaignState/combat/gmPool'), newPool);
-        };
-        // ==========================================
-        // B3. UNSHAKE WITH A BENNY (p.92) — from the tracker detail panel
-        // ==========================================
-        window.unshakeWithBenny = async function () {
-            if (!selectedParticipantId || !globalState.combat || !globalState.combat.participants) return;
-            let participants = globalState.combat.participants;
-            let idx = participants.findIndex(x => x.id === selectedParticipantId);
-            if (idx === -1) return;
-            let p = participants[idx];
-            if (!p.shaken) return;
-            if ((p.bennies || 0) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
-            p.bennies = (p.bennies || 0) - 1;
-            p.shaken = false;
-            // Sync player Bennies back to their character sheet
-            if (p.isPlayer) {
-                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
-            }
             await set(ref(db, 'campaignState/combat/participants'), participants);
-            logToWebhook("BENNY: UNSHAKE", `${p.name} spent a Benny to remove **SHAKEN** instantly. May act normally.`);
-        };
-        // ==========================================
-        // B3. DRAW A NEW ACTION CARD (p.92) — discard current card, draw a
-        // fresh one, re-sort. Quick / Level Headed do NOT apply to benny-drawn
-        // cards (RAW), so the new card simply replaces the old one.
-        // ==========================================
-        window.drawNewCard = async function () {
-            if (!selectedParticipantId || !globalState.combat || !globalState.combat.participants) return;
-            let combat = globalState.combat;
-            let participants = combat.participants;
-            let idx = participants.findIndex(x => x.id === selectedParticipantId);
-            if (idx === -1) return;
-            let p = participants[idx];
-            if (!p.card) { alert("Cards have not been dealt yet. Deal initiative first."); return; }
-            if ((p.bennies || 0) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
-            if (!combat.deck || combat.deck.length === 0) { alert("The deck is empty. Reshuffle is pending — deal initiative next round."); return; }
-            // Remember who currently holds the active turn so the highlight survives the re-sort
-            let activeId = null;
-            let jokerActiveId = null;
-            if (combat.activeTurnIndex >= 0 && combat.activeTurnIndex < participants.length) {
-                activeId = participants[combat.activeTurnIndex].id;
-            }
-            if (combat.jokerActiveIndex >= 0 && combat.jokerActiveIndex < participants.length) {
-                jokerActiveId = participants[combat.jokerActiveIndex].id;
-            }
-            let oldCard = p.card;
-            // Spend the benny and draw a replacement from the live deck
-            p.bennies = (p.bennies || 0) - 1;
-            p.card = combat.deck.pop();
-            p.jokerRound = null; // A benny-drawn card is not "this round's Joker" for interrupt purposes
-            if (p.card.isJoker) {
-                combat.needsReshuffle = true;
-                p.jokerRound = combat.round;
-            }
-            // Sync player Bennies back to their character sheet
-            if (p.isPlayer) {
-                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
-            }
-            // Re-sort by card rank/suit
-            participants.sort((a, b) => {
-                if (b.card.rank !== a.card.rank) return b.card.rank - a.card.rank;
-                return b.card.suit - a.card.suit;
-            });
-            // Restore active-turn pointers by ID after the re-sort
-            let newActiveIdx = participants.findIndex(x => x.id === activeId);
-            let newJokerIdx = jokerActiveId ? participants.findIndex(x => x.id === jokerActiveId) : -1;
-            combat.activeTurnIndex = newActiveIdx !== -1 ? newActiveIdx : 0;
-            combat.jokerActiveIndex = newJokerIdx;
-            await set(ref(db, 'campaignState/combat'), combat);
-            logToWebhook("NEW ACTION CARD", `${p.name} spent a Benny to redraw. Discarded **${oldCard.label}**, drew **${p.card.label}**. Turn order re-sorted.`);
         };
         // ==========================================
         // 5. UI RENDERING
@@ -876,11 +1026,6 @@
             let combat = globalState.combat;
             document.getElementById('round-display').innerText = `ROUND: ${combat.round || 1}`;
             document.getElementById('deck-display').innerText = `ACTIVE DECK: ${combat.deck ? combat.deck.length : 0}/54 CARDS${combat.needsReshuffle ? ' [RESHUFFLE PENDING]' : ''}`;
-            // B3: GM Pool display (GM sees controls, players see the count)
-            let gmPoolWrap = document.getElementById('gm-pool-display');
-            gmPoolWrap.style.display = 'flex';
-            document.getElementById('gm-pool-count').innerText = combat.gmPool || 0;
-            gmPoolWrap.querySelectorAll('.die-btn').forEach(b => { b.style.display = isAdmin ? 'inline-block' : 'none'; });
             const container = document.getElementById('participants-container');
             const targetSelect = document.getElementById('calc-target');
             // Preserve target select value if it exists
@@ -890,8 +1035,11 @@
             if (!combat.participants) return;
             // B1: Shaken Recovery Banner — surfaced when the active combatant is Shaken
             const banner = document.getElementById('recovery-banner');
-            let jai = combat.jokerActiveIndex;
-            let activeIdx = (jai !== undefined && jai !== null && jai >= 0) ? jai : (combat.activeTurnIndex || 0);
+            // B5: active index priority = Joker interrupt > Hold interrupt > normal turn
+            let activeIdx;
+            if (idxValid(combat.jokerActiveIndex)) activeIdx = combat.jokerActiveIndex;
+            else if (idxValid(combat.holdActiveIndex)) activeIdx = combat.holdActiveIndex;
+            else activeIdx = combat.activeTurnIndex || 0;
             let activeP = combat.participants[activeIdx];
             if (activeP && activeP.shaken && !activeP.incapacitated) {
                 banner.style.display = 'block';
@@ -899,10 +1047,10 @@
             } else {
                 banner.style.display = 'none';
             }
-            // Update NEXT TURN button text if a Joker is interrupting
+            // Update NEXT TURN button text if a Joker or Hold interrupt is active
             const nextTurnBtn = document.getElementById('btn-next-turn');
             if (nextTurnBtn) {
-                if (combat.jokerActiveIndex !== undefined && combat.jokerActiveIndex !== null && combat.jokerActiveIndex >= 0) {
+                if (idxValid(combat.jokerActiveIndex) || idxValid(combat.holdActiveIndex)) {
                     nextTurnBtn.innerText = "END INTERRUPT >";
                 } else {
                     nextTurnBtn.innerText = "NEXT TURN >";
@@ -911,10 +1059,12 @@
             combat.participants.forEach((p, index) => {
                 // FIX: Only apply Joker visual indicators if the jokerRound matches the current round
                 let isJoker = p.card && p.card.isJoker && p.jokerRound === combat.round;
+                // B5: Determine if this row is active (Joker interrupt > Hold interrupt > normal)
                 let isActive = false;
-                // Determine if this row is active
-                if (combat.jokerActiveIndex !== undefined && combat.jokerActiveIndex !== null && combat.jokerActiveIndex >= 0) {
+                if (idxValid(combat.jokerActiveIndex)) {
                     isActive = (index === combat.jokerActiveIndex);
+                } else if (idxValid(combat.holdActiveIndex)) {
+                    isActive = (index === combat.holdActiveIndex);
                 } else {
                     isActive = (index === combat.activeTurnIndex);
                 }
@@ -922,6 +1072,7 @@
                 let cardHtml = p.card ? `<div class="card-display ${isJoker ? 'joker-text' : ''}">${p.card.label} ${isJoker ? '[+2 ALL ROLLS]' : ''}</div>` : `<div class="card-display">Waiting for card...</div>`;
                 let badges = "";
                 if (p.incapacitated) badges += `<span class="badge incap">INCAPACITATED</span>`; // A11 Fix
+                if (p.onHold) badges += `<span class="badge onhold">ON HOLD</span>`; // B5
                 if (p.shaken) badges += `<span class="badge shaken">SHAKEN</span>`;
                 if (p.distracted) badges += `<span class="badge distracted">DISTRACTED [-2]</span>`;
                 if (p.vulnerable) badges += `<span class="badge vulnerable">VULNERABLE [+2 to be hit]</span>`;
@@ -937,7 +1088,7 @@
                 if (isJoker && isAdmin) {
                     if (combat.jokerActiveIndex === index) {
                         jokerBtnHtml = `<button class="die-btn" style="font-size: 0.75em; padding: 2px 8px; margin-top: 5px; width: 100%; box-sizing: border-box;" onclick="event.stopPropagation(); endJokerInterrupt()">END INTERRUPT</button>`;
-                    } else if (combat.jokerActiveIndex === -1 || combat.jokerActiveIndex === undefined || combat.jokerActiveIndex === null) {
+                    } else if (!idxValid(combat.jokerActiveIndex)) {
                         jokerBtnHtml = `<button class="die-btn" style="font-size: 0.75em; padding: 2px 8px; margin-top: 5px; width: 100%; box-sizing: border-box;" onclick="event.stopPropagation(); jokerTakeTurn(${index})">RESOLVE INTERRUPT</button>`;
                     }
                 }
@@ -1001,13 +1152,15 @@ ${jokerBtnHtml}
             document.getElementById('btn-recover').style.display = (p.shaken && !p.incapacitated) ? 'block' : 'none';
             // B2: Soak requires a Benny and at least one Wound to soak
             document.getElementById('btn-soak').disabled = !((p.bennies || 0) > 0 && (p.wounds || 0) > 0);
-            // B3: Unshake shown while Shaken (needs a Benny); New Card shown once cards are dealt (needs a Benny)
-            let unshakeBtn = document.getElementById('btn-unshake');
-            unshakeBtn.style.display = (p.shaken && !p.incapacitated) ? 'block' : 'none';
-            unshakeBtn.disabled = (p.bennies || 0) <= 0;
-            let newCardBtn = document.getElementById('btn-newcard');
-            newCardBtn.style.display = p.card ? 'block' : 'none';
-            newCardBtn.disabled = (p.bennies || 0) <= 0;
+            // B5: On Hold button visibility — GO ON HOLD when not holding, ACT NOW when holding
+            document.getElementById('btn-hold').style.display = (!p.onHold && !p.incapacitated) ? 'block' : 'none';
+            document.getElementById('btn-act').style.display = p.onHold ? 'block' : 'none';
+            // B5: Reflect initiative flags in the checkboxes
+            let f = p.initFlags || {};
+            document.getElementById('flag-hesitant').checked = !!f.hesitant;
+            document.getElementById('flag-quick').checked = !!f.quick;
+            document.getElementById('flag-levelheaded').checked = !!f.levelHeaded;
+            document.getElementById('flag-improvedlh').checked = !!f.improvedLevelHeaded;
             const removeContainer = document.getElementById('remove-btn-container');
             if (removeContainer) {
                 removeContainer.style.display = isAdmin ? 'block' : 'none';
@@ -1066,6 +1219,11 @@ ${jokerBtnHtml}
             let p = participants[idx];
             let isOn = !p[status];
             p[status] = isOn;
+            // B5: A character who becomes Shaken (or Stunned) immediately loses their Hold (p.105).
+            // They return to their normal card position but must deal with being Shaken first.
+            if (status === 'shaken' && isOn && p.onHold) {
+                p.onHold = false;
+            }
             // A12 Fix: Apply TTL counters for Distracted/Vulnerable
             if (isOn) {
                 let ttlKey = status + "TTL";
@@ -1170,14 +1328,22 @@ ${jokerBtnHtml}
             let removedIndex = participants.findIndex(x => x.id === selectedParticipantId);
             if (removedIndex === -1) return;
             let wasJokerActive = globalState.combat.jokerActiveIndex === removedIndex;
+            let wasHoldActive = globalState.combat.holdActiveIndex === removedIndex; // B5
             participants = participants.filter(x => x.id !== selectedParticipantId);
             let turnIndex = globalState.combat.activeTurnIndex || 0;
             let jokerIdx = globalState.combat.jokerActiveIndex || -1;
+            let holdIdx = globalState.combat.holdActiveIndex || -1; // B5
             // Adjust Joker Interrupt Index if removing someone
             if (wasJokerActive) {
                 jokerIdx = -1;
             } else if (jokerIdx > removedIndex) {
                 jokerIdx--;
+            }
+            // B5: Adjust Hold Interrupt Index if removing someone
+            if (wasHoldActive) {
+                holdIdx = -1;
+            } else if (holdIdx > removedIndex) {
+                holdIdx--;
             }
             // Adjust normal Turn Index
             if (removedIndex < turnIndex) {
@@ -1185,13 +1351,13 @@ ${jokerBtnHtml}
             } else if (removedIndex === turnIndex && participants.length <= turnIndex) {
                 turnIndex = 0;
             }
-            // Ensure activeTurnIndex doesn't land on a Joker or Incapacitated participant
-            while (turnIndex < participants.length && participants[turnIndex].card && (participants[turnIndex].card.isJoker || participants[turnIndex].incapacitated)) {
+            // Ensure activeTurnIndex doesn't land on a Joker, Incapacitated, or On-Hold participant
+            while (turnIndex < participants.length && participants[turnIndex].card && (participants[turnIndex].card.isJoker || participants[turnIndex].incapacitated || participants[turnIndex].onHold)) {
                 turnIndex++;
             }
             if (turnIndex >= participants.length) {
                 let lastValid = participants.length - 1;
-                while (lastValid >= 0 && participants[lastValid].card && (participants[lastValid].card.isJoker || participants[lastValid].incapacitated)) {
+                while (lastValid >= 0 && participants[lastValid].card && (participants[lastValid].card.isJoker || participants[lastValid].incapacitated || participants[lastValid].onHold)) {
                     lastValid--;
                 }
                 turnIndex = lastValid >= 0 ? lastValid : 0;
@@ -1199,7 +1365,8 @@ ${jokerBtnHtml}
             await update(ref(db, 'campaignState/combat'), {
                 participants: participants,
                 activeTurnIndex: turnIndex,
-                jokerActiveIndex: jokerIdx
+                jokerActiveIndex: jokerIdx,
+                holdActiveIndex: holdIdx // B5
             });
             selectedParticipantId = null;
             document.getElementById('detail-panel').style.display = 'none';
