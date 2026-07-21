@@ -2183,14 +2183,25 @@ ${reloadBtn}
             let r = (weaponObj.range || "").toLowerCase();
             return r.includes("melee") || r.includes("contact");
         }
-        function targetHasDodge(target) {
-            if (target.isPlayer) {
-                let sheet = globalState.characters && globalState.characters[target.id];
-                if (sheet && sheet.edges) return /\bdodge\b/i.test(sheet.edges);
-                return false;
-            }
-            return !!target.hasDodge;
-        }
+function targetHasDodge(target) {
+    if (!target) return false;
+
+    // Manual combat override.
+    // This allows NPCs and player targets to have Dodge toggled on/off
+    // during combat without editing the character sheet.
+    if (typeof target.hasDodge === "boolean") {
+        return target.hasDodge;
+    }
+
+    // Player targets default from their character sheet.
+    if (target.isPlayer) {
+        let sheet = globalState.characters && globalState.characters[target.id];
+        if (sheet && sheet.edges) return /\bdodge\b/i.test(sheet.edges);
+        return false;
+    }
+
+    return false;
+}
         function attackerHasMarksman() {
             return !!(charData.edges && /\bmarksman\b/i.test(charData.edges));
         }
