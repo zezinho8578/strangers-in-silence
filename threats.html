@@ -1016,34 +1016,33 @@ function populateTargetSelect() {
         select.appendChild(opt);
     });
 }
-        window.onTargetChange = function () {
-            let target = getSelectedTarget();
-            let dodgeRow = document.getElementById('target-dodge-row');
-            let dodgeCheckbox = document.getElementById('target-dodge-checkbox');
-            if (!target) {
-                document.getElementById('tn-input').value = "4";
-                dodgeRow.style.display = "none";
-                defenderModifier = 0;
-                defenderDisplay = "";
-                document.getElementById('target-status').innerHTML = "";
-                return;
-            }
-            let melee = isMeleeWeapon(activeWeaponContext);
-            document.getElementById('tn-input').value = melee ? target.parry : "4";
-            if (!melee) {
-                if (target.isPlayer) {
-                    dodgeCheckbox.checked = targetHasDodge(target);
-                    dodgeCheckbox.disabled = true;
-                } else {
-                    dodgeCheckbox.checked = !!target.hasDodge;
-                    dodgeCheckbox.disabled = false;
-                }
-                dodgeRow.style.display = "flex";
-            } else {
-                dodgeRow.style.display = "none";
-            }
-            updateDefenderModifierAndStatus();
-        };
+window.onTargetChange = function () {
+    let target = getSelectedTarget();
+    let dodgeRow = document.getElementById('target-dodge-row');
+    let dodgeCheckbox = document.getElementById('target-dodge-checkbox');
+
+    if (!target) {
+        document.getElementById('tn-input').value = "4";
+        dodgeRow.style.display = "none";
+        defenderModifier = 0;
+        defenderDisplay = "";
+        document.getElementById('target-status').innerHTML = "";
+        return;
+    }
+
+    let melee = isMeleeWeapon(activeWeaponContext);
+    document.getElementById('tn-input').value = melee ? target.parry : "4";
+
+    if (!melee) {
+        dodgeCheckbox.checked = targetHasDodge(target);
+        dodgeCheckbox.disabled = false;
+        dodgeRow.style.display = "flex";
+    } else {
+        dodgeRow.style.display = "none";
+    }
+
+    updateDefenderModifierAndStatus();
+};
         window.onTargetDodgeChange = async function () {
             let target = getSelectedTarget();
             if (!target) return;
