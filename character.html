@@ -239,7 +239,7 @@
             content: "";
         }
 
-        /* B3: Benny reroll button in terminal */
+        /* B3: Benny reroll button in terminal (attack/trait rerolls) */
         .reroll-btn {
             margin-top: 6px;
             font-size: 0.8em;
@@ -248,6 +248,18 @@
         }
 
         .reroll-btn:hover {
+            background: #ffff00;
+            color: var(--bg-color);
+        }
+
+        /* Damage reroll buttons on weapon cards — separate class so attack rolls don't lock them */
+        .dmg-reroll-btn {
+            font-size: 0.8em;
+            border-color: #ffff00;
+            color: #ffff00;
+        }
+
+        .dmg-reroll-btn:hover {
             background: #ffff00;
             color: var(--bg-color);
         }
@@ -837,6 +849,9 @@
         let combatParticipant = null;
         let isJoker = false;
         let lastCombatRound = null;
+        // B3: Benny reroll economy — captures the last trait roll and last damage rolls
+        let lastRollContext = null;
+        let lastDamageRolls = {};
         // B8: Defender/target integration state
         let defenderModifier = 0;
         let defenderDisplay = "";
@@ -1103,8 +1118,14 @@
             if (soakBtn) soakBtn.disabled = val <= 0;
             const unshakeBtn = document.getElementById('unshake-btn');
             if (unshakeBtn) unshakeBtn.disabled = val <= 0;
+            // Attack/trait reroll buttons (terminal)
             document.querySelectorAll('.reroll-btn').forEach(b => {
                 if (b.dataset.used !== "true") b.disabled = (val <= 0);
+            });
+            // Damage reroll buttons (weapon cards) — keep enabled state in sync.
+            // Visibility is handled separately based on pending damage rolls.
+            document.querySelectorAll('.dmg-reroll-btn').forEach(b => {
+                b.disabled = (val <= 0);
             });
             await saveCharacter();
             if (globalState.combatActive && globalState.combat && globalState.combat.participants) {
@@ -1441,6 +1462,16 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
         // ==========================================
         // 6. TACTICAL WEAPONS MANAGEMENT & AMMO HUD
         // ==========================================
+        // Damage reroll button visibility — only shown when a damage roll is
+        // pending for that weapon; disabled (greyed) when out of Bennies.
+        function updateDamageRerollButton(key) {
+            let btn = document.getElementById(`dmg-reroll-${key}`);
+            if (!btn) return;
+            let hasPendingRoll = !!lastDamageRolls[key];
+            let hasBennies = (charData.bennies || 0) > 0;
+            btn.style.display = hasPendingRoll ? 'block' : 'none';
+            btn.disabled = !hasBennies;
+        }
         function renderWeapons() {
             const container = document.getElementById('weapons-list-container');
             container.innerHTML = '';
@@ -1459,11 +1490,12 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
 <div class="weapon-actions">
 <button class="die-btn" onclick="unarmedAttack()" ${shakenAttr}>ATTACK</button>
 <button class="die-btn" onclick="rollUnarmedDamage()">DAMAGE</button>
-<button class="die-btn reroll-btn" onclick="rerollWeaponDamage('unarmed')">REROLL DMG (1 BENNY)</button>
+<button class="die-btn dmg-reroll-btn" id="dmg-reroll-unarmed" onclick="rerollWeaponDamage('unarmed')" style="display:none;">REROLL DMG (1 BENNY)</button>
 </div>
 </div>`;
             if (charData.weapons.length === 0) {
                 container.innerHTML += `<div style="text-align: center; font-style: italic; opacity: 0.6; padding: 20px;">[ NO ADDITIONAL ARMAMENT MOUNTED TO SYSTEM ]</div>`;
+                restoreDamageRerollButtons();
                 return;
             }
             charData.weapons.forEach((w, index) => {
@@ -1524,13 +1556,19 @@ ${ammoDetailsHTML}
 <div class="weapon-actions">
 <button class="die-btn" onclick="rollWeaponAttack(${index})" ${shakenAttr}>ATTACK</button>
 <button class="die-btn" ${damageOnclick}>DAMAGE</button>
-<button class="die-btn reroll-btn" onclick="rerollWeaponDamage(${index})">REROLL DMG (1 BENNY)</button>
+<button class="die-btn dmg-reroll-btn" id="dmg-reroll-${index}" onclick="rerollWeaponDamage(${index})" style="display:none;">REROLL DMG (1 BENNY)</button>
 ${reloadBtn}
 <button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
 </div>
 </div>`;
             });
             attachWeaponAmmoListeners();
+            restoreDamageRerollButtons();
+        }
+        // Re-apply damage reroll button visibility after the weapon list is rebuilt
+        function restoreDamageRerollButtons() {
+            updateDamageRerollButton('unarmed');
+            charData.weapons.forEach((w, index) => updateDamageRerollButton(index));
         }
         function attachWeaponAmmoListeners() {
             document.querySelectorAll('.ammo-display').forEach(el => {
@@ -1567,6 +1605,11 @@ ${reloadBtn}
         }
         function removeWeaponFromCharacter(index) {
             charData.weapons.splice(index, 1);
+            // Weapon indices have shifted — clear pending weapon damage rolls so the
+            // reroll buttons never reference the wrong weapon. Unarmed is index-independent.
+            let unarmedRoll = lastDamageRolls['unarmed'];
+            lastDamageRolls = {};
+            if (unarmedRoll) lastDamageRolls['unarmed'] = unarmedRoll;
             saveCharacter();
             renderWeapons();
             document.getElementById('tn-modal').style.display = 'none';
@@ -1870,6 +1913,8 @@ ${reloadBtn}
                 rolls: rolls,
                 formula: unarmedDamageFormula
             };
+            // Reveal the damage reroll button now that a damage roll is pending
+            updateDamageRerollButton('unarmed');
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
             let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
@@ -1985,6 +2030,8 @@ ${reloadBtn}
                 rolls: rolls,
                 formula: damageStr
             };
+            // Reveal the damage reroll button now that a damage roll is pending
+            updateDamageRerollButton(index);
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
             let dtStr = hasDTBonus ? ` (Includes +${dtBonusVal} from Double Tap)` : "";
@@ -2070,7 +2117,10 @@ ${reloadBtn}
                 newRolls.push(`Raise:${bRoll.history.join('+')}`);
             }
             newTotal += last.staticBonus;
+            // Consume the stored roll — one reroll per damage roll
             lastDamageRolls[key] = null;
+            // Hide the button now that the roll is finalized
+            updateDamageRerollButton(key);
             let keptTotal, keptRolls, which;
             if (newTotal >= last.total) {
                 keptTotal = newTotal; keptRolls = newRolls; which = "NEW ROLL";
@@ -2122,8 +2172,6 @@ ${reloadBtn}
             } while (currentRoll === sides && sides > 1);
             return { total, history };
         }
-        // B8: Damage-reroll capture store
-        let lastDamageRolls = {};
         // ==========================================
         // B8. TARGET / DEFENDER INTEGRATION (SWADE p.95)
         // Melee TN = defender's Parry. Ranged TN 4. Defender modifiers
@@ -2137,16 +2185,13 @@ ${reloadBtn}
         }
         function targetHasDodge(target) {
             if (target.isPlayer) {
-                // Players: auto-detect Dodge from their synced character sheet
                 let sheet = globalState.characters && globalState.characters[target.id];
                 if (sheet && sheet.edges) return /\bdodge\b/i.test(sheet.edges);
                 return false;
             }
-            // NPCs: use the stored hasDodge flag (set via the modal checkbox)
             return !!target.hasDodge;
         }
         function attackerHasMarksman() {
-            // Marksman ignores the defender's Dodge
             return !!(charData.edges && /\bmarksman\b/i.test(charData.edges));
         }
         function getSelectedTarget() {
@@ -2160,12 +2205,10 @@ ${reloadBtn}
             let melee = isMeleeWeapon(activeWeaponContext);
             let mod = 0;
             let notes = [];
-            // Vulnerable: +2 to all attacks against the target (melee and ranged)
             if (target.vulnerable) {
                 mod += 2;
                 notes.push("Vulnerable +2");
             }
-            // Dodge: -2 to ranged attacks only; ignored by Marksman
             if (!melee) {
                 let dodge = targetHasDodge(target);
                 if (dodge && !attackerHasMarksman()) {
@@ -2205,7 +2248,7 @@ ${reloadBtn}
             select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
             if (!globalState.combat || !globalState.combat.participants) return;
             globalState.combat.participants.forEach(p => {
-                if (p.id === activeCharId) return; // exclude self
+                if (p.id === activeCharId) return;
                 select.innerHTML += `<option value="${p.id}">${p.name} (Parry ${p.parry})</option>`;
             });
         }
@@ -2222,16 +2265,12 @@ ${reloadBtn}
                 return;
             }
             let melee = isMeleeWeapon(activeWeaponContext);
-            // Melee -> TN = defender's Parry. Ranged -> TN 4.
             document.getElementById('tn-input').value = melee ? target.parry : "4";
-            // Dodge checkbox: only relevant to ranged attacks
             if (!melee) {
                 if (target.isPlayer) {
-                    // Auto-detected from sheet; locked
                     dodgeCheckbox.checked = targetHasDodge(target);
                     dodgeCheckbox.disabled = true;
                 } else {
-                    // NPC: editable, reflects stored flag
                     dodgeCheckbox.checked = !!target.hasDodge;
                     dodgeCheckbox.disabled = false;
                 }
@@ -2244,7 +2283,6 @@ ${reloadBtn}
         window.onTargetDodgeChange = async function () {
             let target = getSelectedTarget();
             if (!target) return;
-            // Persist only for NPCs (players are auto-detected from their sheet)
             if (!target.isPlayer && globalState.combat && globalState.combat.participants) {
                 let participants = globalState.combat.participants;
                 let idx = participants.findIndex(p => p.id === target.id);
@@ -2460,7 +2498,6 @@ ${reloadBtn}
             };
             renderRollResults(ctx, outcome.results, outcome.isCritFail, outcome.bystanderHit, outcome.bystanderDieVal, null);
         }
-        let lastRollContext = null;
         // ==========================================
         // B3. BENNY REROLL (SWADE p.92) — reroll the last trait roll with
         // identical parameters, keeping the better result. Crit Fails cannot
@@ -2520,6 +2557,7 @@ ${reloadBtn}
                 bystanderDieVal: keptBystanderDieVal,
                 score: scoreVolley(keptResults, keptIsCritFail)
             };
+            // Invalidate all attack reroll buttons — this roll is final now
             document.querySelectorAll('.reroll-btn').forEach(b => { b.dataset.used = "true"; b.disabled = true; });
             let rerollInfo = {
                 which: keptWhich,
@@ -2575,6 +2613,9 @@ ${reloadBtn}
             if (bystanderHit) {
                 termLog += `<br><span style="color:#ff3333;">⚠️ INNOCENT BYSTANDER HIT! (Trait die rolled ${bystanderDieVal})</span>`;
             }
+            // Offer a reroll button only on fresh (non-reroll) attack rolls that aren't
+            // crit fails. This targets ONLY .reroll-btn (attack rerolls) and never
+            // touches the damage reroll buttons (.dmg-reroll-btn).
             let rerollBtnHtml = "";
             if (rerollInfo === null) {
                 document.querySelectorAll('.reroll-btn').forEach(b => { b.disabled = true; });
