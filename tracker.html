@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LambdaOS - Combat Tracker</title>
     <link rel="stylesheet" href="/style.css">
-    
     <script>
         // Security Check
         let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
@@ -18,16 +18,28 @@
             margin-bottom: 20px;
             border-bottom: 1px solid var(--theme-color);
             padding-bottom: 10px;
-            margin-right: 180px; 
+            margin-right: 180px;
             align-items: flex-end;
         }
-        .nav-link { color: var(--theme-color); text-decoration: none; cursor: pointer; }
-        .nav-link:hover { background: var(--theme-color); color: var(--bg-color); }
+
+        .nav-link {
+            color: var(--theme-color);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            background: var(--theme-color);
+            color: var(--bg-color);
+        }
 
         /* Gatekeeper Overlay */
         #gatekeeper-screen {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             background: var(--bg-color);
             z-index: 9999;
             display: flex;
@@ -37,11 +49,33 @@
             text-align: center;
             padding: 20px;
         }
-        .warning-text { color: #ff3333; animation: pulse 2s infinite; text-shadow: 0 0 10px #ff3333; margin-bottom: 20px; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        .warning-text {
+            color: #ff3333;
+            animation: pulse 2s infinite;
+            text-shadow: 0 0 10px #ff3333;
+            margin-bottom: 20px;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
 
         /* Combat Layout */
-        #combat-ui { display: none; }
+        #combat-ui {
+            display: none;
+        }
+
         .tracker-header {
             display: flex;
             justify-content: space-between;
@@ -57,15 +91,21 @@
             grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
-        @media (max-width: 800px) { .tracker-grid { grid-template-columns: 1fr; } }
+
+        @media (max-width: 800px) {
+            .tracker-grid {
+                grid-template-columns: 1fr;
+            }
+        }
 
         /* Turn Order List */
         .turn-list {
             border: 1px solid var(--theme-color);
             min-height: 300px;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             padding: 10px;
         }
+
         .participant-row {
             display: flex;
             flex-direction: column;
@@ -75,13 +115,34 @@
             cursor: pointer;
             transition: 0.2s;
         }
-        .participant-row:hover { background: rgba(255, 153, 0, 0.1); border-color: var(--theme-color); }
-        .participant-row.active-turn { border: 1px solid var(--theme-color); background: rgba(255, 153, 0, 0.2); }
-        .participant-row.selected { border-left: 4px solid var(--theme-color); }
-        .card-display { font-size: 0.9em; opacity: 0.8; margin-top: 5px; }
-        
-        .joker-text { color: #ffff00; font-weight: bold; text-shadow: 0 0 5px #ffff00; animation: pulse 1.5s infinite; }
-        
+
+        .participant-row:hover {
+            background: rgba(255, 153, 0, 0.1);
+            border-color: var(--theme-color);
+        }
+
+        .participant-row.active-turn {
+            border: 1px solid var(--theme-color);
+            background: rgba(255, 153, 0, 0.2);
+        }
+
+        .participant-row.selected {
+            border-left: 4px solid var(--theme-color);
+        }
+
+        .card-display {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        .joker-text {
+            color: #ffff00;
+            font-weight: bold;
+            text-shadow: 0 0 5px #ffff00;
+            animation: pulse 1.5s infinite;
+        }
+
         /* Status Badges */
         .badge {
             display: inline-block;
@@ -91,11 +152,35 @@
             border: 1px solid;
             margin-top: 5px;
         }
-        .badge.shaken { border-color: #ff9900; color: #ff9900; }
-        .badge.distracted { border-color: #ff3333; color: #ff3333; }
-        .badge.vulnerable { border-color: #00ff00; color: #00ff00; }
-        .badge.incap { border-color: #ff3333; color: #ff3333; background: rgba(255,51,51,0.2); font-weight: bold; text-transform: uppercase; }
-        .badge.anytime { border-color: #ffff00; color: #ffff00; animation: pulse 1.5s infinite; }
+
+        .badge.shaken {
+            border-color: #ff9900;
+            color: #ff9900;
+        }
+
+        .badge.distracted {
+            border-color: #ff3333;
+            color: #ff3333;
+        }
+
+        .badge.vulnerable {
+            border-color: #00ff00;
+            color: #00ff00;
+        }
+
+        .badge.incap {
+            border-color: #ff3333;
+            color: #ff3333;
+            background: rgba(255, 51, 51, 0.2);
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge.anytime {
+            border-color: #ffff00;
+            color: #ffff00;
+            animation: pulse 1.5s infinite;
+        }
 
         /* Detail Panel */
         .detail-panel {
@@ -103,14 +188,21 @@
             padding: 15px;
             background: rgba(128, 128, 128, 0.1);
         }
-        .detail-header { font-size: 1.2em; border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px; margin-bottom: 15px; }
-        
+
+        .detail-header {
+            font-size: 1.2em;
+            border-bottom: 1px dashed var(--theme-color);
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+
         .stat-control {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
         }
+
         .die-btn {
             background: transparent;
             color: var(--theme-color);
@@ -122,19 +214,62 @@
             transition: 0.2s;
             outline: none;
         }
-        .die-btn:hover { background: var(--theme-color); color: var(--bg-color); text-shadow: none; }
-        .die-btn.active-toggle { background: var(--theme-color); color: var(--bg-color); }
-        .die-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .die-btn:hover {
+            background: var(--theme-color);
+            color: var(--bg-color);
+            text-shadow: none;
+        }
+
+        .die-btn.active-toggle {
+            background: var(--theme-color);
+            color: var(--bg-color);
+        }
+
+        .die-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
 
         .target-calc {
             margin-top: 20px;
             border-top: 1px dashed var(--theme-color);
             padding-top: 15px;
         }
-        .calc-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
-        .calc-input { background: var(--bg-color); color: var(--theme-color); border: 1px solid var(--theme-color); padding: 5px; font-family: inherit; width: 60px; text-align: center; }
-        .calc-select { background: var(--bg-color); color: var(--theme-color); border: 1px solid var(--theme-color); padding: 5px; font-family: inherit; flex-grow: 1; }
-        #calc-result { margin-top: 10px; font-weight: bold; padding: 10px; border: 1px solid transparent; text-align: center; }
+
+        .calc-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .calc-input {
+            background: var(--bg-color);
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            padding: 5px;
+            font-family: inherit;
+            width: 60px;
+            text-align: center;
+        }
+
+        .calc-select {
+            background: var(--bg-color);
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            padding: 5px;
+            font-family: inherit;
+            flex-grow: 1;
+        }
+
+        #calc-result {
+            margin-top: 10px;
+            font-weight: bold;
+            padding: 10px;
+            border: 1px solid transparent;
+            text-align: center;
+        }
 
         .gm-controls {
             margin-top: 15px;
@@ -144,36 +279,43 @@
         }
     </style>
 </head>
+
 <body>
-
-    <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
-
+    <img id="bg-lambda"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png"
+        alt="Lambda Logo">
     <!-- GATEKEEPER SCREEN -->
     <div id="gatekeeper-screen">
         <h1 class="warning-text">> COMBAT TRACKER OFFLINE</h1>
         <p>> NO ACTIVE COMBAT ENVELOPE DETECTED ON NODE</p>
         <div id="countdown-text" style="margin-top: 20px; font-size: 1.2em;"></div>
-        
         <div id="admin-init-btn" style="display: none; margin-top: 30px;">
             <p style="color: var(--theme-color);">> ADMIN PRIVILEGES RECOGNIZED</p>
-            <button class="die-btn" style="font-size: 1.5em; padding: 10px 20px;" onclick="initializeCombat()">INITIALIZE COMBAT PROTOCOL</button>
+            <button class="die-btn" style="font-size: 1.5em; padding: 10px 20px;"
+                onclick="initializeCombat()">INITIALIZE COMBAT PROTOCOL</button>
         </div>
     </div>
-
     <!-- MAIN UI -->
     <div id="combat-ui">
         <div id="top-nav">
-            <a href="/dashboard.html" class="nav-link">< RETURN TO DASHBOARD</a>
-            <div>TACTICAL ENGAGEMENT MONITOR</div>
+            <a href="/dashboard.html" class="nav-link">
+                < RETURN TO DASHBOARD</a>
+                    <div>TACTICAL ENGAGEMENT MONITOR</div>
         </div>
-
         <div class="tracker-header">
             <span id="round-display">ROUND: --</span>
+            <!-- B3: GM Benny Pool (1 per player, +2 per WC villain, Joker's Wild) -->
+            <span id="gm-pool-display" style="display: none; align-items: center; gap: 6px;">
+                GM POOL:
+                <button class="die-btn" style="padding: 2px 8px;" onclick="adjustGmPool(-1)">-</button>
+                <span id="gm-pool-count" style="display:inline-block; min-width: 24px; text-align: center;">0</span>
+                <button class="die-btn" style="padding: 2px 8px;" onclick="adjustGmPool(1)">+</button>
+            </span>
             <span id="deck-display">ACTIVE DECK: --/54 CARDS</span>
         </div>
-
-        <div id="recovery-banner" style="display: none; border: 1px solid #ff9900; color: #ff9900; padding: 10px 15px; margin-bottom: 15px; text-align: center; animation: pulse 1.5s infinite;"></div>
-
+        <div id="recovery-banner"
+            style="display: none; border: 1px solid #ff9900; color: #ff9900; padding: 10px 15px; margin-bottom: 15px; text-align: center; animation: pulse 1.5s infinite;">
+        </div>
         <div class="tracker-grid">
             <!-- LEFT: TURN ORDER -->
             <div class="turn-list">
@@ -184,17 +326,16 @@
                     <!-- Populated via JS -->
                 </div>
             </div>
-
             <!-- RIGHT: TACTICAL DETAILS & CALCULATOR -->
             <div>
                 <div class="detail-panel" id="detail-panel" style="display: none;">
                     <div class="detail-header" id="detail-name">SELECT TARGET</div>
-                    
                     <div class="stat-control">
                         <span>Bennies:</span>
                         <div>
                             <button class="die-btn" onclick="adjustStat('bennies', -1)">-</button>
-                            <span id="detail-bennies" style="display:inline-block; width: 30px; text-align: center;">0</span>
+                            <span id="detail-bennies"
+                                style="display:inline-block; width: 30px; text-align: center;">0</span>
                             <button class="die-btn" onclick="adjustStat('bennies', 1)">+</button>
                         </div>
                     </div>
@@ -202,7 +343,8 @@
                         <span>Wounds:</span>
                         <div>
                             <button class="die-btn" onclick="adjustStat('wounds', -1)">-</button>
-                            <span id="detail-wounds" style="display:inline-block; width: 30px; text-align: center;">0</span>
+                            <span id="detail-wounds"
+                                style="display:inline-block; width: 30px; text-align: center;">0</span>
                             <button class="die-btn" id="btn-wounds-up" onclick="adjustStat('wounds', 1)">+</button>
                         </div>
                     </div>
@@ -210,35 +352,47 @@
                         <span>Fatigue:</span>
                         <div>
                             <button class="die-btn" onclick="adjustStat('fatigue', -1)">-</button>
-                            <span id="detail-fatigue" style="display:inline-block; width: 30px; text-align: center;">0</span>
+                            <span id="detail-fatigue"
+                                style="display:inline-block; width: 30px; text-align: center;">0</span>
                             <button class="die-btn" id="btn-fatigue-up" onclick="adjustStat('fatigue', 1)">+</button>
                         </div>
                     </div>
-                    
-                    <div style="font-size: 0.85em; opacity: 0.8; margin-bottom: 15px; text-align: right;" id="detail-penalty">
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-bottom: 15px; text-align: right;"
+                        id="detail-penalty">
                         Penalty: -0 to Trait Rolls
                     </div>
-
                     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                        <button id="btn-shaken" class="die-btn" style="flex-grow: 1;" onclick="toggleStatus('shaken')">SHAKEN</button>
-                        <button id="btn-distracted" class="die-btn" style="flex-grow: 1;" onclick="toggleStatus('distracted')">DISTRACTED</button>
-                        <button id="btn-vulnerable" class="die-btn" style="flex-grow: 1;" onclick="toggleStatus('vulnerable')">VULNERABLE</button>
+                        <button id="btn-shaken" class="die-btn" style="flex-grow: 1;"
+                            onclick="toggleStatus('shaken')">SHAKEN</button>
+                        <button id="btn-distracted" class="die-btn" style="flex-grow: 1;"
+                            onclick="toggleStatus('distracted')">DISTRACTED</button>
+                        <button id="btn-vulnerable" class="die-btn" style="flex-grow: 1;"
+                            onclick="toggleStatus('vulnerable')">VULNERABLE</button>
                     </div>
-
                     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                        <button id="btn-recover" class="die-btn" style="flex-grow: 1; border-color: #ff9900; color: #ff9900; display: none;" onclick="rollRecovery()">ROLL SPIRIT RECOVERY</button>
-                        <button id="btn-soak" class="die-btn" style="flex-grow: 1;" onclick="soakWounds()">SOAK (1 BENNY)</button>
+                        <button id="btn-recover" class="die-btn"
+                            style="flex-grow: 1; border-color: #ff9900; color: #ff9900; display: none;"
+                            onclick="rollRecovery()">ROLL SPIRIT RECOVERY</button>
+                        <button id="btn-soak" class="die-btn" style="flex-grow: 1;" onclick="soakWounds()">SOAK (1
+                            BENNY)</button>
                     </div>
-
+                    <!-- B3: Benny Unshake + Draw New Card -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button id="btn-unshake" class="die-btn"
+                            style="flex-grow: 1; border-color: #ffff00; color: #ffff00; display: none;"
+                            onclick="unshakeWithBenny()">BENNY: UNSHAKE</button>
+                        <button id="btn-newcard" class="die-btn" style="flex-grow: 1; display: none;"
+                            onclick="drawNewCard()">NEW CARD (1 BENNY)</button>
+                    </div>
                     <div style="font-size: 0.9em; opacity: 0.8;">
-                        Parry: <span id="detail-parry">--</span> | Toughness: <span id="detail-toughness">--</span> | Pace: <span id="detail-pace">--</span>
+                        Parry: <span id="detail-parry">--</span> | Toughness: <span id="detail-toughness">--</span> |
+                        Pace: <span id="detail-pace">--</span>
                     </div>
-
                     <div id="remove-btn-container" style="margin-top: 15px; display: none;">
-                        <button class="die-btn danger" style="width: 100%; border-color: #ff3333; color: #ff3333;" onclick="removeParticipant()">REMOVE FROM TRACKER</button>
+                        <button class="die-btn danger" style="width: 100%; border-color: #ff3333; color: #ff3333;"
+                            onclick="removeParticipant()">REMOVE FROM TRACKER</button>
                     </div>
                 </div>
-
                 <!-- TARGET CALCULATOR (GM/All visible) -->
                 <div class="target-calc" id="target-calc-container">
                     <div style="margin-bottom: 10px;">> QUICK TARGET CALCULATOR</div>
@@ -261,23 +415,21 @@
                     </div>
                     <div id="calc-result">> WAITING FOR INPUT...</div>
                 </div>
-
                 <!-- GM CONTROLS -->
                 <div class="gm-controls" id="gm-controls" style="display: none;">
                     <button class="die-btn" id="btn-next-turn" onclick="nextTurn()">NEXT TURN ></button>
                     <button class="die-btn" onclick="dealInitiative()">DEAL INITIATIVE</button>
                     <button class="die-btn" onclick="addNpc()">+ ADD EXTRA</button>
-                    <button class="die-btn" onclick="endCombat()" style="border-color: #ff3333; color: #ff3333;">END COMBAT</button>
+                    <button class="die-btn" onclick="endCombat()" style="border-color: #ff3333; color: #ff3333;">END
+                        COMBAT</button>
                 </div>
             </div>
         </div>
     </div>
-
     <script src="/settings.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
         // ==========================================
         // 1. CONFIGURATION & AUTH
         // ==========================================
@@ -290,39 +442,31 @@
             messagingSenderId: "62557473299",
             appId: "1:62557473299:web:e2ebf2ee2520a9189e8de6"
         };
-
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-
         const isAdmin = (currentUser === "Administrator");
-        
         let globalState = null;
         let selectedParticipantId = null;
         let countdownTimer = null;
-
         // Display GM controls if Admin
         if (isAdmin) {
             document.getElementById('gm-controls').style.display = 'flex';
         }
-
         // ==========================================
         // 2. FIREBASE SYNC & GATEKEEPER
         // ==========================================
         onValue(ref(db, 'campaignState'), (snapshot) => {
             globalState = snapshot.val();
             if (!globalState) return;
-
             checkGatekeeper();
             if (globalState.combatActive && globalState.combat) {
                 renderCombatUI();
             }
         });
-
         function checkGatekeeper() {
             const screen = document.getElementById('gatekeeper-screen');
             const ui = document.getElementById('combat-ui');
             const countdownEl = document.getElementById('countdown-text');
-
             if (globalState.combatActive) {
                 // Combat is ON
                 screen.style.display = 'none';
@@ -332,7 +476,6 @@
                 // Combat is OFF
                 ui.style.display = 'none';
                 screen.style.display = 'flex';
-                
                 if (isAdmin) {
                     document.getElementById('admin-init-btn').style.display = 'block';
                     countdownEl.style.display = 'none';
@@ -353,7 +496,6 @@
                 }
             }
         }
-
         // ==========================================
         // 3. DECK GENERATION LOGIC
         // ==========================================
@@ -368,9 +510,9 @@
                 { name: '2', val: 2 }, { name: '3', val: 3 }, { name: '4', val: 4 },
                 { name: '5', val: 5 }, { name: '6', val: 6 }, { name: '7', val: 7 },
                 { name: '8', val: 8 }, { name: '9', val: 9 }, { name: '10', val: 10 },
-                { name: 'Jack', val: 11 }, { name: 'Queen', val: 12 }, { name: 'King', val: 13 }, { name: 'Ace', val: 14 }
+                { name: 'Jack', val: 11 }, { name: 'Queen', val: 12 }, { name: 'King', val: 13 },
+                { name: 'Ace', val: 14 }
             ];
-
             let deck = [];
             suits.forEach(suit => {
                 ranks.forEach(rank => {
@@ -385,7 +527,6 @@
             // Add Jokers
             deck.push({ label: `Red Joker 🃏`, rank: 15, suit: 5, isJoker: true });
             deck.push({ label: `Black Joker 🃏`, rank: 15, suit: 5, isJoker: true });
-
             // Fisher-Yates Shuffle
             for (let i = deck.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -393,13 +534,13 @@
             }
             return deck;
         }
-
         // ==========================================
         // 4. COMBAT INITIALIZATION & ACTIONS
         // ==========================================
-        window.initializeCombat = async function() {
+        window.initializeCombat = async function () {
             let participants = [];
-            
+            // B3: Count players to seed the GM Benny Pool (1 per player, p.91)
+            let playerCount = 0;
             // Pull players from global characters
             if (globalState.characters) {
                 for (const [id, rawData] of Object.entries(globalState.characters)) {
@@ -409,7 +550,6 @@
                     let woundCap = 4; // A11 Fix: Wild Cards can take 3 wounds, incap on 4th
                     if (edgesNorm.includes("improvedtoughasnails")) woundCap = 6;
                     else if (edgesNorm.includes("toughasnails")) woundCap = 5;
-
                     participants.push({
                         id: id,
                         name: characterName,
@@ -433,64 +573,55 @@
                         card: null,
                         jokerRound: null
                     });
+                    playerCount++;
                 }
             }
-
             const initialCombatState = {
                 round: 0, // Start at 0, dealInitiative will bump to 1 on the very first deal
                 activeTurnIndex: 0,
                 jokerActiveIndex: -1,
                 deck: createDeck(),
                 needsReshuffle: false,
-                gmPool: 0,
+                gmPool: playerCount, // B3: GM starts with 1 Benny per player (p.91)
                 participants: participants
             };
-
             await update(ref(db, 'campaignState'), {
                 combatActive: true,
                 combat: initialCombatState
             });
-            logToWebhook("TACTICAL ENGAGEMENT INITIATED", "Combat has begun.");
+            logToWebhook("TACTICAL ENGAGEMENT INITIATED", `Combat has begun. GM Benny Pool seeded with **${playerCount}** (1 per player).`);
         };
-
-        window.endCombat = async function() {
+        window.endCombat = async function () {
             if (confirm("End combat? This will wipe the tracker and return players to dashboard.")) {
                 await set(ref(db, 'campaignState/combatActive'), false);
                 await set(ref(db, 'campaignState/combat'), null);
                 logToWebhook("COMBAT ENDED", "Tactical engagement concluded.");
             }
         };
-
-        window.dealInitiative = async function() {
+        window.dealInitiative = async function () {
             let combat = globalState.combat;
-            
-            // Only initialize round to 1 if it's the very first deal. 
+            // Only initialize round to 1 if it's the very first deal.
             // nextTurn() handles the increments at the end of each round to seal the gap.
             if (combat.round === undefined || combat.round === null || combat.round === 0) {
                 combat.round = 1;
             }
-            
             if (combat.needsReshuffle || !combat.deck || combat.deck.length < combat.participants.length) {
                 combat.deck = createDeck();
                 combat.needsReshuffle = false;
                 logToWebhook("DECK RESHUFFLED", "A new 54-card deck was initialized.");
             }
-
             let jokerDrawnBy = [];
             let playerDrewJoker = false;
             let villainDrewJoker = false;
-
             // Deal cards
             combat.participants.forEach(p => {
                 let drawn = combat.deck.pop();
                 p.card = drawn;
                 p.jokerRound = null; // Clear previous round's joker status
-                
                 if (drawn.isJoker) {
                     combat.needsReshuffle = true;
                     jokerDrawnBy.push(p.name);
                     p.jokerRound = combat.round; // Store the active round on the participant!
-                    
                     // Track who drew the Joker to trigger the right benny logic
                     if (p.isPlayer) {
                         playerDrewJoker = true;
@@ -499,10 +630,8 @@
                     }
                 }
             });
-
             // --- JOKER'S WILD BENNY DISTRIBUTION LOGIC ---
             let playerBennyUpdates = {}; // Used to batch update character sheets
-
             if (playerDrewJoker) {
                 // Rule: Player draws Joker -> All players get a Benny
                 combat.participants.forEach(p => {
@@ -512,23 +641,19 @@
                     }
                 });
             }
-
             if (villainDrewJoker) {
                 // Rule: Villain draws Joker -> +1 to GM Pool, +1 to each enemy Wild Card
                 combat.gmPool = (combat.gmPool || 0) + 1;
-                
                 combat.participants.forEach(p => {
                     if (!p.isPlayer && p.isWildCard) {
                         p.bennies = (p.bennies || 0) + 1;
                     }
                 });
             }
-
             // Sync player bennies to their character sheets in one batched Firebase update
             if (Object.keys(playerBennyUpdates).length > 0) {
                 await update(ref(db, 'campaignState/characters'), playerBennyUpdates);
             }
-
             // Sort participants by Card SWADE Rules
             combat.participants.sort((a, b) => {
                 if (b.card.rank !== a.card.rank) {
@@ -537,15 +662,12 @@
                     return b.card.suit - a.card.suit; // Tie-breaker by suit
                 }
             });
-
             // Set active turn to the first non-Joker, non-Incapacitated participant
             let firstValidIdx = combat.participants.findIndex(p => !p.card.isJoker && !p.incapacitated);
             combat.activeTurnIndex = firstValidIdx !== -1 ? firstValidIdx : 0;
             combat.jokerActiveIndex = -1; // Reset Joker interrupt state
-
             // Save the updated combat state (including new bennies and gmPool) to Firebase
             await set(ref(db, 'campaignState/combat'), combat);
-            
             let desc = `Round ${combat.round} turn order established.`;
             if (jokerDrawnBy.length > 0) {
                 desc += `\n**JOKER DRAWN BY: ${jokerDrawnBy.join(', ')}! (+2 to all rolls)**`;
@@ -555,16 +677,13 @@
             }
             logToWebhook(`ROUND ${combat.round} INITIATIVE`, desc);
         };
-
-        window.nextTurn = async function() {
+        window.nextTurn = async function () {
             let combat = globalState.combat;
-            
             // If a Joker is currently interrupting, end the interrupt and resume normal turn order
             if (combat.jokerActiveIndex !== undefined && combat.jokerActiveIndex !== null && combat.jokerActiveIndex >= 0) {
                 await set(ref(db, 'campaignState/combat/jokerActiveIndex'), -1);
                 return;
             }
-
             // A12 Fix: Decrement TTLs for the participant whose turn is ending
             let oldIdx = combat.activeTurnIndex || 0;
             let oldP = combat.participants[oldIdx];
@@ -588,28 +707,22 @@
                     await set(ref(db, `campaignState/combat/participants/${oldIdx}`), oldP);
                 }
             }
-
             let nextIdx = oldIdx + 1;
-            
             // A11 Fix: Skip Jokers AND Incapacitated participants in the normal turn order progression
             while (nextIdx < combat.participants.length && combat.participants[nextIdx].card && (combat.participants[nextIdx].card.isJoker || combat.participants[nextIdx].incapacitated)) {
                 nextIdx++;
             }
-
             if (nextIdx >= combat.participants.length) {
                 alert("Round Complete! Deal initiative for the next round.");
-                
                 // INCREMENT ROUND HERE so the gap between rounds invalidates the old Joker
                 if (combat.round === undefined || combat.round === null) combat.round = 1;
                 else combat.round += 1;
-
                 // Cap at last valid (non-joker, non-incapacitated)
                 let lastValid = combat.participants.length - 1;
                 while (lastValid >= 0 && combat.participants[lastValid].card && (combat.participants[lastValid].card.isJoker || combat.participants[lastValid].incapacitated)) {
                     lastValid--;
                 }
                 combat.activeTurnIndex = lastValid >= 0 ? lastValid : 0;
-                
                 // Save BOTH the new activeTurnIndex and the new round to Firebase to instantly invalidate Jokers
                 await update(ref(db, 'campaignState/combat'), {
                     activeTurnIndex: combat.activeTurnIndex,
@@ -621,17 +734,14 @@
             }
             await set(ref(db, 'campaignState/combat/activeTurnIndex'), combat.activeTurnIndex);
         };
-
         // ADDED: Functions to handle Joker interrupts
-        window.jokerTakeTurn = async function(index) {
+        window.jokerTakeTurn = async function (index) {
             await set(ref(db, 'campaignState/combat/jokerActiveIndex'), index);
         };
-
-        window.endJokerInterrupt = async function() {
+        window.endJokerInterrupt = async function () {
             await set(ref(db, 'campaignState/combat/jokerActiveIndex'), -1);
         };
-
-        window.addNpc = async function() {
+        window.addNpc = async function () {
             let name = prompt("Enter NPC/Group Name:");
             if (!name) return;
             let parry = parseInt(prompt("Enter Parry:", "5")) || 5;
@@ -640,7 +750,6 @@
             let scale = prompt("Enter Scale:", "Normal") || "Normal";
             let pace = parseInt(prompt("Enter Pace:", "6")) || 6; // A13 Fix
             let isWildCard = confirm("Is this NPC a Wild Card? (Cancel for Extra)"); // A11 Fix
-
             let newNpc = {
                 id: "npc_" + Date.now(),
                 name: name,
@@ -664,12 +773,102 @@
                 card: null,
                 jokerRound: null
             };
-
             let participants = globalState.combat.participants || [];
             participants.push(newNpc);
-            await set(ref(db, 'campaignState/combat/participants'), participants);
+            // B3: Deploying a Wild Card villain adds +2 to the GM Benny Pool (p.91)
+            let poolUpdate = {};
+            if (isWildCard) {
+                let newPool = (globalState.combat.gmPool || 0) + 2;
+                poolUpdate = {
+                    participants: participants,
+                    gmPool: newPool
+                };
+                logToWebhook("GM POOL +2", `Wild Card **${name}** deployed. GM Benny Pool is now **${newPool}**.`);
+            } else {
+                poolUpdate = { participants: participants };
+            }
+            await update(ref(db, 'campaignState/combat'), poolUpdate);
         };
-
+        // ==========================================
+        // B3. GM BENNY POOL — manual adjust (GM only)
+        // ==========================================
+        window.adjustGmPool = async function (amount) {
+            if (!isAdmin) return;
+            if (!globalState.combat) return;
+            let newPool = (globalState.combat.gmPool || 0) + amount;
+            if (newPool < 0) newPool = 0;
+            await set(ref(db, 'campaignState/combat/gmPool'), newPool);
+        };
+        // ==========================================
+        // B3. UNSHAKE WITH A BENNY (p.92) — from the tracker detail panel
+        // ==========================================
+        window.unshakeWithBenny = async function () {
+            if (!selectedParticipantId || !globalState.combat || !globalState.combat.participants) return;
+            let participants = globalState.combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+            if (!p.shaken) return;
+            if ((p.bennies || 0) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
+            p.bennies = (p.bennies || 0) - 1;
+            p.shaken = false;
+            // Sync player Bennies back to their character sheet
+            if (p.isPlayer) {
+                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
+            }
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+            logToWebhook("BENNY: UNSHAKE", `${p.name} spent a Benny to remove **SHAKEN** instantly. May act normally.`);
+        };
+        // ==========================================
+        // B3. DRAW A NEW ACTION CARD (p.92) — discard current card, draw a
+        // fresh one, re-sort. Quick / Level Headed do NOT apply to benny-drawn
+        // cards (RAW), so the new card simply replaces the old one.
+        // ==========================================
+        window.drawNewCard = async function () {
+            if (!selectedParticipantId || !globalState.combat || !globalState.combat.participants) return;
+            let combat = globalState.combat;
+            let participants = combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+            if (!p.card) { alert("Cards have not been dealt yet. Deal initiative first."); return; }
+            if ((p.bennies || 0) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
+            if (!combat.deck || combat.deck.length === 0) { alert("The deck is empty. Reshuffle is pending — deal initiative next round."); return; }
+            // Remember who currently holds the active turn so the highlight survives the re-sort
+            let activeId = null;
+            let jokerActiveId = null;
+            if (combat.activeTurnIndex >= 0 && combat.activeTurnIndex < participants.length) {
+                activeId = participants[combat.activeTurnIndex].id;
+            }
+            if (combat.jokerActiveIndex >= 0 && combat.jokerActiveIndex < participants.length) {
+                jokerActiveId = participants[combat.jokerActiveIndex].id;
+            }
+            let oldCard = p.card;
+            // Spend the benny and draw a replacement from the live deck
+            p.bennies = (p.bennies || 0) - 1;
+            p.card = combat.deck.pop();
+            p.jokerRound = null; // A benny-drawn card is not "this round's Joker" for interrupt purposes
+            if (p.card.isJoker) {
+                combat.needsReshuffle = true;
+                p.jokerRound = combat.round;
+            }
+            // Sync player Bennies back to their character sheet
+            if (p.isPlayer) {
+                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
+            }
+            // Re-sort by card rank/suit
+            participants.sort((a, b) => {
+                if (b.card.rank !== a.card.rank) return b.card.rank - a.card.rank;
+                return b.card.suit - a.card.suit;
+            });
+            // Restore active-turn pointers by ID after the re-sort
+            let newActiveIdx = participants.findIndex(x => x.id === activeId);
+            let newJokerIdx = jokerActiveId ? participants.findIndex(x => x.id === jokerActiveId) : -1;
+            combat.activeTurnIndex = newActiveIdx !== -1 ? newActiveIdx : 0;
+            combat.jokerActiveIndex = newJokerIdx;
+            await set(ref(db, 'campaignState/combat'), combat);
+            logToWebhook("NEW ACTION CARD", `${p.name} spent a Benny to redraw. Discarded **${oldCard.label}**, drew **${p.card.label}**. Turn order re-sorted.`);
+        };
         // ==========================================
         // 5. UI RENDERING
         // ==========================================
@@ -677,17 +876,18 @@
             let combat = globalState.combat;
             document.getElementById('round-display').innerText = `ROUND: ${combat.round || 1}`;
             document.getElementById('deck-display').innerText = `ACTIVE DECK: ${combat.deck ? combat.deck.length : 0}/54 CARDS${combat.needsReshuffle ? ' [RESHUFFLE PENDING]' : ''}`;
-
+            // B3: GM Pool display (GM sees controls, players see the count)
+            let gmPoolWrap = document.getElementById('gm-pool-display');
+            gmPoolWrap.style.display = 'flex';
+            document.getElementById('gm-pool-count').innerText = combat.gmPool || 0;
+            gmPoolWrap.querySelectorAll('.die-btn').forEach(b => { b.style.display = isAdmin ? 'inline-block' : 'none'; });
             const container = document.getElementById('participants-container');
             const targetSelect = document.getElementById('calc-target');
-            
             // Preserve target select value if it exists
             let prevTarget = targetSelect.value;
             container.innerHTML = '';
             targetSelect.innerHTML = '<option value="">-- Select Target --</option>';
-
             if (!combat.participants) return;
-
             // B1: Shaken Recovery Banner — surfaced when the active combatant is Shaken
             const banner = document.getElementById('recovery-banner');
             let jai = combat.jokerActiveIndex;
@@ -699,7 +899,6 @@
             } else {
                 banner.style.display = 'none';
             }
-
             // Update NEXT TURN button text if a Joker is interrupting
             const nextTurnBtn = document.getElementById('btn-next-turn');
             if (nextTurnBtn) {
@@ -709,38 +908,30 @@
                     nextTurnBtn.innerText = "NEXT TURN >";
                 }
             }
-
             combat.participants.forEach((p, index) => {
                 // FIX: Only apply Joker visual indicators if the jokerRound matches the current round
                 let isJoker = p.card && p.card.isJoker && p.jokerRound === combat.round;
                 let isActive = false;
-                
                 // Determine if this row is active
                 if (combat.jokerActiveIndex !== undefined && combat.jokerActiveIndex !== null && combat.jokerActiveIndex >= 0) {
                     isActive = (index === combat.jokerActiveIndex);
                 } else {
                     isActive = (index === combat.activeTurnIndex);
                 }
-                
                 let isSelected = p.id === selectedParticipantId;
-                
                 let cardHtml = p.card ? `<div class="card-display ${isJoker ? 'joker-text' : ''}">${p.card.label} ${isJoker ? '[+2 ALL ROLLS]' : ''}</div>` : `<div class="card-display">Waiting for card...</div>`;
-                
                 let badges = "";
                 if (p.incapacitated) badges += `<span class="badge incap">INCAPACITATED</span>`; // A11 Fix
                 if (p.shaken) badges += `<span class="badge shaken">SHAKEN</span>`;
                 if (p.distracted) badges += `<span class="badge distracted">DISTRACTED [-2]</span>`;
                 if (p.vulnerable) badges += `<span class="badge vulnerable">VULNERABLE [+2 to be hit]</span>`;
-                
                 // A13 Fix: Penalty display caps
                 let wounds = p.wounds || 0;
                 let fatigue = p.fatigue || 0;
                 let totalPenalty = Math.min(wounds, 3) + Math.min(fatigue, 2);
                 if (!p.incapacitated && totalPenalty > 0) badges += `<span class="badge" style="border-color:#ff3333;">W/F PENALTY: -${totalPenalty}</span>`;
-
                 // Add ACT ANYTIME badge for Jokers
                 let jokerBadge = isJoker ? `<span class="badge anytime">ACT ANYTIME</span>` : '';
-
                 // Add GM Interrupt Controls for Jokers
                 let jokerBtnHtml = '';
                 if (isJoker && isAdmin) {
@@ -750,50 +941,40 @@
                         jokerBtnHtml = `<button class="die-btn" style="font-size: 0.75em; padding: 2px 8px; margin-top: 5px; width: 100%; box-sizing: border-box;" onclick="event.stopPropagation(); jokerTakeTurn(${index})">RESOLVE INTERRUPT</button>`;
                     }
                 }
-
                 container.innerHTML += `
-                    <div class="participant-row ${isActive ? 'active-turn' : ''} ${isSelected ? 'selected' : ''}" onclick="selectParticipant('${p.id}')">
-                        <div style="font-weight: bold;">
-                            ${isActive ? '[>] ' : ''}${index + 1}. ${p.name.toUpperCase()}
-                        </div>
-                        ${cardHtml}
-                        <div>${jokerBadge}${badges}</div>
-                        ${jokerBtnHtml}
-                    </div>`;
-
+<div class="participant-row ${isActive ? 'active-turn' : ''} ${isSelected ? 'selected' : ''}" onclick="selectParticipant('${p.id}')">
+<div style="font-weight: bold;">
+${isActive ? '[>] ' : ''}${index + 1}. ${p.name.toUpperCase()}
+</div>
+${cardHtml}
+<div>${jokerBadge}${badges}</div>
+${jokerBtnHtml}
+</div>`;
                 // Populate Target Select
                 targetSelect.innerHTML += `<option value="${p.id}" ${prevTarget === p.id ? 'selected' : ''}>${p.name}</option>`;
             });
-
             updateDetailPanel();
         }
-
-        window.selectParticipant = function(id) {
+        window.selectParticipant = function (id) {
             selectedParticipantId = id;
             renderCombatUI();
         };
-
         function updateDetailPanel() {
             if (!selectedParticipantId || !globalState.combat.participants) {
                 document.getElementById('detail-panel').style.display = 'none';
                 return;
             }
-
             const p = globalState.combat.participants.find(x => x.id === selectedParticipantId);
             if (!p) return;
-
             document.getElementById('detail-panel').style.display = 'block';
             document.getElementById('detail-name').innerText = p.name.toUpperCase();
-            
             document.getElementById('detail-bennies').innerText = p.bennies || 0;
             document.getElementById('detail-wounds').innerText = p.wounds || 0;
             document.getElementById('detail-fatigue').innerText = p.fatigue || 0;
-            
             // A13 Fix: Penalty display caps
             let wounds = p.wounds || 0;
             let fatigue = p.fatigue || 0;
             let totalPenalty = Math.min(wounds, 3) + Math.min(fatigue, 2);
-            
             let penaltyEl = document.getElementById('detail-penalty');
             if (p.incapacitated) {
                 penaltyEl.innerText = "INCAPACITATED";
@@ -804,47 +985,45 @@
                 penaltyEl.style.color = "var(--theme-color)";
                 penaltyEl.style.fontWeight = "normal";
             }
-
             // A13 Fix: Effective Pace display
             let basePace = p.pace || 6;
             let effPace = p.incapacitated ? 0 : Math.max(1, basePace - Math.min(wounds, 3));
             document.getElementById('detail-pace').innerText = `${effPace} (Base: ${basePace})`;
-
             document.getElementById('detail-parry').innerText = p.parry;
             document.getElementById('detail-toughness').innerText = p.toughness;
-
             document.getElementById('btn-shaken').className = `die-btn ${p.shaken ? 'active-toggle' : ''}`;
             document.getElementById('btn-distracted').className = `die-btn ${p.distracted ? 'active-toggle' : ''}`;
             document.getElementById('btn-vulnerable').className = `die-btn ${p.vulnerable ? 'active-toggle' : ''}`;
-
             // A11 Fix: Disable + buttons for wounds/fatigue if Incapacitated
             document.getElementById('btn-wounds-up').disabled = p.incapacitated;
             document.getElementById('btn-fatigue-up').disabled = p.incapacitated;
-
             // B1: Show Spirit Recovery button only while Shaken
             document.getElementById('btn-recover').style.display = (p.shaken && !p.incapacitated) ? 'block' : 'none';
             // B2: Soak requires a Benny and at least one Wound to soak
             document.getElementById('btn-soak').disabled = !((p.bennies || 0) > 0 && (p.wounds || 0) > 0);
-
+            // B3: Unshake shown while Shaken (needs a Benny); New Card shown once cards are dealt (needs a Benny)
+            let unshakeBtn = document.getElementById('btn-unshake');
+            unshakeBtn.style.display = (p.shaken && !p.incapacitated) ? 'block' : 'none';
+            unshakeBtn.disabled = (p.bennies || 0) <= 0;
+            let newCardBtn = document.getElementById('btn-newcard');
+            newCardBtn.style.display = p.card ? 'block' : 'none';
+            newCardBtn.disabled = (p.bennies || 0) <= 0;
             const removeContainer = document.getElementById('remove-btn-container');
             if (removeContainer) {
                 removeContainer.style.display = isAdmin ? 'block' : 'none';
             }
         }
-
         // ==========================================
         // 6. STATUS ADJUSTMENTS
         // ==========================================
-        window.adjustStat = async function(stat, amount) {
+        window.adjustStat = async function (stat, amount) {
             if (!selectedParticipantId) return;
             let participants = globalState.combat.participants;
             let idx = participants.findIndex(x => x.id === selectedParticipantId);
             if (idx === -1) return;
-
             let p = participants[idx];
             let newVal = (p[stat] || 0) + amount;
             if (newVal < 0) newVal = 0;
-            
             // A11 Fix: Wound and Fatigue caps, Incapacitated state trigger
             if (stat === 'wounds') {
                 let cap = p.woundCap || (p.isWildCard ? 4 : 1); // A11 Fix: WC incap at 4, Extra at 1
@@ -858,7 +1037,7 @@
                         p.incapacitated = false;
                     }
                 }
-            } 
+            }
             else if (stat === 'fatigue') {
                 let cap = 3;
                 if (newVal >= cap) {
@@ -872,27 +1051,21 @@
                     }
                 }
             }
-
             p[stat] = newVal;
-
             // If modifying bennies for a player, sync back to character sheet
             if (stat === 'bennies' && p.isPlayer) {
                 await set(ref(db, `campaignState/characters/${p.id}/bennies`), newVal);
             }
-
             await set(ref(db, 'campaignState/combat/participants'), participants);
         };
-
-        window.toggleStatus = async function(status) {
+        window.toggleStatus = async function (status) {
             if (!selectedParticipantId) return;
             let participants = globalState.combat.participants;
             let idx = participants.findIndex(x => x.id === selectedParticipantId);
             if (idx === -1) return;
-
             let p = participants[idx];
             let isOn = !p[status];
             p[status] = isOn;
-
             // A12 Fix: Apply TTL counters for Distracted/Vulnerable
             if (isOn) {
                 let ttlKey = status + "TTL";
@@ -901,14 +1074,11 @@
             } else {
                 p[status + "TTL"] = 0;
             }
-
             await set(ref(db, 'campaignState/combat/participants'), participants);
-            
             if (isOn) {
                 logToWebhook("STATUS UPDATE", `${p.name} is now **${status.toUpperCase()}**.`);
             }
         };
-
         // ==========================================
         // 6B. DICE HELPER, SPIRIT RECOVERY & SOAK (SWADE)
         // ==========================================
@@ -921,124 +1091,100 @@
             } while (currentRoll === sides && sides > 1);
             return { total, history };
         }
-
         // B1: Shaken recovery — free-action Spirit roll vs TN 4 (SWADE p.94).
         // Success clears Shaken; failure leaves the combatant on free actions only.
-        window.rollRecovery = async function(participantId = selectedParticipantId) {
+        window.rollRecovery = async function (participantId = selectedParticipantId) {
             if (!participantId || !globalState.combat || !globalState.combat.participants) return;
             let participants = globalState.combat.participants;
             let idx = participants.findIndex(x => x.id === participantId);
             if (idx === -1) return;
             let p = participants[idx];
             if (!p.shaken) return;
-
             // Players pull their Spirit die from their synced character sheet; NPCs default to d6
             let spiritDie = 6;
             if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
                 spiritDie = parseInt(globalState.characters[p.id].attributes?.Spirit?.die) || 6;
             }
-
             // Wound, Fatigue, and Distracted penalties apply to the recovery roll
             let penalty = Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2) + (p.distracted ? 2 : 0);
-
             let tRoll = rollExplodingDice(spiritDie);
             let wRoll = p.isWildCard ? rollExplodingDice(6) : null;
             let best = (wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total) - penalty;
             let success = best >= 4;
-
             let desc = `${p.name} rolled Spirit Recovery (d${spiritDie})${penalty > 0 ? ` at -${penalty}` : ''}: ${tRoll.history.join(' + ')}`;
             if (wRoll) desc += ` | Wild: ${wRoll.history.join(' + ')}`;
             desc += ` = **${best}** -> ${success ? "RECOVERED! No longer Shaken — may act normally." : "STILL SHAKEN (free actions only)."}`;
-
             if (success) {
                 p.shaken = false;
                 await set(ref(db, 'campaignState/combat/participants'), participants);
             }
             logToWebhook("SPIRIT RECOVERY", desc);
         };
-
         // B2: Soak roll — spend a Benny, Vigor vs TN 4, each success/raise removes 1 Wound (SWADE p.96).
         // Wound modifiers from the Wounds being soaked do NOT apply to this roll.
-        window.soakWounds = async function() {
+        window.soakWounds = async function () {
             if (!selectedParticipantId || !globalState.combat || !globalState.combat.participants) return;
             let participants = globalState.combat.participants;
             let idx = participants.findIndex(x => x.id === selectedParticipantId);
             if (idx === -1) return;
             let p = participants[idx];
-
             if ((p.bennies || 0) <= 0) { alert("No Bennies remaining to Soak."); return; }
             if ((p.wounds || 0) <= 0) { alert("No Wounds to Soak."); return; }
-
             // Players pull their Vigor die from their synced character sheet; NPCs default to d6
             let vigorDie = 6;
             if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
                 vigorDie = parseInt(globalState.characters[p.id].attributes?.Vigor?.die) || 6;
             }
-
             let tRoll = rollExplodingDice(vigorDie);
             let wRoll = p.isWildCard ? rollExplodingDice(6) : null;
             let best = wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total;
-
             let soaked = 0;
             if (best >= 4) soaked = 1 + Math.floor((best - 4) / 4);
             soaked = Math.min(soaked, p.wounds);
-
             p.bennies = (p.bennies || 0) - 1;
             p.wounds = (p.wounds || 0) - soaked;
-
             // Soaking all Wounds also removes Shaken
             let removedShaken = false;
             if (soaked > 0 && p.wounds === 0 && p.shaken) {
                 p.shaken = false;
                 removedShaken = true;
             }
-
             // Recover from Incapacitation if Wounds dropped below the cap
             let cap = p.woundCap || (p.isWildCard ? 4 : 1);
             if (p.incapacitated && p.wounds < cap && (p.fatigue || 0) < 3) p.incapacitated = false;
-
             // Sync player Bennies back to their character sheet
             if (p.isPlayer) {
                 await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
             }
             await set(ref(db, 'campaignState/combat/participants'), participants);
-
             let desc = `${p.name} spent a Benny to Soak (Vigor d${vigorDie}): ${tRoll.history.join(' + ')}`;
             if (wRoll) desc += ` | Wild: ${wRoll.history.join(' + ')}`;
             desc += ` = **${best}** -> Soaked **${soaked}** Wound(s). ${p.wounds} Wound(s) remain.`;
             if (removedShaken) desc += ` Shaken removed.`;
             logToWebhook("SOAK ROLL", desc);
         };
-
-        window.removeParticipant = async function() {
+        window.removeParticipant = async function () {
             if (!selectedParticipantId) return;
             if (!confirm("Remove this combatant from the tracker?")) return;
-            
             let participants = globalState.combat.participants || [];
             let removedIndex = participants.findIndex(x => x.id === selectedParticipantId);
             if (removedIndex === -1) return;
-            
             let wasJokerActive = globalState.combat.jokerActiveIndex === removedIndex;
-            
             participants = participants.filter(x => x.id !== selectedParticipantId);
-            
             let turnIndex = globalState.combat.activeTurnIndex || 0;
             let jokerIdx = globalState.combat.jokerActiveIndex || -1;
-            
             // Adjust Joker Interrupt Index if removing someone
             if (wasJokerActive) {
                 jokerIdx = -1;
             } else if (jokerIdx > removedIndex) {
                 jokerIdx--;
             }
-            
             // Adjust normal Turn Index
             if (removedIndex < turnIndex) {
                 turnIndex--;
             } else if (removedIndex === turnIndex && participants.length <= turnIndex) {
                 turnIndex = 0;
             }
-            
             // Ensure activeTurnIndex doesn't land on a Joker or Incapacitated participant
             while (turnIndex < participants.length && participants[turnIndex].card && (participants[turnIndex].card.isJoker || participants[turnIndex].incapacitated)) {
                 turnIndex++;
@@ -1050,38 +1196,30 @@
                 }
                 turnIndex = lastValid >= 0 ? lastValid : 0;
             }
-
             await update(ref(db, 'campaignState/combat'), {
                 participants: participants,
                 activeTurnIndex: turnIndex,
                 jokerActiveIndex: jokerIdx
             });
-            
             selectedParticipantId = null;
             document.getElementById('detail-panel').style.display = 'none';
         };
-
         // ==========================================
         // 7. TARGET CALCULATOR (GM ASSIST)
         // ==========================================
-        window.calcAttack = function() {
+        window.calcAttack = function () {
             let targetId = document.getElementById('calc-target').value;
             let roll = parseInt(document.getElementById('calc-attack').value);
             let resultBox = document.getElementById('calc-result');
-
             if (!targetId || isNaN(roll)) {
                 resultBox.innerHTML = "<span style='color:#ff3333;'>ERROR: SELECT TARGET AND ENTER ROLL.</span>";
                 return;
             }
-
             let target = globalState.combat.participants.find(x => x.id === targetId);
             let parry = parseInt(target.parry);
-            
             // Being vulnerable adds +2 to actions/attacks against the target (SWADE p.100)
             let effectiveRoll = target.vulnerable ? roll + 2 : roll;
-
             resultBox.style.borderColor = "var(--theme-color)";
-            
             if (effectiveRoll < parry) {
                 resultBox.innerHTML = `FAILURE against ${target.name}'s Parry (${target.parry}).`;
                 resultBox.style.color = "var(--theme-color)";
@@ -1096,34 +1234,28 @@
                 }
             }
         };
-
-        window.calcDamage = async function() {
+        window.calcDamage = async function () {
             let targetId = document.getElementById('calc-target').value;
             let roll = parseInt(document.getElementById('calc-damage').value);
             let ap = parseInt(document.getElementById('calc-ap').value) || 0;
             let resultBox = document.getElementById('calc-result');
-
             if (!targetId || isNaN(roll)) {
                 resultBox.innerHTML = "<span style='color:#ff3333;'>ERROR: SELECT TARGET AND ENTER ROLL.</span>";
                 return;
             }
-
             let target = globalState.combat.participants.find(x => x.id === targetId);
             let toughness = parseInt(target.toughness) || 0;
             let armor = parseInt(target.armor) || 0;
             let effectiveArmor = Math.max(0, armor - Math.max(0, ap));
             let effectiveToughness = toughness + effectiveArmor;
             let breakdown = `Toughness ${toughness} + Armor ${armor} − AP ${Math.max(0, ap)} = ${effectiveToughness}`;
-
             resultBox.style.borderColor = "var(--theme-color)";
-
             if (roll < effectiveToughness) {
                 resultBox.innerHTML = `NO EFFECT. ${breakdown}.`;
                 resultBox.style.color = "var(--theme-color)";
             } else {
                 let extra = roll - effectiveToughness;
                 let wounds = Math.floor(extra / 4);
-
                 let output = "";
                 if (wounds === 0) {
                     if (target.shaken) {
@@ -1144,12 +1276,10 @@
                 } else {
                     output = `Target is **SHAKEN** and takes **${wounds} WOUND(S)**!`;
                 }
-                
                 resultBox.innerHTML = `${output}<br><span style="font-size:0.9em;">${breakdown}</span>`;
                 resultBox.style.color = "#ff9900";
             }
         };
-
         // ==========================================
         // 8. DISCORD LOGGING
         // ==========================================
@@ -1161,7 +1291,7 @@
                 } catch (e) { console.warn("Webhook failed", e); }
             }
         }
-
     </script>
 </body>
+
 </html>
