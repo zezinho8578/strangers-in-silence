@@ -220,6 +220,8 @@
             color: var(--theme-color);
         }
 
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
         .del-btn {
             border-color: #ff3333;
             color: #ff3333;
@@ -1557,13 +1559,13 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
 <div>RoF: <i>${w.rof}</i></div>
 <div>Shots: <i>${w.shots}</i></div>
 <div>Min Str: <i>${w.minStr}</i></div>
-${ammoDetailsHTML}
+ ${ammoDetailsHTML}
 </div>
 <div class="weapon-actions">
 <button class="die-btn" onclick="rollWeaponAttack(${index})" ${shakenAttr}>ATTACK</button>
 <button class="die-btn" ${damageOnclick}>DAMAGE</button>
 <button class="die-btn reroll-btn" onclick="rerollWeaponDamage(${index})">REROLL DMG (1 BENNY)</button>
-${reloadBtn}
+ ${reloadBtn}
 <button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
 </div>
 </div>`;
@@ -2415,6 +2417,9 @@ ${reloadBtn}
         // B3. BENNY REROLL (SWADE p.92) — reroll the last trait roll with
         // identical parameters, keeping the better result. Crit Fails cannot
         // be rerolled. One reroll per roll.
+        // SPECIAL CASE: if the reroll ITSELF is a Critical Failure, that result
+        // MUST be accepted — it supersedes "keep the better total" and ends all
+        // rerolls immediately.
         // ==========================================
         async function rerollLastRoll() {
             if (!lastRollContext) return;
@@ -2438,7 +2443,15 @@ ${reloadBtn}
             let newScore = scoreVolley(newOutcome.results, newOutcome.isCritFail);
             let oldScore = ctx.score;
             let keptResults, keptIsCritFail, keptBystanderHit, keptBystanderDieVal, keptWhich;
-            if (newScore >= oldScore) {
+            // RULE: a Critical Failure on the reroll MUST be accepted. This overrides
+            // the "keep the better total" rule and ends all rerolls immediately.
+            if (newOutcome.isCritFail) {
+                keptResults = newOutcome.results;
+                keptIsCritFail = true;
+                keptBystanderHit = newOutcome.bystanderHit;
+                keptBystanderDieVal = newOutcome.bystanderDieVal;
+                keptWhich = "NEW ROLL — CRITICAL FAILURE (must be accepted!)";
+            } else if (newScore >= oldScore) {
                 keptResults = newOutcome.results;
                 keptIsCritFail = newOutcome.isCritFail;
                 keptBystanderHit = newOutcome.bystanderHit;
@@ -2451,7 +2464,8 @@ ${reloadBtn}
                 keptBystanderDieVal = ctx.bystanderDieVal;
                 keptWhich = "ORIGINAL ROLL";
             }
-            // Apply damage-bonus side effects based on the KEPT result
+            // Apply damage-bonus side effects based on the KEPT result.
+            // (A forced crit fail means no hit, so any pending raise/3RB/DT bonus is correctly cleared.)
             applyDamageBonusSideEffects(keptResults, ctx);
             // Mark this roll as rerolled (no further rerolls) and store the kept result
             ctx.usedReroll = true;
@@ -2481,9 +2495,14 @@ ${reloadBtn}
             let displayMod = totalModifier !== 0 ? (totalModifier > 0 ? `+${totalModifier}` : `${totalModifier}`) : "";
             let modStrDisplay = totalModifier !== 0 ? ` (${displayMod})` : "";
             let termLog = "";
-            // B3: Reroll banner showing both rolls and which was kept
+            // B3: Reroll banner showing both rolls and which was kept.
+            // If the kept result is a Critical Failure (the reroll crit-failed and
+            // had to be accepted), the banner flashes red so it can't be missed.
             if (rerollInfo) {
-                termLog += `<span style="color:#ffff00;">> ⟳ REROLL (1 Benny spent) — ${name.toUpperCase()}<br>`;
+                let bannerStyle = isCritFail
+                    ? "color:#ff3333; text-shadow: 0 0 8px #ff3333; animation: pulse 1s infinite;"
+                    : "color:#ffff00;";
+                termLog += `<span style="${bannerStyle}">> ⟳ REROLL (1 Benny spent) — ${name.toUpperCase()}<br>`;
                 termLog += `&nbsp;&nbsp;Original: ${rerollInfo.oldSummary}<br>`;
                 termLog += `&nbsp;&nbsp;New:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${rerollInfo.newSummary}<br>`;
                 termLog += `&nbsp;&nbsp;-> Keeping <b>${rerollInfo.which}</b>.</span><br>`;
