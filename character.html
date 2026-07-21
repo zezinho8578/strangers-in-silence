@@ -1551,13 +1551,13 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
 <div>RoF: <i>${w.rof}</i></div>
 <div>Shots: <i>${w.shots}</i></div>
 <div>Min Str: <i>${w.minStr}</i></div>
- ${ammoDetailsHTML}
+${ammoDetailsHTML}
 </div>
 <div class="weapon-actions">
 <button class="die-btn" onclick="rollWeaponAttack(${index})" ${shakenAttr}>ATTACK</button>
 <button class="die-btn" ${damageOnclick}>DAMAGE</button>
 <button class="die-btn dmg-reroll-btn" id="dmg-reroll-${index}" onclick="rerollWeaponDamage(${index})" style="display:none;">REROLL DMG (1 BENNY)</button>
- ${reloadBtn}
+${reloadBtn}
 <button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
 </div>
 </div>`;
@@ -1916,7 +1916,7 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
             // Reveal the damage reroll button now that a damage roll is pending
             updateDamageRerollButton('unarmed');
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
-            let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)" : "";
+            let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
             let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
             let waStr = wildAttackDmgBonus > 0 ? ` + ${wildAttackDmgBonus} (Wild Attack)` : "";
             let termLog = `> ${charData.name} dealt damage with UNARMED STRIKE<br>`;
@@ -2481,7 +2481,7 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
                 let pIdx = participants.findIndex(p => p.id === activeCharId);
                 if (pIdx !== -1) {
                     participants[pIdx].vulnerable = true;
-                    participants[pIdx].vulnerableTTL = 2; // Wild Attack: until end of attacker's next turn
+                    participants[pIdx].vulnerableTTL = (pIdx === globalState.combat.activeTurnIndex) ? 2 : 1;
                     set(ref(db, 'campaignState/combat/participants'), participants);
                 }
             }
