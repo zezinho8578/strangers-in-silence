@@ -278,12 +278,18 @@
                         <button class="die-btn" onclick="adjustBennies(-1)">-</button>
                         <span id="benny-count" style="font-weight: bold; width: 30px; text-align: center;">3</span>
                         <button class="die-btn" onclick="adjustBennies(1)">+</button>
+                        <button class="die-btn" id="soak-btn" style="margin-left: 15px;" onclick="soakWounds()" title="Spend a Benny: Vigor roll vs TN 4, each success/raise soaks 1 Wound">SOAK</button>
                     </div>
                 </div>
 
                 <div class="section" id="combat-hud" style="display:none; margin-bottom: 20px; border-color: #ff3333;">
                     <h3 style="color:#ff3333;">TACTICAL STATUS</h3>
                     <div id="hud-stats" style="font-weight:bold; color:#ff9900;"></div>
+                </div>
+
+                <div class="section" id="shaken-banner" style="display:none; margin-bottom: 20px; border-color: #ff3333; background: rgba(255,51,51,0.08); text-align: center;">
+                    <div style="color:#ff3333; font-weight:bold; margin-bottom:10px;">[ SHAKEN — FREE ACTIONS ONLY ]</div>
+                    <button class="die-btn" style="border-color:#ff3333; color:#ff3333;" onclick="recoverFromShaken()">ROLL SPIRIT RECOVERY (TN 4)</button>
                 </div>
 
                 <div class="section" style="margin-bottom: 20px;">
@@ -870,6 +876,10 @@
                 hudEl.style.display = 'none';
             }
 
+            // B1: Shaken banner — free actions only until a Spirit recovery succeeds
+            const shakenBanner = document.getElementById('shaken-banner');
+            shakenBanner.style.display = (combatParticipant && combatParticipant.shaken && !combatParticipant.incapacitated) ? 'block' : 'none';
+
             renderSheet();
             renderWeapons();
         }
@@ -928,6 +938,114 @@
                     participants[pIdx].bennies = val;
                     await set(ref(db, 'campaignState/combat/participants'), participants);
                 }
+            }
+        }
+
+        // ==========================================
+        // B1. SHAKEN RECOVERY (SWADE p.94)
+        // Free-action Spirit roll vs TN 4. Wound, Fatigue, and
+        // Distracted penalties apply to this roll.
+        // ==========================================
+        async function recoverFromShaken() {
+            if (!combatParticipant || !combatParticipant.shaken) return;
+            if (!isFirebaseConfigured || !globalState.combat || !globalState.combat.participants) return;
+
+            let spiritDie = parseInt(charData.attributes?.Spirit?.die) || 4;
+            let spiritMod = parseInt(charData.attributes?.Spirit?.mod) || 0;
+            let statusPenalty = -(Math.min(combatParticipant.wounds || 0, 3) + Math.min(combatParticipant.fatigue || 0, 2) + (combatParticipant.distracted ? 2 : 0));
+            let totalMod = spiritMod + statusPenalty;
+
+            let traitRoll = rollExploding(spiritDie);
+            let wildRoll = rollExploding(6);
+            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
+            let success = bestTotal >= 4;
+
+            let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
+            let termLog = `> ${charData.name} rolled SPIRIT RECOVERY vs TN 4${modStr}<br>`;
+            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> `;
+            termLog += success
+                ? `<span style="color:#00ff00;">RECOVERED! No longer Shaken — may act normally.</span>`
+                : `<span style="color:#ff3333;">STILL SHAKEN. Free actions only.</span>`;
+            logToTerminal(termLog);
+
+            if (success) {
+                let participants = globalState.combat.participants;
+                let pIdx = participants.findIndex(p => p.id === activeCharId);
+                if (pIdx !== -1) {
+                    participants[pIdx].shaken = false;
+                    await set(ref(db, 'campaignState/combat/participants'), participants);
+                }
+            }
+
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} rolled Spirit Recovery`,
+                    description: `**Result: ${bestTotal}**\n${success ? "RECOVERED! No longer Shaken." : "STILL SHAKEN (free actions only)."}`,
+                    color: success ? 0x00ff00 : 0xff3333,
+                    fields: [
+                        { name: `Spirit (d${spiritDie})`, value: traitRoll.history.join(' + '), inline: true },
+                        { name: "Wild (d6)", value: wildRoll.history.join(' + '), inline: true }
+                    ]
+                };
+                if (totalMod !== 0) embed.fields.push({ name: "Modifier", value: `${totalMod > 0 ? '+' : ''}${totalMod}`, inline: true });
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
+            }
+        }
+
+        // ==========================================
+        // B2. SOAK ROLL (SWADE p.96)
+        // Spend a Benny: Vigor vs TN 4, each success/raise soaks 1 Wound.
+        // Do NOT count Wound modifiers from the Wounds being soaked —
+        // only pre-existing Wound/Fatigue penalties apply.
+        // ==========================================
+        async function soakWounds() {
+            if ((charData.bennies || 0) <= 0) {
+                logToTerminal("> [!] SOAK FAILED: No Bennies remaining.");
+                return;
+            }
+
+            let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
+            let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
+            let statusPenalty = 0;
+            if (combatParticipant) {
+                statusPenalty = -(Math.min(combatParticipant.wounds || 0, 3) + Math.min(combatParticipant.fatigue || 0, 2));
+            }
+            let totalMod = vigorMod + statusPenalty;
+
+            let traitRoll = rollExploding(vigorDie);
+            let wildRoll = rollExploding(6);
+            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
+
+            let soaked = 0;
+            if (bestTotal >= 4) soaked = 1 + Math.floor((bestTotal - 4) / 4);
+
+            // Spend the Benny (also syncs the new count to the Combat Tracker)
+            await adjustBennies(-1);
+
+            let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
+            let termLog = `> ${charData.name} spent a Benny to SOAK (Vigor) vs TN 4${modStr}<br>`;
+            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> <b style="color:#00ff00;">SOAKED ${soaked} WOUND(S)</b><br>`;
+            termLog += `&nbsp;&nbsp;[ Report to the GM: remove ${soaked} Wound(s)${soaked > 0 ? " — if all Wounds are Soaked, Shaken is also removed" : ""}. ]`;
+            logToTerminal(termLog);
+
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} spent a Benny to Soak`,
+                    description: `**Result: ${bestTotal}** (Vigor vs TN 4)\n**Soaked ${soaked} Wound(s)** — GM removes them on the tracker.`,
+                    color: soaked > 0 ? 0x00ff00 : 0xff3333,
+                    fields: [
+                        { name: `Vigor (d${vigorDie})`, value: traitRoll.history.join(' + '), inline: true },
+                        { name: "Wild (d6)", value: wildRoll.history.join(' + '), inline: true }
+                    ]
+                };
+                if (totalMod !== 0) embed.fields.push({ name: "Modifier", value: `${totalMod > 0 ? '+' : ''}${totalMod}`, inline: true });
+                try {
+                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
             }
         }
 
@@ -1015,6 +1133,9 @@
             attrContainer.innerHTML = ''; skillContainer.innerHTML = '';
 
             document.getElementById('benny-count').innerText = charData.bennies;
+            // B2: Soak requires at least one Benny
+            const soakBtn = document.getElementById('soak-btn');
+            if (soakBtn) soakBtn.disabled = (charData.bennies || 0) <= 0;
 
             for (let [attr, data] of Object.entries(charData.attributes)) {
                 attrContainer.innerHTML += `
@@ -1163,6 +1284,10 @@
             const container = document.getElementById('weapons-list-container');
             container.innerHTML = '';
 
+            // B1: Shaken characters may only take free actions — lock ATTACK buttons
+            const isShakenLocked = !!(combatParticipant && combatParticipant.shaken && !combatParticipant.incapacitated);
+            const shakenAttr = isShakenLocked ? 'disabled title="SHAKEN: Roll Spirit Recovery first"' : '';
+
             // --- Inject Unarmed Strike card at the top ---
             let unarmedDamage = getUnarmedDamageDisplay();
             let unarmedIcon = "https://i.imgur.com/TimqS8i.png";
@@ -1176,7 +1301,7 @@
                         <div>Damage: <b>${unarmedDamage}</b></div>
                     </div>
                     <div class="weapon-actions">
-                        <button class="die-btn" onclick="unarmedAttack()">ATTACK</button>
+                        <button class="die-btn" onclick="unarmedAttack()" ${shakenAttr}>ATTACK</button>
                         <button class="die-btn" onclick="rollUnarmedDamage()">DAMAGE</button>
                     </div>
                 </div>`;
@@ -1260,7 +1385,7 @@
                             ${ammoDetailsHTML}
                         </div>
                         <div class="weapon-actions">
-                            <button class="die-btn" onclick="rollWeaponAttack(${index})">ATTACK</button>
+                            <button class="die-btn" onclick="rollWeaponAttack(${index})" ${shakenAttr}>ATTACK</button>
                             <button class="die-btn" ${damageOnclick}>DAMAGE</button>
                             ${reloadBtn}
                             <button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
@@ -2477,6 +2602,8 @@
         window.prepareRoll = prepareRoll;
         window.deleteSkill = deleteSkill;
         window.adjustBennies = adjustBennies;
+        window.recoverFromShaken = recoverFromShaken;
+        window.soakWounds = soakWounds;
         window.switchTab = switchTab;
         window.openEquipModal = openEquipModal;
         window.removeWeaponFromCharacter = removeWeaponFromCharacter;
