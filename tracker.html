@@ -580,8 +580,63 @@
         if (isAdmin) {
             document.getElementById('gm-controls').style.display = 'flex';
         }
-        // B5: Small helper — is an index a valid (non-null, >= 0) value?
+
         function idxValid(x) { return x !== undefined && x !== null && x >= 0; }
+
+        function effectiveActiveIndex(combat) {
+            if (!combat) return 0;
+            if (idxValid(combat.jokerActiveIndex)) return combat.jokerActiveIndex;
+            if (idxValid(combat.holdActiveIndex)) return combat.holdActiveIndex;
+            return combat.activeTurnIndex || 0;
+        }
+
+        async function decrementEndOfTurnTTL(idx) {
+            const combat = globalState.combat;
+            if (!combat || !combat.participants || !idxValid(idx)) return;
+
+            const p = combat.participants[idx];
+            if (!p) return;
+
+            let changed = false;
+
+            if ((p.distractedTTL || 0) > 0) {
+                p.distractedTTL--;
+                if (p.distractedTTL === 0) p.distracted = false;
+                changed = true;
+            }
+
+            if ((p.vulnerableTTL || 0) > 0) {
+                p.vulnerableTTL--;
+                if (p.vulnerableTTL === 0) p.vulnerable = false;
+                changed = true;
+            }
+
+            if (changed) {
+                await set(ref(db, `campaignState/combat/participants/${idx}`), p);
+            }
+        }
+
+        function usesGmPool(p) {
+            return p && !p.isPlayer;
+        }
+
+        function getBennies(combat, p) {
+            if (!p) return 0;
+            return usesGmPool(p) ? ((combat && combat.gmPool) || 0) : (p.bennies || 0);
+        }
+
+        async function spendBenny(p) {
+            const combat = globalState.combat;
+            if (!combat || !p) return;
+
+            if (usesGmPool(p)) {
+                combat.gmPool = Math.max(0, (combat.gmPool || 0) - 1);
+                await set(ref(db, 'campaignState/combat/gmPool'), combat.gmPool);
+            } else {
+                p.bennies = Math.max(0, (p.bennies || 0) - 1);
+                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
+            }
+        }
         // ==========================================
         // 2. FIREBASE SYNC & GATEKEEPER
         // ==========================================
@@ -820,7 +875,11 @@
             if (combat.round === undefined || combat.round === null || combat.round === 0) {
                 combat.round = 1;
             }
-            // B5: A new deal ends any pending Hold and resets the interrupt slot
+            // If an interrupt is still open when initiative is redealt, close it cleanly
+            if (idxValid(combat.jokerActiveIndex)) await decrementEndOfTurnTTL(combat.jokerActiveIndex);
+            if (idxValid(combat.holdActiveIndex)) await decrementEndOfTurnTTL(combat.holdActiveIndex);
+
+            combat.jokerActiveIndex = -1;
             combat.holdActiveIndex = -1;
             combat.participants.forEach(p => { p.onHold = false; });
             // B14: Build dealing units (grouped Extras share one card)
@@ -920,11 +979,6 @@
             }
             if (villainDrewJoker) {
                 combat.gmPool = (combat.gmPool || 0) + 1;
-                combat.participants.forEach(p => {
-                    if (!p.isPlayer && p.isWildCard) {
-                        p.bennies = (p.bennies || 0) + 1;
-                    }
-                });
             }
             if (Object.keys(playerBennyUpdates).length > 0) {
                 await update(ref(db, 'campaignState/characters'), playerBennyUpdates);
@@ -948,7 +1002,7 @@
                 desc += `\n**JOKER DRAWN BY: ${jokerDrawnBy.join(', ')}! (+2 to all rolls)**`;
                 desc += `\n*Jokers may act at any time and interrupt!*`;
                 if (playerDrewJoker) desc += `\n*Joker's Wild: All players received a Benny!*`;
-                if (villainDrewJoker) desc += `\n*Villain Joker: GM Pool +1, Enemy Wild Cards +1 Benny!*`;
+                if (villainDrewJoker) desc += `\n*Villain Joker: GM Pool +1!*`;
             }
             logToWebhook(`ROUND ${combat.round} INITIATIVE`, desc);
         };
@@ -956,37 +1010,20 @@
             let combat = globalState.combat;
             // If a Joker is currently interrupting, end the interrupt and resume normal turn order
             if (idxValid(combat.jokerActiveIndex)) {
+                await decrementEndOfTurnTTL(combat.jokerActiveIndex);
                 await set(ref(db, 'campaignState/combat/jokerActiveIndex'), -1);
                 return;
             }
             // B5: If a held character is currently interrupting, end it and resume normal turn order
             if (idxValid(combat.holdActiveIndex)) {
+                await decrementEndOfTurnTTL(combat.holdActiveIndex);
                 await set(ref(db, 'campaignState/combat/holdActiveIndex'), -1);
                 return;
             }
             // A12 Fix: Decrement TTLs for the participant whose turn is ending
             let oldIdx = combat.activeTurnIndex || 0;
-            let oldP = combat.participants[oldIdx];
-            if (oldP) {
-                let changed = false;
-                if (oldP.distractedTTL > 0) {
-                    oldP.distractedTTL--;
-                    if (oldP.distractedTTL === 0) {
-                        oldP.distracted = false;
-                        changed = true;
-                    }
-                }
-                if (oldP.vulnerableTTL > 0) {
-                    oldP.vulnerableTTL--;
-                    if (oldP.vulnerableTTL === 0) {
-                        oldP.vulnerable = false;
-                        changed = true;
-                    }
-                }
-                if (changed) {
-                    await set(ref(db, `campaignState/combat/participants/${oldIdx}`), oldP);
-                }
-            }
+            await decrementEndOfTurnTTL(oldIdx);
+            
             let nextIdx = oldIdx + 1;
             // A11 Fix + B5: Skip Jokers, Incapacitated, AND On-Hold participants in normal progression
             while (nextIdx < combat.participants.length && combat.participants[nextIdx].card && (combat.participants[nextIdx].card.isJoker || combat.participants[nextIdx].incapacitated || combat.participants[nextIdx].onHold)) {
@@ -1016,6 +1053,10 @@
             await set(ref(db, 'campaignState/combat/jokerActiveIndex'), index);
         };
         window.endJokerInterrupt = async function () {
+            const combat = globalState.combat;
+            if (combat && idxValid(combat.jokerActiveIndex)) {
+                await decrementEndOfTurnTTL(combat.jokerActiveIndex);
+            }
             await set(ref(db, 'campaignState/combat/jokerActiveIndex'), -1);
         };
         // ==========================================
@@ -1085,12 +1126,10 @@
             if (idx === -1) return;
             let p = participants[idx];
             if (!p.shaken) return;
-            if ((p.bennies || 0) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
-            p.bennies = (p.bennies || 0) - 1;
+            if (getBennies(globalState.combat, p) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
+
             p.shaken = false;
-            if (p.isPlayer) {
-                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
-            }
+            await spendBenny(p);
             await set(ref(db, 'campaignState/combat/participants'), participants);
             logToWebhook("BENNY: UNSHAKE", `${p.name} spent a Benny to remove **SHAKEN** instantly. May act normally.`);
         };
@@ -1105,7 +1144,7 @@
             if (idx === -1) return;
             let p = participants[idx];
             if (!p.card) { alert("Cards have not been dealt yet. Deal initiative first."); return; }
-            if ((p.bennies || 0) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
+            if (getBennies(globalState.combat, p) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
             if (!combat.deck || combat.deck.length === 0) { alert("The deck is empty. Reshuffle is pending — deal initiative next round."); return; }
             let activeId = null;
             let jokerActiveId = null;
@@ -1116,15 +1155,12 @@
                 jokerActiveId = participants[combat.jokerActiveIndex].id;
             }
             let oldCard = p.card;
-            p.bennies = (p.bennies || 0) - 1;
+            await spendBenny(p);
             p.card = combat.deck.pop();
             p.jokerRound = null;
             if (p.card.isJoker) {
                 combat.needsReshuffle = true;
                 p.jokerRound = combat.round;
-            }
-            if (p.isPlayer) {
-                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
             }
             participants.sort((a, b) => {
                 if (b.card.rank !== a.card.rank) return b.card.rank - a.card.rank;
@@ -1151,7 +1187,7 @@
                 name: name,
                 isPlayer: false,
                 isWildCard: isWildCard,
-                bennies: isWildCard ? 3 : 0,
+                bennies: 0, // NPCs use shared GM pool
                 parry: parry,
                 toughness: toughness,
                 armor: armor,
@@ -1274,17 +1310,17 @@
                         container.innerHTML += `
 <div class="participant-row group-header-row ${headerActive ? 'active-turn' : ''}">
 <div style="font-weight: bold;">
-${headerActive ? '[>] ' : ''}${groupLabel} SQUAD (${memberCount} UNITS)
+ ${headerActive ? '[>] ' : ''}${groupLabel} SQUAD (${memberCount} UNITS)
 </div>
-${groupCardHtml}
-${groupJokerBtn}
+ ${groupCardHtml}
+ ${groupJokerBtn}
 </div>`;
                     }
                     // B14: Nested member row — no card here, it lives on the squad header
                     container.innerHTML += `
 <div class="participant-row nested-member ${isActive ? 'active-turn' : ''} ${isSelected ? 'selected' : ''}" onclick="selectParticipant('${p.id}')">
 <div style="font-weight: bold;">
-${isActive ? '[>] ' : ''}${index + 1}. ${p.name.toUpperCase()}
+ ${isActive ? '[>] ' : ''}${index + 1}. ${p.name.toUpperCase()}
 </div>
 <div>${jokerBadge}${badges}</div>
 </div>`;
@@ -1302,11 +1338,11 @@ ${isActive ? '[>] ' : ''}${index + 1}. ${p.name.toUpperCase()}
                     container.innerHTML += `
 <div class="participant-row ${isActive ? 'active-turn' : ''} ${isSelected ? 'selected' : ''}" onclick="selectParticipant('${p.id}')">
 <div style="font-weight: bold;">
-${isActive ? '[>] ' : ''}${index + 1}. ${p.name.toUpperCase()}
+ ${isActive ? '[>] ' : ''}${index + 1}. ${p.name.toUpperCase()}
 </div>
-${cardHtml}
+ ${cardHtml}
 <div>${jokerBadge}${badges}</div>
-${jokerBtnHtml}
+ ${jokerBtnHtml}
 </div>`;
                 }
                 // Populate Target Select (every individual is still targetable)
@@ -1327,7 +1363,9 @@ ${jokerBtnHtml}
             if (!p) return;
             document.getElementById('detail-panel').style.display = 'block';
             document.getElementById('detail-name').innerText = p.name.toUpperCase();
-            document.getElementById('detail-bennies').innerText = p.bennies || 0;
+            const bennyLabel = document.querySelector('#detail-panel .stat-control span');
+            if (bennyLabel) bennyLabel.innerText = p.isPlayer ? 'Bennies:' : 'GM Pool:';
+            document.getElementById('detail-bennies').innerText = getBennies(globalState.combat, p);
             document.getElementById('detail-wounds').innerText = p.wounds || 0;
             document.getElementById('detail-fatigue').innerText = p.fatigue || 0;
             let wounds = p.wounds || 0;
@@ -1354,14 +1392,14 @@ ${jokerBtnHtml}
             document.getElementById('btn-wounds-up').disabled = p.incapacitated;
             document.getElementById('btn-fatigue-up').disabled = p.incapacitated;
             document.getElementById('btn-recover').style.display = (p.shaken && !p.incapacitated) ? 'block' : 'none';
-            document.getElementById('btn-soak').disabled = !((p.bennies || 0) > 0 && (p.wounds || 0) > 0);
+            document.getElementById('btn-soak').disabled = !(getBennies(globalState.combat, p) > 0 && (p.wounds || 0) > 0);
             // B3: Unshake shown while Shaken (needs a Benny); New Card shown once cards are dealt (needs a Benny)
             let unshakeBtn = document.getElementById('btn-unshake');
             unshakeBtn.style.display = (p.shaken && !p.incapacitated) ? 'block' : 'none';
-            unshakeBtn.disabled = (p.bennies || 0) <= 0;
+            unshakeBtn.disabled = getBennies(globalState.combat, p) <= 0;
             let newCardBtn = document.getElementById('btn-newcard');
             newCardBtn.style.display = p.card ? 'block' : 'none';
-            newCardBtn.disabled = (p.bennies || 0) <= 0;
+            newCardBtn.disabled = getBennies(globalState.combat, p) <= 0;
             // B5: On Hold button visibility — GO ON HOLD when not holding, ACT NOW when holding
             document.getElementById('btn-hold').style.display = (!p.onHold && !p.incapacitated) ? 'block' : 'none';
             document.getElementById('btn-act').style.display = p.onHold ? 'block' : 'none';
@@ -1385,6 +1423,18 @@ ${jokerBtnHtml}
             let idx = participants.findIndex(x => x.id === selectedParticipantId);
             if (idx === -1) return;
             let p = participants[idx];
+            if (stat === 'bennies') {
+                if (usesGmPool(p)) {
+                    await adjustGmPool(amount);
+                    return;
+                }
+
+                let newVal = Math.max(0, (p.bennies || 0) + amount);
+                p.bennies = newVal;
+                await set(ref(db, `campaignState/characters/${p.id}/bennies`), newVal);
+                await set(ref(db, 'campaignState/combat/participants'), participants);
+                return;
+            }
             let newVal = (p[stat] || 0) + amount;
             if (newVal < 0) newVal = 0;
             if (stat === 'wounds') {
@@ -1412,9 +1462,6 @@ ${jokerBtnHtml}
                 }
             }
             p[stat] = newVal;
-            if (stat === 'bennies' && p.isPlayer) {
-                await set(ref(db, `campaignState/characters/${p.id}/bennies`), newVal);
-            }
             await set(ref(db, 'campaignState/combat/participants'), participants);
         };
         window.toggleStatus = async function (status) {
@@ -1430,8 +1477,8 @@ ${jokerBtnHtml}
                 p.onHold = false;
             }
             if (isOn) {
-                let ttlKey = status + "TTL";
-                p[ttlKey] = (idx === globalState.combat.activeTurnIndex) ? 2 : 1;
+                const activeIdx = effectiveActiveIndex(globalState.combat);
+                p[status + "TTL"] = (idx === activeIdx) ? 2 : 1;
             } else {
                 p[status + "TTL"] = 0;
             }
@@ -1483,7 +1530,7 @@ ${jokerBtnHtml}
             let idx = participants.findIndex(x => x.id === selectedParticipantId);
             if (idx === -1) return;
             let p = participants[idx];
-            if ((p.bennies || 0) <= 0) { alert("No Bennies remaining to Soak."); return; }
+            if (getBennies(globalState.combat, p) <= 0) { alert("No Bennies remaining to Soak."); return; }
             if ((p.wounds || 0) <= 0) { alert("No Wounds to Soak."); return; }
             let vigorDie = 6;
             if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
@@ -1495,7 +1542,7 @@ ${jokerBtnHtml}
             let soaked = 0;
             if (best >= 4) soaked = 1 + Math.floor((best - 4) / 4);
             soaked = Math.min(soaked, p.wounds);
-            p.bennies = (p.bennies || 0) - 1;
+            await spendBenny(p);
             p.wounds = (p.wounds || 0) - soaked;
             let removedShaken = false;
             if (soaked > 0 && p.wounds === 0 && p.shaken) {
@@ -1504,9 +1551,6 @@ ${jokerBtnHtml}
             }
             let cap = p.woundCap || (p.isWildCard ? 4 : 1);
             if (p.incapacitated && p.wounds < cap && (p.fatigue || 0) < 3) p.incapacitated = false;
-            if (p.isPlayer) {
-                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
-            }
             await set(ref(db, 'campaignState/combat/participants'), participants);
             let desc = `${p.name} spent a Benny to Soak (Vigor d${vigorDie}): ${tRoll.history.join(' + ')}`;
             if (wRoll) desc += ` | Wild: ${wRoll.history.join(' + ')}`;
