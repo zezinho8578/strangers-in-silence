@@ -172,6 +172,8 @@
             <span id="deck-display">ACTIVE DECK: --/54 CARDS</span>
         </div>
 
+        <div id="recovery-banner" style="display: none; border: 1px solid #ff9900; color: #ff9900; padding: 10px 15px; margin-bottom: 15px; text-align: center; animation: pulse 1.5s infinite;"></div>
+
         <div class="tracker-grid">
             <!-- LEFT: TURN ORDER -->
             <div class="turn-list">
@@ -221,6 +223,11 @@
                         <button id="btn-shaken" class="die-btn" style="flex-grow: 1;" onclick="toggleStatus('shaken')">SHAKEN</button>
                         <button id="btn-distracted" class="die-btn" style="flex-grow: 1;" onclick="toggleStatus('distracted')">DISTRACTED</button>
                         <button id="btn-vulnerable" class="die-btn" style="flex-grow: 1;" onclick="toggleStatus('vulnerable')">VULNERABLE</button>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button id="btn-recover" class="die-btn" style="flex-grow: 1; border-color: #ff9900; color: #ff9900; display: none;" onclick="rollRecovery()">ROLL SPIRIT RECOVERY</button>
+                        <button id="btn-soak" class="die-btn" style="flex-grow: 1;" onclick="soakWounds()">SOAK (1 BENNY)</button>
                     </div>
 
                     <div style="font-size: 0.9em; opacity: 0.8;">
@@ -681,6 +688,18 @@
 
             if (!combat.participants) return;
 
+            // B1: Shaken Recovery Banner — surfaced when the active combatant is Shaken
+            const banner = document.getElementById('recovery-banner');
+            let jai = combat.jokerActiveIndex;
+            let activeIdx = (jai !== undefined && jai !== null && jai >= 0) ? jai : (combat.activeTurnIndex || 0);
+            let activeP = combat.participants[activeIdx];
+            if (activeP && activeP.shaken && !activeP.incapacitated) {
+                banner.style.display = 'block';
+                banner.innerHTML = `> SPIRIT RECOVERY REQUIRED: ${activeP.name.toUpperCase()} IS SHAKEN — FREE ACTIONS ONLY. <button class="die-btn" style="margin-left: 10px; border-color: #ff9900; color: #ff9900;" onclick="event.stopPropagation(); rollRecovery('${activeP.id}')">ROLL RECOVERY (TN 4)</button>`;
+            } else {
+                banner.style.display = 'none';
+            }
+
             // Update NEXT TURN button text if a Joker is interrupting
             const nextTurnBtn = document.getElementById('btn-next-turn');
             if (nextTurnBtn) {
@@ -802,6 +821,11 @@
             document.getElementById('btn-wounds-up').disabled = p.incapacitated;
             document.getElementById('btn-fatigue-up').disabled = p.incapacitated;
 
+            // B1: Show Spirit Recovery button only while Shaken
+            document.getElementById('btn-recover').style.display = (p.shaken && !p.incapacitated) ? 'block' : 'none';
+            // B2: Soak requires a Benny and at least one Wound to soak
+            document.getElementById('btn-soak').disabled = !((p.bennies || 0) > 0 && (p.wounds || 0) > 0);
+
             const removeContainer = document.getElementById('remove-btn-container');
             if (removeContainer) {
                 removeContainer.style.display = isAdmin ? 'block' : 'none';
@@ -883,6 +907,107 @@
             if (isOn) {
                 logToWebhook("STATUS UPDATE", `${p.name} is now **${status.toUpperCase()}**.`);
             }
+        };
+
+        // ==========================================
+        // 6B. DICE HELPER, SPIRIT RECOVERY & SOAK (SWADE)
+        // ==========================================
+        function rollExplodingDice(sides) {
+            let total = 0, currentRoll, history = [];
+            do {
+                currentRoll = Math.floor(Math.random() * sides) + 1;
+                total += currentRoll;
+                history.push(currentRoll);
+            } while (currentRoll === sides && sides > 1);
+            return { total, history };
+        }
+
+        // B1: Shaken recovery — free-action Spirit roll vs TN 4 (SWADE p.94).
+        // Success clears Shaken; failure leaves the combatant on free actions only.
+        window.rollRecovery = async function(participantId = selectedParticipantId) {
+            if (!participantId || !globalState.combat || !globalState.combat.participants) return;
+            let participants = globalState.combat.participants;
+            let idx = participants.findIndex(x => x.id === participantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+            if (!p.shaken) return;
+
+            // Players pull their Spirit die from their synced character sheet; NPCs default to d6
+            let spiritDie = 6;
+            if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
+                spiritDie = parseInt(globalState.characters[p.id].attributes?.Spirit?.die) || 6;
+            }
+
+            // Wound, Fatigue, and Distracted penalties apply to the recovery roll
+            let penalty = Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2) + (p.distracted ? 2 : 0);
+
+            let tRoll = rollExplodingDice(spiritDie);
+            let wRoll = p.isWildCard ? rollExplodingDice(6) : null;
+            let best = (wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total) - penalty;
+            let success = best >= 4;
+
+            let desc = `${p.name} rolled Spirit Recovery (d${spiritDie})${penalty > 0 ? ` at -${penalty}` : ''}: ${tRoll.history.join(' + ')}`;
+            if (wRoll) desc += ` | Wild: ${wRoll.history.join(' + ')}`;
+            desc += ` = **${best}** -> ${success ? "RECOVERED! No longer Shaken — may act normally." : "STILL SHAKEN (free actions only)."}`;
+
+            if (success) {
+                p.shaken = false;
+                await set(ref(db, 'campaignState/combat/participants'), participants);
+            }
+            logToWebhook("SPIRIT RECOVERY", desc);
+        };
+
+        // B2: Soak roll — spend a Benny, Vigor vs TN 4, each success/raise removes 1 Wound (SWADE p.96).
+        // Wound modifiers from the Wounds being soaked do NOT apply to this roll.
+        window.soakWounds = async function() {
+            if (!selectedParticipantId || !globalState.combat || !globalState.combat.participants) return;
+            let participants = globalState.combat.participants;
+            let idx = participants.findIndex(x => x.id === selectedParticipantId);
+            if (idx === -1) return;
+            let p = participants[idx];
+
+            if ((p.bennies || 0) <= 0) { alert("No Bennies remaining to Soak."); return; }
+            if ((p.wounds || 0) <= 0) { alert("No Wounds to Soak."); return; }
+
+            // Players pull their Vigor die from their synced character sheet; NPCs default to d6
+            let vigorDie = 6;
+            if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
+                vigorDie = parseInt(globalState.characters[p.id].attributes?.Vigor?.die) || 6;
+            }
+
+            let tRoll = rollExplodingDice(vigorDie);
+            let wRoll = p.isWildCard ? rollExplodingDice(6) : null;
+            let best = wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total;
+
+            let soaked = 0;
+            if (best >= 4) soaked = 1 + Math.floor((best - 4) / 4);
+            soaked = Math.min(soaked, p.wounds);
+
+            p.bennies = (p.bennies || 0) - 1;
+            p.wounds = (p.wounds || 0) - soaked;
+
+            // Soaking all Wounds also removes Shaken
+            let removedShaken = false;
+            if (soaked > 0 && p.wounds === 0 && p.shaken) {
+                p.shaken = false;
+                removedShaken = true;
+            }
+
+            // Recover from Incapacitation if Wounds dropped below the cap
+            let cap = p.woundCap || (p.isWildCard ? 4 : 1);
+            if (p.incapacitated && p.wounds < cap && (p.fatigue || 0) < 3) p.incapacitated = false;
+
+            // Sync player Bennies back to their character sheet
+            if (p.isPlayer) {
+                await set(ref(db, `campaignState/characters/${p.id}/bennies`), p.bennies);
+            }
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+
+            let desc = `${p.name} spent a Benny to Soak (Vigor d${vigorDie}): ${tRoll.history.join(' + ')}`;
+            if (wRoll) desc += ` | Wild: ${wRoll.history.join(' + ')}`;
+            desc += ` = **${best}** -> Soaked **${soaked}** Wound(s). ${p.wounds} Wound(s) remain.`;
+            if (removedShaken) desc += ` Shaken removed.`;
+            logToWebhook("SOAK ROLL", desc);
         };
 
         window.removeParticipant = async function() {
@@ -972,7 +1097,7 @@
             }
         };
 
-        window.calcDamage = function() {
+        window.calcDamage = async function() {
             let targetId = document.getElementById('calc-target').value;
             let roll = parseInt(document.getElementById('calc-damage').value);
             let ap = parseInt(document.getElementById('calc-ap').value) || 0;
@@ -1001,7 +1126,21 @@
 
                 let output = "";
                 if (wounds === 0) {
-                    output = `Target is **SHAKEN**. (If already shaken, causes 1 Wound).`;
+                    if (target.shaken) {
+                        // B1: SWADE — a success-level damage result against an already-Shaken
+                        // target (from physical damage) converts to 1 Wound. Apply it.
+                        let participants = globalState.combat.participants;
+                        let idx = participants.findIndex(x => x.id === targetId);
+                        if (idx !== -1) {
+                            participants[idx].wounds = (participants[idx].wounds || 0) + 1;
+                            let cap = participants[idx].woundCap || (participants[idx].isWildCard ? 4 : 1);
+                            if (participants[idx].wounds >= cap) participants[idx].incapacitated = true;
+                            await set(ref(db, 'campaignState/combat/participants'), participants);
+                        }
+                        output = `Target was already SHAKEN — physical damage inflicts **1 WOUND** (applied to tracker).`;
+                    } else {
+                        output = `Target is **SHAKEN**. (If already shaken, causes 1 Wound).`;
+                    }
                 } else {
                     output = `Target is **SHAKEN** and takes **${wounds} WOUND(S)**!`;
                 }
