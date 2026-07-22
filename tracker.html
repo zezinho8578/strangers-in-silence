@@ -536,6 +536,11 @@
                         <input type="number" id="calc-damage" class="calc-input">
                         <span style="width: 30px;">AP:</span>
                         <input type="text" id="calc-ap" class="calc-input" value="0" style="width:80px;" placeholder="0 or Ignore Armor">
+                        <select id="calc-dmgtype" class="calc-input" style="width:90px;">
+                            <option value="Ballistic">Ballistic</option>
+                            <option value="Energy">Energy</option>
+                            <option value="Melee">Melee</option>
+                        </select>
                         <button class="die-btn" onclick="calcDamage()">COMPARE TOUGHNESS</button>
                     </div>
                     <div id="calc-result">> WAITING FOR INPUT...</div>
@@ -845,7 +850,11 @@
                         bennies: data.bennies || 0,
                         parry: parseInt(data.derived?.parry) || 4,
                         toughness: parseInt(data.derived?.toughness) || 4,
+                        naturalArmor: parseInt(data.derived?.naturalArmor) || 0,
+                        wornArmor: parseInt(data.derived?.armor) || 0,
                         armor: parseInt(data.derived?.armor) || 0,
+                        ballisticProtection: parseInt(data.derived?.ballisticProtection) || 0,
+                        forceField: parseInt(data.derived?.forceField) || 0,
                         scale: parseInt(data.derived?.scale) || 0,
                         pace: parseInt(data.derived?.pace) || 6,
                         wounds: 0,
@@ -1198,7 +1207,11 @@
             if (!name) return;
             let parry = parseInt(prompt("Enter Parry:", "5")) || 5;
             let toughness = parseInt(prompt("Enter Toughness before armor:", "6")) || 6;
-            let armor = parseInt(prompt("Enter Armor:", "0")) || 0;
+            let naturalArmor = parseInt(prompt("Enter Natural Armor (structural/carapace):", "0")) || 0;
+            let wornArmor = parseInt(prompt("Enter Worn Armor (equipped):", "0")) || 0;
+            let ballisticProtection = parseInt(prompt("Enter Ballistic Protection (negates AP vs Ballistic):", "0")) || 0;
+            let forceField = parseInt(prompt("Enter Force Field value (ignores AP):", "0")) || 0;
+            let armor = naturalArmor + wornArmor + forceField;
             let scale = parseInt(prompt("Enter Scale (0=Normal, 2=Large, 4=Huge, 6=Gargantuan):", "0"));
             if (isNaN(scale)) scale = 0;
             let pace = parseInt(prompt("Enter Pace:", "6")) || 6;
@@ -1222,7 +1235,11 @@
                 bennies: 0, // NPCs use shared GM pool
                 parry: parry,
                 toughness: toughness,
+                naturalArmor: naturalArmor,
+                wornArmor: wornArmor,
                 armor: armor,
+                ballisticProtection: ballisticProtection,
+                forceField: forceField,
                 scale: scale,
                 pace: pace,
                 heavyArmor: isHeavyArmor,
@@ -1322,8 +1339,12 @@
                 let isSelected = p.id === selectedParticipantId;
                 let isGrouped = isGroupableParticipant(p, groupOn); // B14
                 // Status badges (shared by grouped and ungrouped rows)
+                normalizeArmorData(p);
                 let badges = "";
-                if (p.heavyArmor) badges += `<span class="badge" style="border-color:#ff3333; color:#ff3333;">HEAVY ARMOR</span>`;
+                let totalArmorVal = parseInt(p.armor) || 0;
+                if (totalArmorVal > 0) badges += `<span class="badge" style="border-color:#ff9900; color:#ff9900;">A:${totalArmorVal}</span>`;
+                if ((parseInt(p.forceField) || 0) > 0) badges += `<span class="badge" style="border-color:#00ccff; color:#00ccff;">FF:${p.forceField}</span>`;
+                if (p.heavyArmor) badges += `<span class="badge" style="border-color:#ff3333; color:#ff3333;">HEAVY</span>`;
                 if (p.incapacitated) badges += `<span class="badge incap">INCAPACITATED</span>`;
                 if (p.stunned) badges += `<span class="badge stunned">STUNNED</span>`; // B6
                 if (p.onHold) badges += `<span class="badge onhold">ON HOLD</span>`; // B5
@@ -1433,13 +1454,26 @@
             document.getElementById('detail-pace').innerText = `${effPace} (Base: ${basePace})`;
             document.getElementById('detail-parry').innerText = p.parry;
             document.getElementById('detail-toughness').innerText = p.toughness;
+            normalizeArmorData(p);
             let armorDisplay = p.armor || 0;
-            if (p.heavyArmor) {
-                armorDisplay += " [HEAVY";
-                if (p.armorType && p.armorType !== "General") armorDisplay += " \u2014 " + p.armorType;
-                armorDisplay += "]";
+            let armorDetail = "";
+            if ((parseInt(p.naturalArmor) || 0) > 0 || (parseInt(p.wornArmor) || 0) > 0 || (parseInt(p.forceField) || 0) > 0) {
+                armorDetail = " (";
+                let parts = [];
+                if ((parseInt(p.naturalArmor) || 0) > 0) parts.push("Nat " + p.naturalArmor);
+                if ((parseInt(p.wornArmor) || 0) > 0) parts.push("Worn " + p.wornArmor);
+                if ((parseInt(p.forceField) || 0) > 0) parts.push("FF " + p.forceField);
+                armorDetail += parts.join(" + ") + ")";
             }
-            document.getElementById('detail-armor').innerText = armorDisplay;
+            if ((parseInt(p.ballisticProtection) || 0) > 0) {
+                armorDetail += " [BP " + p.ballisticProtection + "]";
+            }
+            if (p.heavyArmor) {
+                armorDetail += " [HEAVY";
+                if (p.armorType && p.armorType !== "General") armorDetail += " \u2014 " + p.armorType;
+                armorDetail += "]";
+            }
+            document.getElementById('detail-armor').innerText = armorDisplay + armorDetail;
             document.getElementById('btn-shaken').className = `die-btn ${p.shaken ? 'active-toggle' : ''}`;
             document.getElementById('btn-distracted').className = `die-btn ${p.distracted ? 'active-toggle' : ''}`;
             document.getElementById('btn-vulnerable').className = `die-btn ${p.vulnerable ? 'active-toggle' : ''}`;
@@ -1787,16 +1821,12 @@
                 return;
             }
             let target = globalState.combat.participants.find(x => x.id === targetId);
-            let toughness = parseInt(target.toughness) || 0;
-            let armor = parseInt(target.armor) || 0;
             let apInput = document.getElementById('calc-ap').value || "0";
             let ap = parseApForDamage(apInput);
-            // Damage type conditional armor (manual calculator assumes Ballistic by default)
-            let targetArmorType = target.armorType || "General";
-            let armorApplies = (targetArmorType === "General" || targetArmorType === "Ballistic");
-            let applicableArmor = armorApplies ? armor : 0;
-            let effectiveToughness = computeEffectiveToughness(toughness, applicableArmor, ap);
-            let breakdown = buildDamageBreakdown(roll, toughness, applicableArmor, ap, effectiveToughness);
+            let selectedDmgType = document.getElementById('calc-dmgtype').value || "Ballistic";
+            let pipeline = computeArmorPipeline(target, selectedDmgType, ap);
+            let effectiveToughness = pipeline.effectiveToughness;
+            let breakdown = buildDamageBreakdown(roll, pipeline);
             resultBox.style.borderColor = "var(--theme-color)";
             if (roll < effectiveToughness) {
                 resultBox.innerHTML = `NO EFFECT. ${breakdown}.`;
