@@ -579,6 +579,18 @@
             </div>
             <div id="weapons-list-container"></div>
         </div>
+        <!-- EQUIPPED ARMOR -->
+        <div class="section" style="margin-top: 25px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px dashed var(--theme-color); padding-bottom: 5px;">
+                <h3 style="margin: 0; border: none; padding: 0;">EQUIPPED ARMOR</h3>
+                <button class="die-btn" onclick="openArmorEquipModal()" style="border: none;">+ EQUIP ARMOR</button>
+            </div>
+            <div style="margin-bottom: 10px; font-size: 0.9em;">
+                <span>Natural Armor (race/cyberware):</span>
+                <input type="number" id="natural-armor-input" class="admin-input" value="0" style="width: 50px; padding: 2px; text-align: center;" onchange="updateNaturalArmor(this.value)">
+            </div>
+            <div id="armor-list-container"></div>
+        </div>
         <!-- Master Presets Database Configuration Panel (Admin Only) -->
         <div id="master-presets-panel" class="section" style="margin-top: 25px; display: none;">
             <h3>OVERWATCH ARMORY CONFIG (MASTER PRESETS)</h3>
@@ -609,6 +621,31 @@
             </div>
             <button class="die-btn" onclick="addCustomPreset()" style="margin-top: 15px; border: none;">+ CREATE CUSTOM
                 WEAPON PRESET</button>
+        </div>
+        <!-- Armor Presets Database Configuration Panel (Admin Only) -->
+        <div id="armor-presets-panel" class="section" style="margin-top: 25px; display: none;">
+            <h3>OVERWATCH ARMOR CONFIG (MASTER PRESETS)</h3>
+            <p style="font-size: 0.85em; opacity: 0.85; margin-bottom: 10px;">GM Mode: Changes made below update the armor presets database globally in real-time.</p>
+            <div style="overflow-x: auto;">
+                <table class="preset-table">
+                    <thead>
+                        <tr>
+                            <th>Icon</th>
+                            <th>Name</th>
+                            <th>Armor</th>
+                            <th>Type</th>
+                            <th>BP</th>
+                            <th>HW?</th>
+                            <th>FF?</th>
+                            <th>Min Str</th>
+                            <th>Icon Link</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="armor-presets-body"></tbody>
+                </table>
+            </div>
+            <button class="die-btn" onclick="addCustomArmorPreset()" style="margin-top: 15px; border: none;">+ CREATE CUSTOM ARMOR PRESET</button>
         </div>
     </div>
     <!-- Live Roll Output -->
@@ -758,6 +795,27 @@
             <button class="die-btn" onclick="cancelEquip()" style="pointer-events: auto !important;">CANCEL</button>
         </div>
     </div>
+    <!-- Equip Armor Selection Modal -->
+    <div id="armor-equip-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px; z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(0, 0, 0, 0.9); width: max-content; min-width: 380px; pointer-events: auto !important;">
+        <h3 style="margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px;">EQUIP ARMOR</h3>
+        <div class="setting-row">
+            <span>Slot:</span>
+            <select id="armor-slot-select" class="admin-input" style="width: 180px;" onchange="filterArmorPresets()">
+                <option value="primary">Primary Armor</option>
+                <option value="secondary">Secondary Layer</option>
+                <option value="forcefield">Force Field</option>
+            </select>
+        </div>
+        <div class="setting-row">
+            <span>Armor:</span>
+            <select id="equip-armor-select" class="admin-input" style="width: 240px;"></select>
+        </div>
+        <div id="armor-preview" style="font-size: 0.85em; opacity: 0.8; margin: 10px 0; text-align: left;"></div>
+        <div class="tn-buttons">
+            <button class="die-btn" onclick="confirmArmorEquip()" style="pointer-events: auto !important;">EQUIP ARMOR</button>
+            <button class="die-btn" onclick="cancelArmorEquip()" style="pointer-events: auto !important;">CANCEL</button>
+        </div>
+    </div>
     <!-- Minimum Strength Warning Modal -->
     <div id="min-str-modal"
         style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid #ff3333; background: var(--bg-color); padding: 25px; z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(255,0,0,0.9); width: max-content; min-width: 350px; pointer-events: auto !important;">
@@ -815,6 +873,18 @@
             { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "2", shots: "Unlimited", minStr: "d6", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/vhkAPmf.png" },
             { id: "bugbait", name: "Bugbait", range: "12/24/48", damage: "Special", ap: "—", rof: "1", shots: "1", minStr: "d4", damageType: "Ballistic", icon: "https://i.imgur.com/gwitRFd.png" }
         ];
+        const defaultArmorPresets = [
+            { id: "hev-suit", name: "HEV Suit (Mark V)", armor: 4, armorType: "General", heavyArmor: false, ballisticProtection: 2, forceField: false, minStr: "d4", weight: 15, cost: 5000, icon: "https://i.imgur.com/niLzrfW.png", notes: "Black Mesa standard issue. Full-body protection." },
+            { id: "combine-light", name: "Combine Soldier Armor", armor: 3, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 2, forceField: false, minStr: "d6", weight: 12, cost: 800, icon: "https://i.imgur.com/niLzrfW.png", notes: "Standard Combine infantry issue." },
+            { id: "combine-elite", name: "Combine Elite Armor", armor: 5, armorType: "Ballistic", heavyArmor: true, ballisticProtection: 4, forceField: false, minStr: "d8", weight: 20, cost: 2000, icon: "https://i.imgur.com/niLzrfW.png", notes: "Heavy plating. Elite units only." },
+            { id: "metrocop", name: "Civil Protection Vest", armor: 2, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 1, forceField: false, minStr: "d4", weight: 5, cost: 200, icon: "https://i.imgur.com/niLzrfW.png", notes: "Light vest. Metrocop standard." },
+            { id: "rebel", name: "Rebel Flak Jacket", armor: 2, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 1, forceField: false, minStr: "d4", weight: 6, cost: 150, icon: "https://i.imgur.com/niLzrfW.png", notes: "Scavenged military surplus." },
+            { id: "hazmat", name: "Hazard Suit", armor: 1, armorType: "General", heavyArmor: false, ballisticProtection: 0, forceField: false, minStr: "d4", weight: 8, cost: 300, icon: "https://i.imgur.com/niLzrfW.png", notes: "Radiation and chemical protection." },
+            { id: "kevlar", name: "Kevlar Vest", armor: 4, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 4, forceField: false, minStr: "d6", weight: 4, cost: 200, icon: "https://i.imgur.com/niLzrfW.png", notes: "Lightweight. Worn under clothing." },
+            { id: "combat-armor", name: "Combat Armor (Full)", armor: 6, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 4, forceField: false, minStr: "d8", weight: 12, cost: 800, icon: "https://i.imgur.com/niLzrfW.png", notes: "Full suit with helmet, boots, gloves." },
+            { id: "energy-skin", name: "Energy Skin", armor: 8, armorType: "Energy", heavyArmor: false, ballisticProtection: 0, forceField: false, minStr: "d4", weight: 5, cost: 500, icon: "https://i.imgur.com/niLzrfW.png", notes: "+8 vs lasers/energy only. Shiny. -2 Stealth." },
+            { id: "ff-belt", name: "Combine Forcefield Belt", armor: 4, armorType: "General", heavyArmor: false, ballisticProtection: 0, forceField: true, minStr: "d4", weight: 4, cost: 2000, icon: "https://i.imgur.com/niLzrfW.png", notes: "Ignores AP. 24hr battery. Stacks with all armor." }
+        ];
         const strongProjectileIds = ["ar2-orb", "rpg", "grenade", "mine", "crossbow", "bugbait"];
         const ammoTiers = ["Full", "High", "OK", "Low", "Very Low", "Out"];
         // ==========================================
@@ -852,7 +922,7 @@
             activeCharId = currentUser.toLowerCase().replace(' ', '-');
         }
         let charData = {};
-        let globalState = { characters: {}, webhook: "", presets: defaultPresets };
+        let globalState = { characters: {}, webhook: "", presets: defaultPresets, armorPresets: defaultArmorPresets };
         let pendingRoll = null;
         let activeWeaponContext = null;
         let activeWeaponIndex = -1;
@@ -1247,10 +1317,12 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                     if (data) {
                         globalState = data;
                         if (!globalState.presets) globalState.presets = defaultPresets;
+                        if (!globalState.armorPresets) globalState.armorPresets = defaultArmorPresets;
                         if (!isEditing) {
                             loadCharacter();
                             if (isAdmin) {
                                 renderMasterPresets();
+                                renderArmorPresets();
                             }
                         }
                     } else {
@@ -1272,6 +1344,11 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             }
             if (charData.bennies === undefined) charData.bennies = 3;
             if (!charData.weapons) charData.weapons = [];
+            if (charData.equippedArmor === undefined) charData.equippedArmor = null;
+            if (charData.equippedArmorSecondary === undefined) charData.equippedArmorSecondary = null;
+            if (charData.equippedForceField === undefined) charData.equippedForceField = null;
+            if (charData.naturalArmor === undefined) charData.naturalArmor = 0;
+            if (charData.equippedArmorPenalty === undefined) charData.equippedArmorPenalty = 0;
             if (!charData.derived) charData.derived = { pace: "6", parryOverride: 0, toughnessOverride: 0 };
             if (charData.derived.parryOverride === undefined) charData.derived.parryOverride = 0;
             if (charData.derived.toughnessOverride === undefined) charData.derived.toughnessOverride = 0;
@@ -1315,6 +1392,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (unshakeBtn) unshakeBtn.disabled = (charData.bennies || 0) <= 0;
             renderSheet();
             renderWeapons();
+            renderArmor();
         }
         async function saveCharacter() {
             let showSync = localStorage.getItem('lambdaSyncNotif') === 'on';
@@ -1335,6 +1413,13 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         async function saveGlobalPresets() {
             if (isFirebaseConfigured) {
                 await set(ref(db, 'campaignState/presets'), globalState.presets);
+            } else {
+                localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+            }
+        }
+        async function saveGlobalArmorPresets() {
+            if (isFirebaseConfigured) {
+                await set(ref(db, 'campaignState/armorPresets'), globalState.armorPresets);
             } else {
                 localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
             }
@@ -2141,6 +2226,80 @@ ${reloadBtn}
                 globalState.presets.splice(index, 1);
                 saveGlobalPresets();
                 renderMasterPresets();
+            }
+        }
+        // ==========================================
+        // 8B. ARMOR PRESETS GENERATOR (ADMIN ONLY)
+        // ==========================================
+        function renderArmorPresets() {
+            document.getElementById('armor-presets-panel').style.display = 'block';
+            const tbody = document.getElementById('armor-presets-body');
+            tbody.innerHTML = '';
+            globalState.armorPresets.forEach((p, index) => {
+                tbody.innerHTML += `
+<tr>
+<td style="text-align:center;"><img style="width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 1px var(--theme-color));" src="${p.icon}"></td>
+<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="name">${p.name}</td>
+<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="armor" style="width:40px; text-align:center;">${p.armor}</td>
+<td>
+<select class="ammo-tier-select armor-type-select" data-index="${index}" style="width:90px;">
+<option value="General" ${p.armorType === 'General' ? 'selected' : ''}>General</option>
+<option value="Ballistic" ${p.armorType === 'Ballistic' ? 'selected' : ''}>Ballistic</option>
+<option value="Energy" ${p.armorType === 'Energy' ? 'selected' : ''}>Energy</option>
+</select>
+</td>
+<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="ballisticProtection" style="width:30px; text-align:center;">${p.ballisticProtection || 0}</td>
+<td style="text-align:center;"><input type="checkbox" class="armor-hw-toggle" data-index="${index}" ${p.heavyArmor ? "checked" : ""} style="width:18px; height:18px;"></td>
+<td style="text-align:center;"><input type="checkbox" class="armor-ff-toggle" data-index="${index}" ${p.forceField ? "checked" : ""} style="width:18px; height:18px;"></td>
+<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="minStr" style="width:40px; text-align:center;">${p.minStr}</td>
+<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="icon" style="max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.icon}</td>
+<td><button class="die-btn del-btn" onclick="deleteArmorPreset(${index})">DELETE</button></td>
+</tr>`;
+            });
+            document.querySelectorAll('.armor-preset-edit').forEach(el => {
+                el.addEventListener('blur', async (e) => {
+                    let idx = e.target.dataset.index;
+                    let field = e.target.dataset.field;
+                    let val = e.target.innerText.trim();
+                    if (field === 'armor' || field === 'ballisticProtection') val = parseInt(val) || 0;
+                    globalState.armorPresets[idx][field] = val;
+                    await saveGlobalArmorPresets();
+                });
+            });
+            document.querySelectorAll('.armor-type-select').forEach(el => {
+                el.addEventListener('change', async (e) => {
+                    globalState.armorPresets[e.target.dataset.index].armorType = e.target.value;
+                    await saveGlobalArmorPresets();
+                });
+            });
+            document.querySelectorAll('.armor-hw-toggle').forEach(el => {
+                el.addEventListener('change', async (e) => {
+                    globalState.armorPresets[e.target.dataset.index].heavyArmor = e.target.checked;
+                    await saveGlobalArmorPresets();
+                });
+            });
+            document.querySelectorAll('.armor-ff-toggle').forEach(el => {
+                el.addEventListener('change', async (e) => {
+                    globalState.armorPresets[e.target.dataset.index].forceField = e.target.checked;
+                    await saveGlobalArmorPresets();
+                });
+            });
+        }
+        function addCustomArmorPreset() {
+            let id = "armor_custom_" + Date.now();
+            globalState.armorPresets.push({
+                id: id, name: "New Armor", armor: 2, armorType: "General", heavyArmor: false,
+                ballisticProtection: 0, forceField: false, minStr: "d4", weight: 5, cost: 100,
+                icon: "https://i.imgur.com/niLzrfW.png", notes: ""
+            });
+            saveGlobalArmorPresets();
+            renderArmorPresets();
+        }
+        function deleteArmorPreset(index) {
+            if (confirm("WARNING: Erase this Armor Preset from global archives?")) {
+                globalState.armorPresets.splice(index, 1);
+                saveGlobalArmorPresets();
+                renderArmorPresets();
             }
         }
         // ==========================================
@@ -3408,6 +3567,214 @@ window.onTargetDodgeChange = async function () {
         function cancelEquip() {
             document.getElementById('weapon-add-modal').style.display = 'none';
         }
+        // ==========================================
+        // ARMOR EQUIP/UNEQUIP SYSTEM
+        // ==========================================
+        function openArmorEquipModal() {
+            document.getElementById('armor-slot-select').value = 'primary';
+            filterArmorPresets();
+            document.getElementById('armor-equip-modal').style.display = 'block';
+        }
+        function filterArmorPresets() {
+            const slot = document.getElementById('armor-slot-select').value;
+            const select = document.getElementById('equip-armor-select');
+            select.innerHTML = '';
+            globalState.armorPresets.forEach(p => {
+                if (slot === 'forcefield' && p.forceField) {
+                    select.innerHTML += `<option value="${p.id}">${p.name} (Armor: ${p.armor})</option>`;
+                } else if (slot !== 'forcefield' && !p.forceField) {
+                    select.innerHTML += `<option value="${p.id}">${p.name} (Armor: ${p.armor}, ${p.armorType})</option>`;
+                }
+            });
+            updateArmorPreview();
+        }
+        function updateArmorPreview() {
+            const id = document.getElementById('equip-armor-select').value;
+            const preset = globalState.armorPresets.find(p => p.id === id);
+            const preview = document.getElementById('armor-preview');
+            if (!preset) { preview.innerHTML = ''; return; }
+            let html = `<b>${preset.name}</b><br>`;
+            html += `Armor: +${preset.armor} | Type: ${preset.armorType} | BP: ${preset.ballisticProtection || 0}<br>`;
+            html += `Min Str: ${preset.minStr} | Weight: ${preset.weight || '—'} lbs`;
+            if (preset.heavyArmor) html += ` | <span style="color:#ff3333;">HEAVY ARMOR</span>`;
+            if (preset.forceField) html += ` | <span style="color:#00ccff;">FORCE FIELD (ignores AP)</span>`;
+            if (preset.notes) html += `<br><i>${preset.notes}</i>`;
+            preview.innerHTML = html;
+        }
+        function confirmArmorEquip() {
+            const slot = document.getElementById('armor-slot-select').value;
+            const id = document.getElementById('equip-armor-select').value;
+            const preset = globalState.armorPresets.find(p => p.id === id);
+            if (!preset) { cancelArmorEquip(); return; }
+            let newArmor = JSON.parse(JSON.stringify(preset));
+            let strDie = getDieStep(charData.attributes.Strength.die);
+            let reqDie = getDieStep(newArmor.minStr);
+            let penalty = 0;
+            if (strDie < reqDie) {
+                const dice = [4, 6, 8, 10, 12];
+                let currIdx = dice.indexOf(strDie);
+                let reqIdx = dice.indexOf(reqDie);
+                if (reqIdx > currIdx) {
+                    penalty = reqIdx - currIdx;
+                    if (slot === 'secondary' && charData.equippedArmor) {
+                        penalty += 1;
+                    }
+                    logToTerminal(`> <span style="color:#ff9900;">[!] ARMOR MIN STR NOT MET: ${newArmor.name} requires ${newArmor.minStr}. You have d${strDie}. Penalty: -${penalty} to Pace and Agility-linked skills.</span>`);
+                }
+            }
+            if (slot === 'primary') {
+                charData.equippedArmor = newArmor;
+                charData.equippedArmorPenalty = penalty;
+            } else if (slot === 'secondary') {
+                charData.equippedArmorSecondary = newArmor;
+                if (charData.equippedArmor) {
+                    let primaryReq = getDieStep(charData.equippedArmor.minStr);
+                    let adjustedReq = primaryReq + 1;
+                    let primaryPenalty = 0;
+                    if (strDie < adjustedReq) {
+                        const dice = [4, 6, 8, 10, 12];
+                        let currIdx = dice.indexOf(strDie);
+                        let adjIdx = dice.indexOf(adjustedReq);
+                        if (adjIdx === -1) adjIdx = dice.length - 1;
+                        if (adjIdx > currIdx) primaryPenalty = adjIdx - currIdx;
+                    }
+                    charData.equippedArmorPenalty = primaryPenalty;
+                }
+            } else if (slot === 'forcefield') {
+                charData.equippedForceField = newArmor;
+            }
+            saveCharacter();
+            renderSheet();
+            renderArmor();
+            document.getElementById('armor-equip-modal').style.display = 'none';
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} equipped armor`,
+                    description: `**${newArmor.name}** → ${slot === 'primary' ? 'Primary' : slot === 'secondary' ? 'Secondary Layer' : 'Force Field'} slot\nArmor: +${newArmor.armor} | Type: ${newArmor.armorType} | BP: ${newArmor.ballisticProtection || 0}`,
+                    color: 0x0099ff,
+                    thumbnail: { url: newArmor.icon }
+                };
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => {});
+            }
+        }
+        function cancelArmorEquip() {
+            document.getElementById('armor-equip-modal').style.display = 'none';
+        }
+        function unequipArmor(slot) {
+            let removed = null;
+            if (slot === 'primary') {
+                removed = charData.equippedArmor;
+                charData.equippedArmor = null;
+                charData.equippedArmorPenalty = 0;
+            } else if (slot === 'secondary') {
+                removed = charData.equippedArmorSecondary;
+                charData.equippedArmorSecondary = null;
+                if (charData.equippedArmor) {
+                    let strDie = getDieStep(charData.attributes.Strength.die);
+                    let reqDie = getDieStep(charData.equippedArmor.minStr);
+                    let penalty = 0;
+                    if (strDie < reqDie) {
+                        const dice = [4, 6, 8, 10, 12];
+                        let currIdx = dice.indexOf(strDie);
+                        let reqIdx = dice.indexOf(reqDie);
+                        if (reqIdx > currIdx) penalty = reqIdx - currIdx;
+                    }
+                    charData.equippedArmorPenalty = penalty;
+                }
+            } else if (slot === 'forcefield') {
+                removed = charData.equippedForceField;
+                charData.equippedForceField = null;
+            }
+            saveCharacter();
+            renderSheet();
+            renderArmor();
+            if (removed && globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} unequipped armor`,
+                    description: `Removed **${removed.name}** from ${slot} slot.`,
+                    color: 0xff9900
+                };
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => {});
+            }
+        }
+        function updateNaturalArmor(val) {
+            charData.naturalArmor = parseInt(val) || 0;
+            saveCharacter();
+            renderSheet();
+            renderArmor();
+        }
+        function renderArmor() {
+            const container = document.getElementById('armor-list-container');
+            container.innerHTML = '';
+            document.getElementById('natural-armor-input').value = charData.naturalArmor || 0;
+            if (charData.equippedArmor) {
+                let a = charData.equippedArmor;
+                container.innerHTML += `
+<div class="weapon-card">
+<img class="weapon-icon" src="${a.icon}" alt="${a.name}" style="width:64px; height:64px;">
+<div class="weapon-details" style="grid-template-columns: repeat(2, 1fr);">
+<div><b>${a.name.toUpperCase()}</b> <span style="opacity:0.6;">[PRIMARY]</span></div>
+<div>Armor: <b>+${a.armor}</b></div>
+<div>Type: <i>${a.armorType}</i></div>
+<div>BP: <i>${a.ballisticProtection || 0}</i></div>
+<div>Min Str: <i>${a.minStr}</i></div>
+${a.heavyArmor ? '<div style="color:#ff3333;">HEAVY ARMOR</div>' : ''}
+</div>
+<div class="weapon-actions">
+<button class="die-btn del-btn" onclick="unequipArmor('primary')">UNEQUIP</button>
+</div>
+</div>`;
+            }
+            if (charData.equippedArmorSecondary) {
+                let a = charData.equippedArmorSecondary;
+                let halfVal = Math.floor((parseInt(a.armor) || 0) / 2);
+                container.innerHTML += `
+<div class="weapon-card" style="opacity: 0.8;">
+<img class="weapon-icon" src="${a.icon}" alt="${a.name}" style="width:64px; height:64px;">
+<div class="weapon-details" style="grid-template-columns: repeat(2, 1fr);">
+<div><b>${a.name.toUpperCase()}</b> <span style="opacity:0.6;">[SECONDARY — half value]</span></div>
+<div>Armor: <b>+${halfVal}</b> <span style="opacity:0.5;">(base ${a.armor})</span></div>
+<div>Type: <i>${a.armorType}</i></div>
+<div>BP: <i>${a.ballisticProtection || 0}</i></div>
+</div>
+<div class="weapon-actions">
+<button class="die-btn del-btn" onclick="unequipArmor('secondary')">UNEQUIP</button>
+</div>
+</div>`;
+            }
+            if (charData.equippedForceField) {
+                let a = charData.equippedForceField;
+                container.innerHTML += `
+<div class="weapon-card" style="border-color: #00ccff;">
+<img class="weapon-icon" src="${a.icon}" alt="${a.name}" style="width:64px; height:64px;">
+<div class="weapon-details" style="grid-template-columns: repeat(2, 1fr);">
+<div><b>${a.name.toUpperCase()}</b> <span style="color:#00ccff;">[FORCE FIELD]</span></div>
+<div>Armor: <b>+${a.armor}</b> <span style="opacity:0.5;">(ignores AP)</span></div>
+<div>Type: <i>${a.armorType}</i></div>
+<div>Stacks with all armor</div>
+</div>
+<div class="weapon-actions">
+<button class="die-btn del-btn" onclick="unequipArmor('forcefield')">UNEQUIP</button>
+</div>
+</div>`;
+            }
+            if (!charData.equippedArmor && !charData.equippedArmorSecondary && !charData.equippedForceField) {
+                container.innerHTML += `<div style="text-align: center; font-style: italic; opacity: 0.6; padding: 20px;">[ NO ARMOR EQUIPPED ]</div>`;
+            }
+            let nat = parseInt(charData.naturalArmor) || 0;
+            let worn = 0;
+            let ff = 0;
+            if (charData.equippedArmor) worn += parseInt(charData.equippedArmor.armor) || 0;
+            if (charData.equippedArmorSecondary) worn += Math.floor((parseInt(charData.equippedArmorSecondary.armor) || 0) / 2);
+            if (charData.equippedForceField) ff = parseInt(charData.equippedForceField.armor) || 0;
+            let total = nat + worn + ff;
+            if (total > 0) {
+                container.innerHTML += `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--theme-color); font-size: 0.9em;">
+<b>Total Armor: ${total}</b> (Nat ${nat} + Worn ${worn} + FF ${ff})
+${charData.equippedArmorPenalty > 0 ? `<br><span style="color:#ff9900;">Min Str Penalty: -${charData.equippedArmorPenalty} to Pace & Agility skills</span>` : ''}
+</div>`;
+            }
+        }
         function clearLog() {
             document.getElementById('roll-terminal').innerHTML = '<div>> TERMINAL LOG CLEARED...</div>';
         }
@@ -3447,6 +3814,15 @@ window.onTargetDodgeChange = async function () {
         window.removeWeaponFromCharacter = removeWeaponFromCharacter;
         window.deletePreset = deletePreset;
         window.addCustomPreset = addCustomPreset;
+        window.addCustomArmorPreset = addCustomArmorPreset;
+        window.deleteArmorPreset = deleteArmorPreset;
+        window.renderArmorPresets = renderArmorPresets;
+        window.openArmorEquipModal = openArmorEquipModal;
+        window.confirmArmorEquip = confirmArmorEquip;
+        window.cancelArmorEquip = cancelArmorEquip;
+        window.unequipArmor = unequipArmor;
+        window.updateNaturalArmor = updateNaturalArmor;
+        window.filterArmorPresets = filterArmorPresets;
         window.rollWeaponAttack = rollWeaponAttack;
         window.rollWeaponDamage = rollWeaponDamage;
         window.unarmedAttack = unarmedAttack;
