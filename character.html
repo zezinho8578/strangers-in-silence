@@ -598,6 +598,8 @@
                             <th>Shots</th>
                             <th>Min Str</th>
                             <th>3RB?</th>
+                            <th>HW?</th>
+                            <th>Dmg Type</th>
                             <th>Icon Image Link</th>
                             <th>Action</th>
                         </tr>
@@ -637,6 +639,8 @@
             </div>
             <div id="target-status"
                 style="font-size:0.85em; opacity:0.9; text-align:left; min-height:1.2em; margin: 4px 0;"></div>
+            <div id="effective-toughness-preview"
+                style="font-size:0.85em; color:#00ff00; text-align:left; min-height:1.2em; margin: 4px 0; display:none;"></div>
             <div class="setting-row" id="target-dodge-row" style="display:none;">
                 <span>Target has Dodge/Deflect (-2):</span>
                 <input type="checkbox" id="target-dodge-checkbox" onchange="onTargetDodgeChange()"
@@ -794,22 +798,22 @@
         // 2. DEFAULT WEAPON PRESETS DATABASE
         // ==========================================
         const defaultPresets = [
-            { id: "crowbar", name: "Crowbar", range: "Melee", damage: "Str+d4", ap: "1", rof: "1", shots: "—", minStr: "d4", icon: "https://i.imgur.com/niLzrfW.png" },
-            { id: "stunstick", name: "Stunstick", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", shots: "Charge 20", minStr: "d4", icon: "https://i.imgur.com/pMPZprv.png" },
-            { id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", shots: "18", minStr: "d4", icon: "https://i.imgur.com/sAz8rBR.png" },
-            { id: "magnum-357", name: "357 Magnum", range: "15/30/60", damage: "2d10", ap: "2", rof: "1", shots: "6", minStr: "d6", icon: "https://i.imgur.com/cLsJTiP.png" },
-            { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", shots: "30", minStr: "d6", burst: true, icon: "https://i.imgur.com/oAbqfGW.png" },
-            { id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", shots: "6", minStr: "d8", icon: "https://i.imgur.com/8ewEl7D.png" },
-            { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", shots: "2", minStr: "d8", icon: "https://i.imgur.com/8ewEl7D.png" },
-            { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", shots: "30", minStr: "d6", burst: true, icon: "https://i.imgur.com/3rgRKGo.png" },
-            { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", shots: "1", minStr: "d6", icon: "https://i.imgur.com/4lFt2CC.png" },
-            { id: "crossbow", name: "Crossbow", range: "24/48/96", damage: "3d10", ap: "4", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/2oHfVXb.png" },
-            { id: "rpg", name: "RPG Launcher", range: "36/72/144", damage: "6d10", ap: "6", rof: "1", shots: "1", minStr: "d8", icon: "https://i.imgur.com/yyVsqkD.png" },
-            { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "—", shots: "1", minStr: "d6", icon: "https://i.imgur.com/9a4Uprg.png" },
-            { id: "mine", name: "SLAM Mine", range: "Contact", damage: "5d6", ap: "3", rof: "—", shots: "1", minStr: "d4", icon: "https://i.imgur.com/38WpCXz.png" },
-            { id: "grav-punt", name: "Gravity Gun (Punt)", range: "6/12/24", damage: "Varies", ap: "Varies", rof: "1", shots: "—", minStr: "d6", icon: "https://i.imgur.com/fAMbiF1.png" },
-            { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "2", shots: "Unlimited", minStr: "d6", icon: "https://i.imgur.com/vhkAPmf.png" },
-            { id: "bugbait", name: "Bugbait", range: "12/24/48", damage: "Special", ap: "—", rof: "1", shots: "1", minStr: "d4", icon: "https://i.imgur.com/gwitRFd.png" }
+            { id: "crowbar", name: "Crowbar", range: "Melee", damage: "Str+d4", ap: "1", rof: "1", shots: "—", minStr: "d4", damageType: "Melee", icon: "https://i.imgur.com/niLzrfW.png" },
+            { id: "stunstick", name: "Stunstick", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", shots: "Charge 20", minStr: "d4", damageType: "Melee", icon: "https://i.imgur.com/pMPZprv.png" },
+            { id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", shots: "18", minStr: "d4", damageType: "Ballistic", icon: "https://i.imgur.com/sAz8rBR.png" },
+            { id: "magnum-357", name: "357 Magnum", range: "15/30/60", damage: "2d10", ap: "2", rof: "1", shots: "6", minStr: "d6", damageType: "Ballistic", icon: "https://i.imgur.com/cLsJTiP.png" },
+            { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", shots: "30", minStr: "d6", burst: true, damageType: "Ballistic", icon: "https://i.imgur.com/oAbqfGW.png" },
+            { id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", shots: "6", minStr: "d8", damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" },
+            { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", shots: "2", minStr: "d8", damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" },
+            { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", shots: "30", minStr: "d6", burst: true, damageType: "Ballistic", icon: "https://i.imgur.com/3rgRKGo.png" },
+            { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", shots: "1", minStr: "d6", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/4lFt2CC.png" },
+            { id: "crossbow", name: "Crossbow", range: "24/48/96", damage: "3d10", ap: "4", rof: "1", shots: "1", minStr: "d8", damageType: "Ballistic", icon: "https://i.imgur.com/2oHfVXb.png" },
+            { id: "rpg", name: "RPG Launcher", range: "36/72/144", damage: "6d10", ap: "6", rof: "1", shots: "1", minStr: "d8", heavyWeapon: true, damageType: "Ballistic", icon: "https://i.imgur.com/yyVsqkD.png" },
+            { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "—", shots: "1", minStr: "d6", damageType: "Ballistic", icon: "https://i.imgur.com/9a4Uprg.png" },
+            { id: "mine", name: "SLAM Mine", range: "Contact", damage: "5d6", ap: "3", rof: "—", shots: "1", minStr: "d4", damageType: "Ballistic", icon: "https://i.imgur.com/38WpCXz.png" },
+            { id: "grav-punt", name: "Gravity Gun (Punt)", range: "6/12/24", damage: "Varies", ap: "Varies", rof: "1", shots: "—", minStr: "d6", damageType: "Ballistic", icon: "https://i.imgur.com/fAMbiF1.png" },
+            { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "2", shots: "Unlimited", minStr: "d6", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/vhkAPmf.png" },
+            { id: "bugbait", name: "Bugbait", range: "12/24/48", damage: "Special", ap: "—", rof: "1", shots: "1", minStr: "d4", damageType: "Ballistic", icon: "https://i.imgur.com/gwitRFd.png" }
         ];
         const strongProjectileIds = ["ar2-orb", "rpg", "grenade", "mine", "crossbow", "bugbait"];
         const ammoTiers = ["Full", "High", "OK", "Low", "Very Low", "Out"];
@@ -952,48 +956,6 @@ function storeAttackContext(ctx, hit, results) {
     });
 }
 
-function parseApForDamage(ap) {
-    const raw = (ap === undefined || ap === null) ? "0" : String(ap);
-    const lower = raw.toLowerCase();
-
-    if (lower.includes("ignore")) {
-        return {
-            amount: 999,
-            ignore: true,
-            label: raw.trim() || "Ignore Armor"
-        };
-    }
-
-    const match = lower.match(/-?\d+/);
-    if (!match) {
-        return {
-            amount: 0,
-            ignore: false,
-            label: raw.trim() || "0"
-        };
-    }
-
-    return {
-        amount: parseInt(match[0], 10),
-        ignore: false,
-        label: raw.trim() || match[0]
-    };
-}
-
-function buildDamageBreakdown(damageTotal, toughness, armor, ap, effectiveToughness) {
-    let breakdown = `${damageTotal} damage vs Toughness ${toughness}`;
-
-    if (ap.ignore) {
-        if (armor > 0) breakdown += ` + Armor ${armor} (ignored by AP ${ap.label})`;
-    } else {
-        if (armor > 0) breakdown += ` + Armor ${armor} − AP ${Math.max(0, ap.amount)}`;
-        else if (ap.amount > 0) breakdown += ` − AP ${ap.amount}`;
-    }
-
-    breakdown += ` = ${effectiveToughness}`;
-    return breakdown;
-}
-
 async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     const result = {
         applied: false,
@@ -1038,6 +1000,12 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
 
     const target = JSON.parse(JSON.stringify(participants[idx]));
 
+    if (target.incapacitated) {
+        result.message = `> <b style="color:#ff9900;">AUTO-CHECK:</b> ${target.name} is already INCAPACITATED. No further effect.`;
+        result.plainText = `AUTO-CHECK: ${target.name} is already INCAPACITATED. No further effect.`;
+        return result;
+    }
+
     const toughness = parseInt(target.toughness) || 0;
     const armor = parseInt(target.armor) || 0;
 
@@ -1046,8 +1014,25 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         : attack.ap;
 
     const ap = parseApForDamage(apInput);
-    const effectiveArmor = ap.ignore ? 0 : Math.max(0, armor - Math.max(0, ap.amount));
-    const effectiveToughness = toughness + effectiveArmor;
+
+    // Heavy Armor check: non-heavy weapons cannot damage Heavy Armor targets
+    if (target.heavyArmor && weaponObj && !weaponObj.heavyWeapon && !ap.ignore) {
+        result.message = `> <b style="color:#ff3333;">HEAVY ARMOR:</b> ${weaponObj.name || "This weapon"} is NOT a Heavy Weapon. ${target.name}'s Heavy Armor is immune to this attack.`;
+        result.plainText = `HEAVY ARMOR: ${weaponObj.name || "This weapon"} cannot damage ${target.name}'s Heavy Armor.`;
+        return result;
+    }
+
+    // Determine if armor applies based on damage type vs armor type
+    let armorApplies = true;
+    const weaponDmgType = (weaponObj && weaponObj.damageType) || "Ballistic";
+    const targetArmorType = target.armorType || "General";
+    if (targetArmorType === "Ballistic" && weaponDmgType !== "Ballistic") {
+        armorApplies = false;
+    } else if (targetArmorType === "Energy" && weaponDmgType !== "Energy") {
+        armorApplies = false;
+    }
+    const applicableArmor = armorApplies ? armor : 0;
+    const effectiveToughness = computeEffectiveToughness(toughness, applicableArmor, ap);
 
     const breakdown = buildDamageBreakdown(
         damageTotal,
@@ -2097,6 +2082,14 @@ ${reloadBtn}
 <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="shots">${p.shots}</td>
 <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="minStr">${p.minStr}</td>
 <td style="text-align:center;"><input type="checkbox" class="burst-toggle" data-index="${index}" ${p.burst ? "checked" : ""} style="width:18px; height:18px;" title="Has Three-Round Burst ability"></td>
+<td style="text-align:center;"><input type="checkbox" class="hw-toggle" data-index="${index}" ${p.heavyWeapon ? "checked" : ""} style="width:18px; height:18px;" title="Heavy Weapon — can damage Heavy Armor"></td>
+<td>
+<select class="ammo-tier-select dmg-type-select" data-index="${index}" style="width:90px;">
+<option value="Ballistic" ${p.damageType === 'Ballistic' ? 'selected' : ''}>Ballistic</option>
+<option value="Energy" ${p.damageType === 'Energy' ? 'selected' : ''}>Energy</option>
+<option value="Melee" ${p.damageType === 'Melee' ? 'selected' : ''}>Melee</option>
+</select>
+</td>
 <td class="preset-edit" contenteditable="true" data-index="${index}" data-field="icon" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.icon}</td>
 <td><button class="die-btn del-btn" onclick="deletePreset(${index})">DELETE</button></td>
 </tr>`;
@@ -2115,11 +2108,23 @@ ${reloadBtn}
                     await saveGlobalPresets();
                 });
             });
+            document.querySelectorAll('.hw-toggle').forEach(el => {
+                el.addEventListener('change', async (e) => {
+                    globalState.presets[e.target.dataset.index].heavyWeapon = e.target.checked;
+                    await saveGlobalPresets();
+                });
+            });
+            document.querySelectorAll('.dmg-type-select').forEach(el => {
+                el.addEventListener('change', async (e) => {
+                    globalState.presets[e.target.dataset.index].damageType = e.target.value;
+                    await saveGlobalPresets();
+                });
+            });
         }
         function addCustomPreset() {
             let id = "custom_" + Date.now();
             globalState.presets.push({
-                id: id, name: "New Weapon", range: "Melee", damage: "2d6", ap: "0", rof: "1", shots: "—", minStr: "d4", burst: false, icon: "https://i.imgur.com/niLzrfW.png"
+                id: id, name: "New Weapon", range: "Melee", damage: "2d6", ap: "0", rof: "1", shots: "—", minStr: "d4", burst: false, heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/niLzrfW.png"
             });
             saveGlobalPresets();
             renderMasterPresets();
@@ -2625,6 +2630,24 @@ function updateDefenderModifierAndStatus() {
     }
 
     statusEl.innerHTML = html;
+
+    // Effective Toughness preview
+    let previewEl = document.getElementById('effective-toughness-preview');
+    if (target && activeWeaponContext) {
+        let wepAp = parseApForDamage(activeWeaponContext.ap || "0");
+        let wepDmgType = activeWeaponContext.damageType || "Ballistic";
+        let tArmorType = target.armorType || "General";
+        let armorApplies = true;
+        if (tArmorType === "Ballistic" && wepDmgType !== "Ballistic") armorApplies = false;
+        if (tArmorType === "Energy" && wepDmgType !== "Energy") armorApplies = false;
+        let applicableArmor = armorApplies ? armor : 0;
+        let effTgh = computeEffectiveToughness(toughness, applicableArmor, wepAp);
+        let apLabel = wepAp.ignore ? "Ignore Armor" : wepAp.amount;
+        previewEl.style.display = "block";
+        previewEl.innerHTML = `⚔ Effective Toughness vs ${activeWeaponContext.name}: <b>${effTgh}</b> (Tgh ${toughness} + Armor ${applicableArmor} − AP ${apLabel})`;
+    } else {
+        previewEl.style.display = "none";
+    }
 
     defenderDisplay = `Target: ${target.name}` + (defenderModifier !== 0 ? ` (${defenderModifier > 0 ? '+' : ''}${defenderModifier} defender mod)` : "");
 }
@@ -3323,12 +3346,24 @@ window.onTargetDodgeChange = async function () {
             // B8: clear defender state on cancel
             defenderModifier = 0;
             defenderDisplay = "";
+            // Clear effective toughness preview
+            let previewEl = document.getElementById('effective-toughness-preview');
+            if (previewEl) previewEl.style.display = "none";
         }
         function confirmEquip() {
             let id = document.getElementById('equip-weapon-select').value;
             let preset = globalState.presets.find(p => p.id === id);
             if (preset) {
                 let newWeapon = JSON.parse(JSON.stringify(preset));
+                // Auto-detect damage type if not set
+                if (!newWeapon.damageType) {
+                    let rangeStr = (newWeapon.range || "").toLowerCase();
+                    if (rangeStr.includes("melee") || rangeStr.includes("contact")) {
+                        newWeapon.damageType = "Melee";
+                    } else {
+                        newWeapon.damageType = "Ballistic";
+                    }
+                }
                 normalizeWeaponAmmo(newWeapon);
                 const ammoType = getAmmoType(newWeapon);
                 if (ammoType === 'ballistic') {
