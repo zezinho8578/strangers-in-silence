@@ -459,11 +459,19 @@
                         onchange="updateActive()"></div>
                 <div class="form-row"><span>Toughness:</span><input type="number" id="edit-toughness"
                         class="form-input small" onchange="updateActive()"></div>
-                <div class="form-row"><span>Armor:</span><input type="number" id="edit-armor" class="form-input small"
-                        onchange="updateActive()"></div>
+                <div class="form-row"><span>Nat Armor:</span><input type="number" id="edit-naturalarmor" class="form-input small"
+                    onchange="updateActive()" title="Natural/structural armor (always applies)"></div>
+                <div class="form-row"><span>Worn Armor:</span><input type="number" id="edit-wornarmor" class="form-input small"
+                    onchange="updateActive()" title="Worn/equipped armor (subject to Armor Type)"></div>
+                <div class="form-row"><span>Ballistic Prot:</span><input type="number" id="edit-ballisticprotection" class="form-input small"
+                    onchange="updateActive()" title="Negates this much AP from Ballistic attacks"></div>
+                <div class="form-row"><span>Force Field:</span><input type="number" id="edit-forcefield" class="form-input small"
+                    onchange="updateActive()" title="Ignores AP, stacks with all armor"></div>
+                <div class="form-row" style="opacity:0.7; font-size:0.85em;"><span>Total Armor:</span><span id="edit-totalarmor">0</span></div>
                 <div class="form-row"><span>Scale:</span><input type="number" id="edit-scale" class="form-input small"
                         onchange="onScaleChange(this)" title="Normal=0, Large=2, Huge=4, Gargantuan=6"></div>
             </div>
+            <div id="editor-warnings" style="display:none; border:1px dashed #ff9900; padding:8px; margin-bottom:10px; font-size:0.8em; color:#ff9900;"></div>
             <div class="form-row">
                 <span>Heavy Armor:</span>
                 <label class="custom-checkbox">
@@ -764,17 +772,27 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         return result;
     }
 
-    const toughness = parseInt(target.toughness) || 0;
-    const armor = parseInt(target.armor) || 0;
-
     const apInput = (weaponObj && weaponObj.ap !== undefined && weaponObj.ap !== null)
         ? weaponObj.ap
         : attack.ap;
 
     const ap = parseApForDamage(apInput);
 
-    // Heavy Armor check: non-heavy weapons cannot damage Heavy Armor targets
-    // Fallback: check master preset list if equipped weapon snapshot lacks heavyWeapon flag
+    // Resolve weapon damage type (with preset fallback)
+    let weaponDmgType = (weaponObj && weaponObj.damageType) || null;
+    if (!weaponDmgType && weaponObj && globalState && globalState.presets) {
+        let dmgPreset = null;
+        if (weaponObj.id) {
+            dmgPreset = globalState.presets.find(p => p.id === weaponObj.id);
+        }
+        if (!dmgPreset && weaponObj.name) {
+            dmgPreset = globalState.presets.find(p => p.name === weaponObj.name);
+        }
+        if (dmgPreset && dmgPreset.damageType) weaponDmgType = dmgPreset.damageType;
+    }
+    weaponDmgType = weaponDmgType || "Ballistic";
+
+    // Heavy Armor check (before pipeline)
     let isHeavyWeapon = !!(weaponObj && weaponObj.heavyWeapon);
     if (!isHeavyWeapon && weaponObj && globalState && globalState.presets) {
         let masterPreset = null;
@@ -792,36 +810,10 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         return result;
     }
 
-    // Determine if armor applies based on damage type vs armor type
-    let armorApplies = true;
-    let weaponDmgType = (weaponObj && weaponObj.damageType) || null;
-    if (!weaponDmgType && weaponObj && globalState && globalState.presets) {
-        let dmgPreset = null;
-        if (weaponObj.id) {
-            dmgPreset = globalState.presets.find(p => p.id === weaponObj.id);
-        }
-        if (!dmgPreset && weaponObj.name) {
-            dmgPreset = globalState.presets.find(p => p.name === weaponObj.name);
-        }
-        if (dmgPreset && dmgPreset.damageType) weaponDmgType = dmgPreset.damageType;
-    }
-    weaponDmgType = weaponDmgType || "Ballistic";
-    const targetArmorType = target.armorType || "General";
-    if (targetArmorType === "Ballistic" && weaponDmgType !== "Ballistic") {
-        armorApplies = false;
-    } else if (targetArmorType === "Energy" && weaponDmgType !== "Energy") {
-        armorApplies = false;
-    }
-    const applicableArmor = armorApplies ? armor : 0;
-    const effectiveToughness = computeEffectiveToughness(toughness, applicableArmor, ap);
-
-    const breakdown = buildDamageBreakdown(
-        damageTotal,
-        toughness,
-        armor,
-        ap,
-        effectiveToughness
-    );
+    // Full armor pipeline
+    const pipeline = computeArmorPipeline(target, weaponDmgType, ap);
+    const effectiveToughness = pipeline.effectiveToughness;
+    const breakdown = buildDamageBreakdown(damageTotal, pipeline);
 
     if (damageTotal < effectiveToughness) {
         result.message = `> <b style="color:#ff9900;">AUTO-CHECK:</b> ${breakdown} → ${target.name} takes no effect.`;
@@ -977,8 +969,9 @@ function storeThreatAttackContext(hit, results) {
         window.createNewTemplate = function () {
             let id = "threat_" + Date.now();
             activeThreat = {
-                name: "New Threat", isWildCard: false, pace: 6, parry: 5, toughness: 5, armor: 0, scale: 0,
-                heavyArmor: false, armorType: "General",
+                name: "New Threat", isWildCard: false, pace: 6, parry: 5, toughness: 5,
+                naturalArmor: 0, wornArmor: 0, armor: 0, scale: 0,
+                heavyArmor: false, armorType: "General", ballisticProtection: 0, forceField: 0,
                 attributes: JSON.parse(JSON.stringify(defaultAttributes)), skills: JSON.parse(JSON.stringify(defaultSkills)), abilities: "", weapons: []
             };
             activeTemplateId = id;
@@ -987,6 +980,7 @@ function storeThreatAttackContext(hit, results) {
         window.loadTemplate = function (id) {
             activeTemplateId = id;
             activeThreat = JSON.parse(JSON.stringify(globalState.threatTemplates[id]));
+            normalizeArmorData(activeThreat);
             if (!activeThreat.attributes) activeThreat.attributes = JSON.parse(JSON.stringify(defaultAttributes));
             if (!activeThreat.skills) activeThreat.skills = JSON.parse(JSON.stringify(defaultSkills));
             if (!activeThreat.weapons) activeThreat.weapons = [];
@@ -1000,7 +994,12 @@ function storeThreatAttackContext(hit, results) {
             document.getElementById('edit-pace').value = activeThreat.pace || 6;
             document.getElementById('edit-parry').value = activeThreat.parry || 5;
             document.getElementById('edit-toughness').value = activeThreat.toughness || 5;
-            document.getElementById('edit-armor').value = activeThreat.armor || 0;
+            document.getElementById('edit-naturalarmor').value = activeThreat.naturalArmor || 0;
+            document.getElementById('edit-wornarmor').value = activeThreat.wornArmor || 0;
+            document.getElementById('edit-ballisticprotection').value = activeThreat.ballisticProtection || 0;
+            document.getElementById('edit-forcefield').value = activeThreat.forceField || 0;
+            let totalArmorDisplay = (parseInt(activeThreat.naturalArmor) || 0) + (parseInt(activeThreat.wornArmor) || 0) + (parseInt(activeThreat.forceField) || 0);
+            document.getElementById('edit-totalarmor').innerText = totalArmorDisplay;
             document.getElementById('edit-scale').value = activeThreat.scale || 0;
             document.getElementById('edit-heavyarmor').checked = !!activeThreat.heavyArmor;
             document.getElementById('edit-armortype').value = activeThreat.armorType || "General";
@@ -1070,7 +1069,23 @@ function storeThreatAttackContext(hit, results) {
             activeThreat.pace = parseInt(document.getElementById('edit-pace').value) || 6;
             activeThreat.parry = parseInt(document.getElementById('edit-parry').value) || 5;
             activeThreat.toughness = parseInt(document.getElementById('edit-toughness').value) || 5;
-            activeThreat.armor = parseInt(document.getElementById('edit-armor').value) || 0;
+            activeThreat.naturalArmor = parseInt(document.getElementById('edit-naturalarmor').value) || 0;
+            activeThreat.wornArmor = parseInt(document.getElementById('edit-wornarmor').value) || 0;
+            activeThreat.ballisticProtection = parseInt(document.getElementById('edit-ballisticprotection').value) || 0;
+            activeThreat.forceField = parseInt(document.getElementById('edit-forcefield').value) || 0;
+            activeThreat.armor = activeThreat.naturalArmor + activeThreat.wornArmor + activeThreat.forceField;
+            let totalArmorDisplay = activeThreat.armor;
+            document.getElementById('edit-totalarmor').innerText = totalArmorDisplay;
+            // Validation warnings
+            let warnings = validateThreatTemplate(activeThreat);
+            let warnEl = document.getElementById('editor-warnings');
+            if (warnings.length > 0) {
+                warnEl.style.display = "block";
+                warnEl.innerHTML = warnings.join("<br>");
+            } else {
+                warnEl.style.display = "none";
+                warnEl.innerHTML = "";
+            }
             activeThreat.scale = parseInt(document.getElementById('edit-scale').value) || 0;
             activeThreat.heavyArmor = document.getElementById('edit-heavyarmor').checked;
             activeThreat.armorType = document.getElementById('edit-armortype').value;
@@ -1133,25 +1148,25 @@ function storeThreatAttackContext(hit, results) {
         window.seedBestiary = async function () {
             if (!confirm("Initialize Master HL2 Bestiary? This will overwrite standard templates with 19 pre-configured threats.")) return;
             const hl2Threats = {
-                "hl2_headcrab": { name: "Headcrab", isWildCard: false, pace: 6, parry: 5, toughness: 4, armor: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d6", Notice: "d6", Stealth: "d8" }, abilities: "Leap: Jumps 6\" ignoring elevation.\nLatch: Raise on Fighting roll latches onto head. Victim rolls Vigor or becomes Shaken and starts transforming.", weapons: [{ name: "Latch/Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_headcrab_fast": { name: "Fast Headcrab", isWildCard: false, pace: 8, parry: 5, toughness: 3, armor: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d10", Smarts: "d4", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Athletics: "d10", Fighting: "d6", Notice: "d8", Stealth: "d10" }, abilities: "Leap & Latch.", weapons: [{ name: "Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_headcrab_poison": { name: "Poison Headcrab", isWildCard: false, pace: 6, parry: 6, toughness: 5, armor: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8", Intimidation: "d10" }, abilities: "Leap & Latch.\nToxic Bite: Hit requires Vigor roll. Fail = Fatigue. Success = Shaken with pain (no Spirit recovery next round).", weapons: [{ name: "Toxic Bite", range: "Melee", damage: "Str", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_zombie": { name: "Zombie", isWildCard: false, pace: 4, parry: 5, toughness: 7, armor: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d8", Vigor: "d8" }, skills: { Fighting: "d6", Intimidation: "d6", Notice: "d6", Throwing: "d6", Athletics: "d6" }, abilities: "Undead: +2 recover Shaken, no Called Shot dmg, immune poison/disease.\nHeadcrab Survivor: Destroying body drops 1-Wound Headcrab.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }, { name: "Swat Object", range: "3/6/12", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: defaultWeaponIcon }] },
-                "hl2_zombie_fast": { name: "Fast Zombie", isWildCard: false, pace: 8, parry: 6, toughness: 5, armor: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d10", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d6" }, abilities: "Undead.\nWall Crawler: Climb verticals at Pace 8.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_zombie_poison": { name: "Poison Zombie", isWildCard: false, pace: 4, parry: 6, toughness: 8, armor: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Undead.\nToxic Aura: Start turn in melee = Vigor roll or Fatigue.\nHive: Can throw 2-3 Poison Headcrabs.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }, { name: "Throw Headcrab", range: "4/8/16", damage: "Special", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: defaultWeaponIcon }] },
-                "hl2_antlion": { name: "Antlion", isWildCard: false, pace: 8, parry: 6, toughness: 6, armor: 1, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Flight: Winged flight at Pace 8.\nBurrower: Hides underground, pops out as action.", weapons: [{ name: "Bite/Claws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_antlion_guard": { name: "Antlion Guard", isWildCard: true, pace: 8, parry: 6, toughness: 12, armor: 2, scale: 2, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d12+2", Vigor: "d12" }, skills: { Athletics: "d8", Fighting: "d8", Intimidation: "d10", Notice: "d6" }, abilities: "Charge: +4 Dmg and +2 Athletics pushback if runs 6\" straight line.\nCarapace: +2 Armor.\nSize +2: Large.", weapons: [{ name: "Ram/Gore", range: "Melee", damage: "Str+d8", ap: "2", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_scanner": { name: "City Scanner", isWildCard: false, pace: 10, parry: 4, toughness: 6, armor: 2, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Driving: "d8", Notice: "d10", Taunt: "d6" }, abilities: "Construct: +2 recover Shaken, immune poison/disease, no Called Shot dmg.\nMark Target: Grants Combine +1 hit vs target.\nFlashbulb: Small Burst, Vigor or Distracted 1d4 rnds.", weapons: [] },
-                "hl2_manhack": { name: "Manhack", isWildCard: false, pace: 8, parry: 6, toughness: 5, armor: 2, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d6" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Construct.\nSmall: Attackers -2 to hit.", weapons: [{ name: "Buzzsaw", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_rollermine": { name: "Rollermine", isWildCard: false, pace: 8, parry: 4, toughness: 8, armor: 2, scale: -1, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d8", Notice: "d8" }, abilities: "Construct.\nEMP Burst: Explodes Small Burst 2d6 electrical damage when destroyed.", weapons: [{ name: "Electric Shock", range: "Melee", damage: "2d6", ap: "2", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_metrocop": { name: "Civil Protection (Metrocop)", isWildCard: false, pace: 6, parry: 4, toughness: 6, armor: 1, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Driving: "d6", Fighting: "d6", Intimidation: "d6", Notice: "d6", Shooting: "d6", Taunt: "d6", Athletics: "d6" }, abilities: "Tactical Doctrine: +1 recover Shaken near command.", weapons: [{ id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/sAz8rBR.png" }, { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/oAbqfGW.png" }, { id: "stunstick", name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: "https://i.imgur.com/pMPZprv.png" }] },
-                "hl2_combine_soldier": { name: "Combine Soldier", isWildCard: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8", Stealth: "d6", Throwing: "d6" }, abilities: "Edges: Steady Hands.", weapons: [{ id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/oAbqfGW.png" }, { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/3rgRKGo.png" }, { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/9a4Uprg.png" }] },
-                "hl2_combine_shotgunner": { name: "Combine Shotgunner", isWildCard: false, pace: 6, parry: 5, toughness: 8, armor: 2, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8" }, abilities: "Edges: Sweep.", weapons: [{ id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" }, { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" }] },
-                "hl2_combine_elite": { name: "Combine Elite", isWildCard: true, pace: 6, parry: 6, toughness: 9, armor: 3, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d8", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Shooting: "d10", Stealth: "d8" }, abilities: "Edges: Rock and Roll!", weapons: [{ id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/3rgRKGo.png" }, { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/4lFt2CC.png" }] },
-                "hl2_gunship": { name: "Combine Gunship", isWildCard: true, pace: 15, parry: 7, toughness: 17, armor: 4, scale: 4, heavyArmor: true, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: "Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms).\nPoint Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.", weapons: [{ name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }] },
-                "hl2_strider": { name: "Strider", isWildCard: true, pace: 12, parry: 7, toughness: 28, armor: 6, scale: 8, heavyArmor: true, armorType: "General", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: "Construct. Massive (+8 Tgh, -8 to be hit by small arms).\nImpale: Legs deal Str+d10 AP4 in melee.\nCrouch: Can lower body to enter buildings.", weapons: [{ name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: "10", rof: "1", heavyWeapon: true, damageType: "Energy", icon: defaultWeaponIcon }] },
-                "hl2_barnacle": { name: "Barnacle", isWildCard: false, pace: 0, parry: 2, toughness: 6, armor: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: "Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3\" up per round.\nWeak Point: Tongue is Toughness 5 to sever.", weapons: [{ name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, armor: 1, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Aquatic: Pace 10 in water.\nDrag: Raise on bite pulls target underwater (hold breath).", weapons: [{ name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] }
+                "hl2_headcrab": { name: "Headcrab", isWildCard: false, pace: 6, parry: 5, toughness: 4, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d6", Notice: "d6", Stealth: "d8" }, abilities: "Leap: Jumps 6\" ignoring elevation.\nLatch: Raise on Fighting roll latches onto head. Victim rolls Vigor or becomes Shaken and starts transforming.", weapons: [{ name: "Latch/Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_headcrab_fast": { name: "Fast Headcrab", isWildCard: false, pace: 8, parry: 5, toughness: 3, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d10", Smarts: "d4", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Athletics: "d10", Fighting: "d6", Notice: "d8", Stealth: "d10" }, abilities: "Leap & Latch.", weapons: [{ name: "Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_headcrab_poison": { name: "Poison Headcrab", isWildCard: false, pace: 6, parry: 6, toughness: 5, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8", Intimidation: "d10" }, abilities: "Leap & Latch.\nToxic Bite: Hit requires Vigor roll. Fail = Fatigue. Success = Shaken with pain (no Spirit recovery next round).", weapons: [{ name: "Toxic Bite", range: "Melee", damage: "Str", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_zombie": { name: "Zombie", isWildCard: false, pace: 4, parry: 5, toughness: 7, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d8", Vigor: "d8" }, skills: { Fighting: "d6", Intimidation: "d6", Notice: "d6", Throwing: "d6", Athletics: "d6" }, abilities: "Undead: +2 recover Shaken, no Called Shot dmg, immune poison/disease.\nHeadcrab Survivor: Destroying body drops 1-Wound Headcrab.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }, { name: "Swat Object", range: "3/6/12", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: defaultWeaponIcon }] },
+                "hl2_zombie_fast": { name: "Fast Zombie", isWildCard: false, pace: 8, parry: 6, toughness: 5, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d10", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d6" }, abilities: "Undead.\nWall Crawler: Climb verticals at Pace 8.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_zombie_poison": { name: "Poison Zombie", isWildCard: false, pace: 4, parry: 6, toughness: 8, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Undead.\nToxic Aura: Start turn in melee = Vigor roll or Fatigue.\nHive: Can throw 2-3 Poison Headcrabs.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }, { name: "Throw Headcrab", range: "4/8/16", damage: "Special", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: defaultWeaponIcon }] },
+                "hl2_antlion": { name: "Antlion", isWildCard: false, pace: 8, parry: 6, toughness: 6, naturalArmor: 1, wornArmor: 0, armor: 1, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Flight: Winged flight at Pace 8.\nBurrower: Hides underground, pops out as action.", weapons: [{ name: "Bite/Claws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_antlion_guard": { name: "Antlion Guard", isWildCard: true, pace: 8, parry: 6, toughness: 12, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: 2, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d12+2", Vigor: "d12" }, skills: { Athletics: "d8", Fighting: "d8", Intimidation: "d10", Notice: "d6" }, abilities: "Charge: +4 Dmg and +2 Athletics pushback if runs 6\" straight line.\nCarapace: +2 Armor.\nSize +2: Large.", weapons: [{ name: "Ram/Gore", range: "Melee", damage: "Str+d8", ap: "2", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_scanner": { name: "City Scanner", isWildCard: false, pace: 10, parry: 4, toughness: 6, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Driving: "d8", Notice: "d10", Taunt: "d6" }, abilities: "Construct: +2 recover Shaken, immune poison/disease, no Called Shot dmg.\nMark Target: Grants Combine +1 hit vs target.\nFlashbulb: Small Burst, Vigor or Distracted 1d4 rnds.", weapons: [] },
+                "hl2_manhack": { name: "Manhack", isWildCard: false, pace: 8, parry: 6, toughness: 5, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d6" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Construct.\nSmall: Attackers -2 to hit.", weapons: [{ name: "Buzzsaw", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_rollermine": { name: "Rollermine", isWildCard: false, pace: 8, parry: 4, toughness: 8, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -1, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d8", Notice: "d8" }, abilities: "Construct.\nEMP Burst: Explodes Small Burst 2d6 electrical damage when destroyed.", weapons: [{ name: "Electric Shock", range: "Melee", damage: "2d6", ap: "2", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_metrocop": { name: "Civil Protection (Metrocop)", isWildCard: false, pace: 6, parry: 4, toughness: 6, naturalArmor: 0, wornArmor: 1, armor: 1, ballisticProtection: 1, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Driving: "d6", Fighting: "d6", Intimidation: "d6", Notice: "d6", Shooting: "d6", Taunt: "d6", Athletics: "d6" }, abilities: "Tactical Doctrine: +1 recover Shaken near command.", weapons: [{ id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/sAz8rBR.png" }, { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/oAbqfGW.png" }, { id: "stunstick", name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: "https://i.imgur.com/pMPZprv.png" }] },
+                "hl2_combine_soldier": { name: "Combine Soldier", isWildCard: false, pace: 6, parry: 5, toughness: 8, naturalArmor: 0, wornArmor: 2, armor: 2, ballisticProtection: 2, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8", Stealth: "d6", Throwing: "d6" }, abilities: "Edges: Steady Hands.", weapons: [{ id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/oAbqfGW.png" }, { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/3rgRKGo.png" }, { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/9a4Uprg.png" }] },
+                "hl2_combine_shotgunner": { name: "Combine Shotgunner", isWildCard: false, pace: 6, parry: 5, toughness: 8, naturalArmor: 0, wornArmor: 2, armor: 2, ballisticProtection: 2, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8" }, abilities: "Edges: Sweep.", weapons: [{ id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" }, { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" }] },
+                "hl2_combine_elite": { name: "Combine Elite", isWildCard: true, pace: 6, parry: 6, toughness: 9, naturalArmor: 0, wornArmor: 3, armor: 3, ballisticProtection: 4, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d8", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Shooting: "d10", Stealth: "d8" }, abilities: "Edges: Rock and Roll!", weapons: [{ id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/3rgRKGo.png" }, { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/4lFt2CC.png" }] },
+                "hl2_gunship": { name: "Combine Gunship", isWildCard: true, pace: 15, parry: 7, toughness: 17, naturalArmor: 4, wornArmor: 0, armor: 4, ballisticProtection: 0, forceField: 0, scale: 4, heavyArmor: true, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: "Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms).\nPoint Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.", weapons: [{ name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }] },
+                "hl2_strider": { name: "Strider", isWildCard: true, pace: 12, parry: 7, toughness: 28, naturalArmor: 6, wornArmor: 0, armor: 6, ballisticProtection: 0, forceField: 0, scale: 8, heavyArmor: true, armorType: "General", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: "Construct. Massive (+8 Tgh, -8 to be hit by small arms).\nImpale: Legs deal Str+d10 AP4 in melee.\nCrouch: Can lower body to enter buildings.", weapons: [{ name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: "10", rof: "1", heavyWeapon: true, damageType: "Energy", icon: defaultWeaponIcon }] },
+                "hl2_barnacle": { name: "Barnacle", isWildCard: false, pace: 0, parry: 2, toughness: 6, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: "Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3\" up per round.\nWeak Point: Tongue is Toughness 5 to sever.", weapons: [{ name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, naturalArmor: 1, wornArmor: 0, armor: 1, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Aquatic: Pace 10 in water.\nDrag: Raise on bite pulls target underwater (hold breath).", weapons: [{ name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] }
             };
             await update(ref(db, 'campaignState/threatTemplates'), hl2Threats);
             logToTerminal("> OVERWATCH BESTIARY FULLY INTEGRATED.");
@@ -1315,20 +1330,35 @@ function updateDefenderModifierAndStatus() {
 
     statusEl.innerHTML = html;
 
-    // Effective Toughness preview
+    // Effective Toughness preview (full pipeline)
     let previewEl = document.getElementById('effective-toughness-preview');
     if (target && activeWeaponContext) {
         let wepAp = parseApForDamage(activeWeaponContext.ap || "0");
         let wepDmgType = activeWeaponContext.damageType || "Ballistic";
-        let tArmorType = target.armorType || "General";
-        let armorApplies = true;
-        if (tArmorType === "Ballistic" && wepDmgType !== "Ballistic") armorApplies = false;
-        if (tArmorType === "Energy" && wepDmgType !== "Energy") armorApplies = false;
-        let applicableArmor = armorApplies ? armor : 0;
-        let effTgh = computeEffectiveToughness(toughness, applicableArmor, wepAp);
-        let apLabel = wepAp.ignore ? "Ignore Armor" : wepAp.amount;
+        let prevPipeline = computeArmorPipeline(target, wepDmgType, wepAp);
         previewEl.style.display = "block";
-        previewEl.innerHTML = `⚔ Effective Toughness vs ${activeWeaponContext.name}: <b>${effTgh}</b> (Tgh ${toughness} + Armor ${applicableArmor} − AP ${apLabel})`;
+        let prevHtml = `⚔ Eff Tgh vs ${activeWeaponContext.name}: <b>${prevPipeline.effectiveToughness}</b><br>`;
+        prevHtml += `&nbsp;&nbsp;Tgh ${prevPipeline.toughness}`;
+        if (prevPipeline.applicableNatural > 0 || prevPipeline.applicableWorn > 0) {
+            prevHtml += ` + Armor ${prevPipeline.totalApplicableArmor}`;
+            if (prevPipeline.applicableNatural > 0 && prevPipeline.applicableWorn > 0) {
+                prevHtml += ` (Nat ${prevPipeline.applicableNatural} + Worn ${prevPipeline.applicableWorn})`;
+            }
+        }
+        if (prevPipeline.bpApplied > 0) {
+            prevHtml += ` [BP ${prevPipeline.bpApplied}]`;
+        }
+        if (!prevPipeline.apIgnore && prevPipeline.effectiveAP > 0 && prevPipeline.totalApplicableArmor > 0) {
+            prevHtml += ` − AP ${prevPipeline.effectiveAP}`;
+        }
+        if (prevPipeline.apIgnore && prevPipeline.totalApplicableArmor > 0) {
+            prevHtml += ` (armor ignored)`;
+        }
+        if (prevPipeline.forceField > 0) {
+            prevHtml += ` + FF ${prevPipeline.forceField}`;
+        }
+        prevHtml += ` = <b>${prevPipeline.effectiveToughness}</b>`;
+        previewEl.innerHTML = prevHtml;
     } else {
         previewEl.style.display = "none";
     }
@@ -1930,7 +1960,12 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                 let newNpc = {
                     id: "npc_" + activeTemplateId + "_" + Date.now() + "_" + i, name: baseName + suffix, isPlayer: false,
                     isWildCard: activeThreat.isWildCard, parry: activeThreat.parry, toughness: activeThreat.toughness,
-                    armor: activeThreat.armor || 0, scale: parseInt(activeThreat.scale) || 0, pace: activeThreat.pace || 6,
+                    naturalArmor: parseInt(activeThreat.naturalArmor) || 0,
+                    wornArmor: parseInt(activeThreat.wornArmor) || 0,
+                    armor: (parseInt(activeThreat.naturalArmor) || 0) + (parseInt(activeThreat.wornArmor) || 0) + (parseInt(activeThreat.forceField) || 0),
+                    ballisticProtection: parseInt(activeThreat.ballisticProtection) || 0,
+                    forceField: parseInt(activeThreat.forceField) || 0,
+                    scale: parseInt(activeThreat.scale) || 0, pace: activeThreat.pace || 6,
                     heavyArmor: !!activeThreat.heavyArmor,
                     armorType: activeThreat.armorType || "General",
                     bennies: 0, // NPCs use shared GM pool
