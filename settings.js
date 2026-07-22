@@ -198,6 +198,7 @@ function injectSettingsModal() {
 // ==========================================
 // SHARED ARMOR/AP UTILITIES (used by all pages)
 // ==========================================
+
 function parseApForDamage(ap) {
     const raw = (ap === undefined || ap === null) ? "0" : String(ap);
     const lower = raw.toLowerCase();
@@ -211,18 +212,155 @@ function parseApForDamage(ap) {
     return { amount: parseInt(match[0], 10), ignore: false, label: raw.trim() || match[0] };
 }
 
-function buildDamageBreakdown(damageTotal, toughness, armor, ap, effectiveToughness) {
-    let breakdown = `${damageTotal} damage vs Toughness ${toughness}`;
-    if (ap.ignore) {
-        if (armor > 0) breakdown += ` + Armor ${armor} (ignored by AP ${ap.label})`;
-    } else {
-        if (armor > 0) breakdown += ` + Armor ${armor} − AP ${Math.max(0, ap.amount)}`;
+// --- Migration: normalize old single-armor targets to new layered model ---
+function normalizeArmorData(target) {
+    if (!target) return target;
+    // If old-format (has 'armor' but no 'naturalArmor'/'wornArmor'), migrate
+    if (target.naturalArmor === undefined && target.wornArmor === undefined) {
+        target.wornArmor = parseInt(target.armor) || 0;
+        target.naturalArmor = 0;
     }
-    breakdown += ` = ${effectiveToughness}`;
-    return breakdown;
+    if (target.naturalArmor === undefined) target.naturalArmor = 0;
+    if (target.wornArmor === undefined) target.wornArmor = 0;
+    if (target.ballisticProtection === undefined) target.ballisticProtection = 0;
+    if (target.forceField === undefined) target.forceField = 0;
+    if (target.armorType === undefined) target.armorType = "General";
+    // Recompute total 'armor' for display/backward compat
+    target.armor = (parseInt(target.naturalArmor) || 0)
+                 + (parseInt(target.wornArmor) || 0)
+                 + (parseInt(target.forceField) || 0);
+    return target;
 }
 
+// --- Main armor pipeline: single source of truth for all armor math ---
+function computeArmorPipeline(target, weaponDmgType, ap) {
+    const t = normalizeArmorData(JSON.parse(JSON.stringify(target)));
+    const naturalArmor = parseInt(t.naturalArmor) || 0;
+    const wornArmor = parseInt(t.wornArmor) || 0;
+    const bp = parseInt(t.ballisticProtection) || 0;
+    const ff = parseInt(t.forceField) || 0;
+    const toughness = parseInt(t.toughness) || 0;
+    const armorType = t.armorType || "General";
+    const heavyArmor = !!t.heavyArmor;
+
+    // Step 1: Determine which armor layers apply based on damage type
+    // Natural armor is always General (applies to everything)
+    const naturalApplies = true;
+
+    // Worn armor applies based on its armorType vs the weapon's damageType
+    let wornApplies = true;
+    if (armorType === "Ballistic" && weaponDmgType !== "Ballistic") wornApplies = false;
+    if (armorType === "Energy" && weaponDmgType !== "Energy") wornApplies = false;
+
+    // Step 2: Ballistic Protection reduces AP (only vs Ballistic attacks, only if armor applies)
+    let effectiveAP = ap.ignore ? 0 : ap.amount;
+    let bpApplied = 0;
+    if (!ap.ignore && weaponDmgType === "Ballistic" && bp > 0 && (naturalApplies || wornApplies)) {
+        bpApplied = Math.min(bp, ap.amount);
+        effectiveAP = Math.max(0, ap.amount - bp);
+    }
+
+    // Step 3: Calculate applicable armor after AP
+    const applicableNatural = naturalApplies ? naturalArmor : 0;
+    const applicableWorn = wornApplies ? wornArmor : 0;
+    const totalApplicableArmor = applicableNatural + applicableWorn;
+    const armorAfterAP = ap.ignore ? 0 : Math.max(0, totalApplicableArmor - effectiveAP);
+
+    // Step 4: Force Field (always applies, ignores AP entirely)
+    const totalArmor = armorAfterAP + ff;
+
+    // Step 5: Effective Toughness
+    const effectiveToughness = toughness + totalArmor;
+
+    return {
+        naturalArmor, wornArmor, ballisticProtection: bp, forceField: ff,
+        toughness, armorType, heavyArmor,
+        naturalApplies, wornApplies,
+        bpApplied, effectiveAP,
+        applicableNatural, applicableWorn, totalApplicableArmor,
+        armorAfterAP, totalArmor, effectiveToughness,
+        apIgnore: ap.ignore, apLabel: ap.label, apAmount: ap.amount
+    };
+}
+
+// --- Human-readable breakdown string ---
+function buildDamageBreakdown(damageTotal, p) {
+    let s = `${damageTotal} damage vs Tgh ${p.toughness}`;
+
+    if (p.apIgnore) {
+        // Ignore Armor: bypasses natural+worn, but force field still stands
+        if (p.totalApplicableArmor > 0) {
+            s += ` + Armor ${p.totalApplicableArmor} (ignored by AP ${p.apLabel})`;
+        }
+    } else {
+        // Show armor composition if both layers exist
+        if (p.applicableNatural > 0 && p.applicableWorn > 0) {
+            s += ` + Armor ${p.totalApplicableArmor} (Nat ${p.applicableNatural} + Worn ${p.applicableWorn})`;
+        } else if (p.totalApplicableArmor > 0) {
+            s += ` + Armor ${p.totalApplicableArmor}`;
+        } else if (!p.naturalApplies || !p.wornApplies) {
+            s += ` + Armor 0 (${p.armorType} armor vs ${p.apLabel})`;
+        }
+
+        // Show BP if it was applied
+        if (p.bpApplied > 0) {
+            s += ` [BP ${p.bpApplied} → eff AP ${p.effectiveAP}]`;
+        }
+
+        // Show AP reduction
+        if (p.effectiveAP > 0 && p.totalApplicableArmor > 0) {
+            s += ` − AP ${p.effectiveAP}`;
+        }
+    }
+
+    // Force field (always shown if > 0)
+    if (p.forceField > 0) {
+        s += ` + FF ${p.forceField} (ignores AP)`;
+    }
+
+    s += ` = ${p.effectiveToughness}`;
+    return s;
+}
+
+// --- Simple wrapper for code that just needs the number ---
 function computeEffectiveToughness(toughness, armor, ap) {
     const effectiveArmor = ap.ignore ? 0 : Math.max(0, armor - Math.max(0, ap.amount));
     return toughness + effectiveArmor;
+}
+
+// --- Validation warnings for threat editor ---
+function validateThreatTemplate(t) {
+    const warnings = [];
+    if (!t) return warnings;
+
+    // Check Toughness vs expected
+    const vigorStr = (t.attributes && t.attributes.Vigor) ? String(t.attributes.Vigor) : "d6";
+    const vigorMatch = vigorStr.match(/d(\d+)/);
+    const vigorDie = vigorMatch ? parseInt(vigorMatch[1]) : 6;
+    const totalArmor = (parseInt(t.naturalArmor) || 0) + (parseInt(t.wornArmor) || 0) + (parseInt(t.forceField) || 0);
+    const scale = parseInt(t.scale) || 0;
+    const expectedToughness = 2 + Math.floor(vigorDie / 2) + totalArmor + scale;
+    const actualToughness = parseInt(t.toughness) || 0;
+    if (actualToughness !== expectedToughness) {
+        warnings.push(`\u26a0 Toughness (${actualToughness}) \u2260 expected ${expectedToughness} (2 + Vig ${vigorDie}/2 + Armor ${totalArmor} + Scale ${scale}). May be intentional.`);
+    }
+
+    // Check Parry vs expected
+    const fightStr = (t.skills && t.skills.Fighting) ? String(t.skills.Fighting) : "d4";
+    const fightMatch = fightStr.match(/d(\d+)/);
+    const fightDie = fightMatch ? parseInt(fightMatch[1]) : 4;
+    const expectedParry = 2 + Math.floor(fightDie / 2);
+    const actualParry = parseInt(t.parry) || 0;
+    if (actualParry !== expectedParry) {
+        warnings.push(`\u26a0 Parry (${actualParry}) \u2260 expected ${expectedParry} (2 + Fighting ${fightDie}/2). May be intentional.`);
+    }
+
+    // Armor stacking note
+    const nat = parseInt(t.naturalArmor) || 0;
+    const worn = parseInt(t.wornArmor) || 0;
+    if (nat > 0 && worn > 0) {
+        warnings.push(`\u2139 Natural (${nat}) + Worn (${worn}) = ${nat + worn}. SWADE: natural stacks at full value with worn.`);
+    }
+
+    return warnings;
 }
