@@ -1018,8 +1018,14 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     // Heavy Armor check: non-heavy weapons cannot damage Heavy Armor targets
     // Fallback: check master preset list if equipped weapon snapshot lacks heavyWeapon flag
     let isHeavyWeapon = !!(weaponObj && weaponObj.heavyWeapon);
-    if (!isHeavyWeapon && weaponObj && weaponObj.id && globalState && globalState.presets) {
-        const masterPreset = globalState.presets.find(p => p.id === weaponObj.id);
+    if (!isHeavyWeapon && weaponObj && globalState && globalState.presets) {
+        let masterPreset = null;
+        if (weaponObj.id) {
+            masterPreset = globalState.presets.find(p => p.id === weaponObj.id);
+        }
+        if (!masterPreset && weaponObj.name) {
+            masterPreset = globalState.presets.find(p => p.name === weaponObj.name);
+        }
         if (masterPreset && masterPreset.heavyWeapon) isHeavyWeapon = true;
     }
     if (target.heavyArmor && weaponObj && !isHeavyWeapon && !ap.ignore) {
@@ -1030,7 +1036,18 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
 
     // Determine if armor applies based on damage type vs armor type
     let armorApplies = true;
-    const weaponDmgType = (weaponObj && weaponObj.damageType) || "Ballistic";
+    let weaponDmgType = (weaponObj && weaponObj.damageType) || null;
+    if (!weaponDmgType && weaponObj && globalState && globalState.presets) {
+        let dmgPreset = null;
+        if (weaponObj.id) {
+            dmgPreset = globalState.presets.find(p => p.id === weaponObj.id);
+        }
+        if (!dmgPreset && weaponObj.name) {
+            dmgPreset = globalState.presets.find(p => p.name === weaponObj.name);
+        }
+        if (dmgPreset && dmgPreset.damageType) weaponDmgType = dmgPreset.damageType;
+    }
+    weaponDmgType = weaponDmgType || "Ballistic";
     const targetArmorType = target.armorType || "General";
     if (targetArmorType === "Ballistic" && weaponDmgType !== "Ballistic") {
         armorApplies = false;
