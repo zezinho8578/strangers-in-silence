@@ -846,7 +846,7 @@
                         parry: parseInt(data.derived?.parry) || 4,
                         toughness: parseInt(data.derived?.toughness) || 4,
                         armor: parseInt(data.derived?.armor) || 0,
-                        scale: data.derived?.scale || "Normal",
+                        scale: parseInt(data.derived?.scale) || 0,
                         pace: parseInt(data.derived?.pace) || 6,
                         wounds: 0,
                         fatigue: 0,
@@ -1199,9 +1199,21 @@
             let parry = parseInt(prompt("Enter Parry:", "5")) || 5;
             let toughness = parseInt(prompt("Enter Toughness before armor:", "6")) || 6;
             let armor = parseInt(prompt("Enter Armor:", "0")) || 0;
-            let scale = prompt("Enter Scale:", "Normal") || "Normal";
+            let scale = parseInt(prompt("Enter Scale (0=Normal, 2=Large, 4=Huge, 6=Gargantuan):", "0"));
+            if (isNaN(scale)) scale = 0;
             let pace = parseInt(prompt("Enter Pace:", "6")) || 6;
             let isWildCard = confirm("Is this NPC a Wild Card? (Cancel for Extra)");
+            let isHeavyArmor = confirm("Does this NPC have Heavy Armor? (Cancel for No)");
+            let armorType = "General";
+            if (isHeavyArmor) {
+                let atInput = prompt("Armor Type (General / Ballistic / Energy):", "General");
+                if (atInput) {
+                    atInput = atInput.trim().toLowerCase();
+                    if (atInput === "ballistic") armorType = "Ballistic";
+                    else if (atInput === "energy") armorType = "Energy";
+                    else armorType = "General";
+                }
+            }
             let newNpc = {
                 id: "npc_" + Date.now(),
                 name: name,
@@ -1213,6 +1225,8 @@
                 armor: armor,
                 scale: scale,
                 pace: pace,
+                heavyArmor: isHeavyArmor,
+                armorType: armorType,
                 wounds: 0,
                 fatigue: 0,
                 woundCap: isWildCard ? 4 : 1,
@@ -1309,6 +1323,7 @@
                 let isGrouped = isGroupableParticipant(p, groupOn); // B14
                 // Status badges (shared by grouped and ungrouped rows)
                 let badges = "";
+                if (p.heavyArmor) badges += `<span class="badge" style="border-color:#ff3333; color:#ff3333;">HEAVY ARMOR</span>`;
                 if (p.incapacitated) badges += `<span class="badge incap">INCAPACITATED</span>`;
                 if (p.stunned) badges += `<span class="badge stunned">STUNNED</span>`; // B6
                 if (p.onHold) badges += `<span class="badge onhold">ON HOLD</span>`; // B5
@@ -1418,7 +1433,13 @@
             document.getElementById('detail-pace').innerText = `${effPace} (Base: ${basePace})`;
             document.getElementById('detail-parry').innerText = p.parry;
             document.getElementById('detail-toughness').innerText = p.toughness;
-            document.getElementById('detail-armor').innerText = p.armor || 0;
+            let armorDisplay = p.armor || 0;
+            if (p.heavyArmor) {
+                armorDisplay += " [HEAVY";
+                if (p.armorType && p.armorType !== "General") armorDisplay += " \u2014 " + p.armorType;
+                armorDisplay += "]";
+            }
+            document.getElementById('detail-armor').innerText = armorDisplay;
             document.getElementById('btn-shaken').className = `die-btn ${p.shaken ? 'active-toggle' : ''}`;
             document.getElementById('btn-distracted').className = `die-btn ${p.distracted ? 'active-toggle' : ''}`;
             document.getElementById('btn-vulnerable').className = `die-btn ${p.vulnerable ? 'active-toggle' : ''}`;
@@ -1770,8 +1791,12 @@
             let armor = parseInt(target.armor) || 0;
             let apInput = document.getElementById('calc-ap').value || "0";
             let ap = parseApForDamage(apInput);
-            let effectiveToughness = computeEffectiveToughness(toughness, armor, ap);
-            let breakdown = buildDamageBreakdown(roll, toughness, armor, ap, effectiveToughness);
+            // Damage type conditional armor (manual calculator assumes Ballistic by default)
+            let targetArmorType = target.armorType || "General";
+            let armorApplies = (targetArmorType === "General" || targetArmorType === "Ballistic");
+            let applicableArmor = armorApplies ? armor : 0;
+            let effectiveToughness = computeEffectiveToughness(toughness, applicableArmor, ap);
+            let breakdown = buildDamageBreakdown(roll, toughness, applicableArmor, ap, effectiveToughness);
             resultBox.style.borderColor = "var(--theme-color)";
             if (roll < effectiveToughness) {
                 resultBox.innerHTML = `NO EFFECT. ${breakdown}.`;
