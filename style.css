@@ -186,6 +186,20 @@ body::after {
 .danger-btn { border-color: #ff3333 !important; color: #ff3333 !important; }
 .danger-btn:hover { background: #ff3333 !important; color: #000 !important; }
 
+/* Armor System Enhancements */
+.dmg-type-select {
+    font-size: 0.85em;
+    padding: 2px 4px;
+}
+#effective-toughness-preview {
+    border-left: 2px solid #00ff00;
+    padding-left: 8px;
+}
+#effective-toughness-preview b {
+    color: #00ff00;
+    text-shadow: 0 0 4px #00ff00;
+}
+
 /* =========================================
    MOBILE COMPATIBILITY 
    ========================================= */
