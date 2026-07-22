@@ -194,3 +194,35 @@ function injectSettingsModal() {
         window.location.href = 'index.html'; 
     });
 }
+
+// ==========================================
+// SHARED ARMOR/AP UTILITIES (used by all pages)
+// ==========================================
+function parseApForDamage(ap) {
+    const raw = (ap === undefined || ap === null) ? "0" : String(ap);
+    const lower = raw.toLowerCase();
+    if (lower.includes("ignore")) {
+        return { amount: 999, ignore: true, label: raw.trim() || "Ignore Armor" };
+    }
+    const match = lower.match(/-?\d+/);
+    if (!match) {
+        return { amount: 0, ignore: false, label: raw.trim() || "0" };
+    }
+    return { amount: parseInt(match[0], 10), ignore: false, label: raw.trim() || match[0] };
+}
+
+function buildDamageBreakdown(damageTotal, toughness, armor, ap, effectiveToughness) {
+    let breakdown = `${damageTotal} damage vs Toughness ${toughness}`;
+    if (ap.ignore) {
+        if (armor > 0) breakdown += ` + Armor ${armor} (ignored by AP ${ap.label})`;
+    } else {
+        if (armor > 0) breakdown += ` + Armor ${armor} − AP ${Math.max(0, ap.amount)}`;
+    }
+    breakdown += ` = ${effectiveToughness}`;
+    return breakdown;
+}
+
+function computeEffectiveToughness(toughness, armor, ap) {
+    const effectiveArmor = ap.ignore ? 0 : Math.max(0, armor - Math.max(0, ap.amount));
+    return toughness + effectiveArmor;
+}
