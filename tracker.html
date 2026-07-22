@@ -488,7 +488,7 @@
                     </div>
                     <div style="font-size: 0.9em; opacity: 0.8;">
                         Parry: <span id="detail-parry">--</span> | Toughness: <span id="detail-toughness">--</span> |
-                        Pace: <span id="detail-pace">--</span>
+                        Armor: <span id="detail-armor">--</span> | Pace: <span id="detail-pace">--</span>
                     </div>
                     <!-- B5: Initiative Edges / Hindrances toggles -->
                     <div style="margin-top: 15px; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
@@ -535,7 +535,7 @@
                         <span style="width: 80px;">Dmg Roll:</span>
                         <input type="number" id="calc-damage" class="calc-input">
                         <span style="width: 30px;">AP:</span>
-                        <input type="number" id="calc-ap" class="calc-input" value="0">
+                        <input type="text" id="calc-ap" class="calc-input" value="0" style="width:80px;" placeholder="0 or Ignore Armor">
                         <button class="die-btn" onclick="calcDamage()">COMPARE TOUGHNESS</button>
                     </div>
                     <div id="calc-result">> WAITING FOR INPUT...</div>
@@ -1418,6 +1418,7 @@
             document.getElementById('detail-pace').innerText = `${effPace} (Base: ${basePace})`;
             document.getElementById('detail-parry').innerText = p.parry;
             document.getElementById('detail-toughness').innerText = p.toughness;
+            document.getElementById('detail-armor').innerText = p.armor || 0;
             document.getElementById('btn-shaken').className = `die-btn ${p.shaken ? 'active-toggle' : ''}`;
             document.getElementById('btn-distracted').className = `die-btn ${p.distracted ? 'active-toggle' : ''}`;
             document.getElementById('btn-vulnerable').className = `die-btn ${p.vulnerable ? 'active-toggle' : ''}`;
@@ -1759,7 +1760,6 @@
         window.calcDamage = async function () {
             let targetId = document.getElementById('calc-target').value;
             let roll = parseInt(document.getElementById('calc-damage').value);
-            let ap = parseInt(document.getElementById('calc-ap').value) || 0;
             let resultBox = document.getElementById('calc-result');
             if (!targetId || isNaN(roll)) {
                 resultBox.innerHTML = "<span style='color:#ff3333;'>ERROR: SELECT TARGET AND ENTER ROLL.</span>";
@@ -1768,9 +1768,10 @@
             let target = globalState.combat.participants.find(x => x.id === targetId);
             let toughness = parseInt(target.toughness) || 0;
             let armor = parseInt(target.armor) || 0;
-            let effectiveArmor = Math.max(0, armor - Math.max(0, ap));
-            let effectiveToughness = toughness + effectiveArmor;
-            let breakdown = `Toughness ${toughness} + Armor ${armor} − AP ${Math.max(0, ap)} = ${effectiveToughness}`;
+            let apInput = document.getElementById('calc-ap').value || "0";
+            let ap = parseApForDamage(apInput);
+            let effectiveToughness = computeEffectiveToughness(toughness, armor, ap);
+            let breakdown = buildDamageBreakdown(roll, toughness, armor, ap, effectiveToughness);
             resultBox.style.borderColor = "var(--theme-color)";
             if (roll < effectiveToughness) {
                 resultBox.innerHTML = `NO EFFECT. ${breakdown}.`;
