@@ -1016,7 +1016,13 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     const ap = parseApForDamage(apInput);
 
     // Heavy Armor check: non-heavy weapons cannot damage Heavy Armor targets
-    if (target.heavyArmor && weaponObj && !weaponObj.heavyWeapon && !ap.ignore) {
+    // Fallback: check master preset list if equipped weapon snapshot lacks heavyWeapon flag
+    let isHeavyWeapon = !!(weaponObj && weaponObj.heavyWeapon);
+    if (!isHeavyWeapon && weaponObj && weaponObj.id && globalState && globalState.presets) {
+        const masterPreset = globalState.presets.find(p => p.id === weaponObj.id);
+        if (masterPreset && masterPreset.heavyWeapon) isHeavyWeapon = true;
+    }
+    if (target.heavyArmor && weaponObj && !isHeavyWeapon && !ap.ignore) {
         result.message = `> <b style="color:#ff3333;">HEAVY ARMOR:</b> ${weaponObj.name || "This weapon"} is NOT a Heavy Weapon. ${target.name}'s Heavy Armor is immune to this attack.`;
         result.plainText = `HEAVY ARMOR: ${weaponObj.name || "This weapon"} cannot damage ${target.name}'s Heavy Armor.`;
         return result;
