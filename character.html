@@ -1006,17 +1006,27 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         return result;
     }
 
-    const toughness = parseInt(target.toughness) || 0;
-    const armor = parseInt(target.armor) || 0;
-
     const apInput = (weaponObj && weaponObj.ap !== undefined && weaponObj.ap !== null)
         ? weaponObj.ap
         : attack.ap;
 
     const ap = parseApForDamage(apInput);
 
-    // Heavy Armor check: non-heavy weapons cannot damage Heavy Armor targets
-    // Fallback: check master preset list if equipped weapon snapshot lacks heavyWeapon flag
+    // Resolve weapon damage type (with preset fallback)
+    let weaponDmgType = (weaponObj && weaponObj.damageType) || null;
+    if (!weaponDmgType && weaponObj && globalState && globalState.presets) {
+        let dmgPreset = null;
+        if (weaponObj.id) {
+            dmgPreset = globalState.presets.find(p => p.id === weaponObj.id);
+        }
+        if (!dmgPreset && weaponObj.name) {
+            dmgPreset = globalState.presets.find(p => p.name === weaponObj.name);
+        }
+        if (dmgPreset && dmgPreset.damageType) weaponDmgType = dmgPreset.damageType;
+    }
+    weaponDmgType = weaponDmgType || "Ballistic";
+
+    // Heavy Armor check (before pipeline)
     let isHeavyWeapon = !!(weaponObj && weaponObj.heavyWeapon);
     if (!isHeavyWeapon && weaponObj && globalState && globalState.presets) {
         let masterPreset = null;
@@ -1034,36 +1044,10 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         return result;
     }
 
-    // Determine if armor applies based on damage type vs armor type
-    let armorApplies = true;
-    let weaponDmgType = (weaponObj && weaponObj.damageType) || null;
-    if (!weaponDmgType && weaponObj && globalState && globalState.presets) {
-        let dmgPreset = null;
-        if (weaponObj.id) {
-            dmgPreset = globalState.presets.find(p => p.id === weaponObj.id);
-        }
-        if (!dmgPreset && weaponObj.name) {
-            dmgPreset = globalState.presets.find(p => p.name === weaponObj.name);
-        }
-        if (dmgPreset && dmgPreset.damageType) weaponDmgType = dmgPreset.damageType;
-    }
-    weaponDmgType = weaponDmgType || "Ballistic";
-    const targetArmorType = target.armorType || "General";
-    if (targetArmorType === "Ballistic" && weaponDmgType !== "Ballistic") {
-        armorApplies = false;
-    } else if (targetArmorType === "Energy" && weaponDmgType !== "Energy") {
-        armorApplies = false;
-    }
-    const applicableArmor = armorApplies ? armor : 0;
-    const effectiveToughness = computeEffectiveToughness(toughness, applicableArmor, ap);
-
-    const breakdown = buildDamageBreakdown(
-        damageTotal,
-        toughness,
-        armor,
-        ap,
-        effectiveToughness
-    );
+    // Full armor pipeline
+    const pipeline = computeArmorPipeline(target, weaponDmgType, ap);
+    const effectiveToughness = pipeline.effectiveToughness;
+    const breakdown = buildDamageBreakdown(damageTotal, pipeline);
 
     if (damageTotal < effectiveToughness) {
         result.message = `> <b style="color:#ff9900;">AUTO-CHECK:</b> ${breakdown} → ${target.name} takes no effect.`;
@@ -2654,20 +2638,35 @@ function updateDefenderModifierAndStatus() {
 
     statusEl.innerHTML = html;
 
-    // Effective Toughness preview
+    // Effective Toughness preview (full pipeline)
     let previewEl = document.getElementById('effective-toughness-preview');
     if (target && activeWeaponContext) {
         let wepAp = parseApForDamage(activeWeaponContext.ap || "0");
         let wepDmgType = activeWeaponContext.damageType || "Ballistic";
-        let tArmorType = target.armorType || "General";
-        let armorApplies = true;
-        if (tArmorType === "Ballistic" && wepDmgType !== "Ballistic") armorApplies = false;
-        if (tArmorType === "Energy" && wepDmgType !== "Energy") armorApplies = false;
-        let applicableArmor = armorApplies ? armor : 0;
-        let effTgh = computeEffectiveToughness(toughness, applicableArmor, wepAp);
-        let apLabel = wepAp.ignore ? "Ignore Armor" : wepAp.amount;
+        let prevPipeline = computeArmorPipeline(target, wepDmgType, wepAp);
         previewEl.style.display = "block";
-        previewEl.innerHTML = `⚔ Effective Toughness vs ${activeWeaponContext.name}: <b>${effTgh}</b> (Tgh ${toughness} + Armor ${applicableArmor} − AP ${apLabel})`;
+        let prevHtml = `⚔ Eff Tgh vs ${activeWeaponContext.name}: <b>${prevPipeline.effectiveToughness}</b><br>`;
+        prevHtml += `&nbsp;&nbsp;Tgh ${prevPipeline.toughness}`;
+        if (prevPipeline.applicableNatural > 0 || prevPipeline.applicableWorn > 0) {
+            prevHtml += ` + Armor ${prevPipeline.totalApplicableArmor}`;
+            if (prevPipeline.applicableNatural > 0 && prevPipeline.applicableWorn > 0) {
+                prevHtml += ` (Nat ${prevPipeline.applicableNatural} + Worn ${prevPipeline.applicableWorn})`;
+            }
+        }
+        if (prevPipeline.bpApplied > 0) {
+            prevHtml += ` [BP ${prevPipeline.bpApplied}]`;
+        }
+        if (!prevPipeline.apIgnore && prevPipeline.effectiveAP > 0 && prevPipeline.totalApplicableArmor > 0) {
+            prevHtml += ` − AP ${prevPipeline.effectiveAP}`;
+        }
+        if (prevPipeline.apIgnore && prevPipeline.totalApplicableArmor > 0) {
+            prevHtml += ` (armor ignored)`;
+        }
+        if (prevPipeline.forceField > 0) {
+            prevHtml += ` + FF ${prevPipeline.forceField}`;
+        }
+        prevHtml += ` = <b>${prevPipeline.effectiveToughness}</b>`;
+        previewEl.innerHTML = prevHtml;
     } else {
         previewEl.style.display = "none";
     }
