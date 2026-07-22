@@ -1,0 +1,1 @@
+Nothing should be ignored based on the provided file changes. The modified files (`character.html` and `tracker.html`) are HTML source files that should be tracked in version control. There are no build artifacts, dependency directories, temporary files, or other items that need to be added to the .gitignore file.

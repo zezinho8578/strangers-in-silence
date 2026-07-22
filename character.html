@@ -1511,12 +1511,22 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 let participants = globalState.combat.participants;
                 let pIdx = participants.findIndex(p => p.id === activeCharId);
                 if (pIdx !== -1) {
-                    participants[pIdx].stunned = false;
-                    participants[pIdx].shaken  = false;
-                    participants[pIdx].distracted  = false;
-                    participants[pIdx].distractedTTL = 0;
-                    participants[pIdx].vulnerable  = true;
-                    participants[pIdx].vulnerableTTL = raise ? 1 : 2;
+                    let target = participants[pIdx];
+
+                    target.stunned = false;
+
+                    // Do NOT clear Shaken here.
+                    // Stunned neither applies nor removes Shaken.
+
+                    // Only clear Distracted if it was pinned by Stunned.
+                    if (target.distractedTTL === 999) {
+                        target.distracted = false;
+                        target.distractedTTL = 0;
+                    }
+
+                    target.vulnerable = true;
+                    target.vulnerableTTL = raise ? 1 : 2;
+
                     await set(ref(db, 'campaignState/combat/participants'), participants);
                 }
             }

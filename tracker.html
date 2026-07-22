@@ -1538,14 +1538,13 @@
             let becomingStunned = !p.stunned;
             p.stunned = becomingStunned;
             if (becomingStunned) {
-                // Enforce Distracted + Vulnerable, clear Hold
+                // Stunned does NOT apply Shaken. Leave existing Shaken untouched.
                 p.distracted = true;
                 p.distractedTTL = 999; // pinned until stun clears
                 p.vulnerable = true;
                 p.vulnerableTTL = 999;
-                p.shaken = true;
                 p.onHold = false;
-                logToWebhook("STUNNED", `${p.name} is now **STUNNED** — Distracted, Vulnerable, Shaken, cannot act. Vigor recovery required.`);
+                logToWebhook("STUNNED", `${p.name} is now **STUNNED** — Distracted, Vulnerable, cannot act. Vigor recovery required.`);
             } else {
                 // Manual removal: clear pinned TTLs (do not auto-clear statuses so GM decides)
                 if (p.distractedTTL === 999) { p.distractedTTL = 0; p.distracted = false; }
@@ -1578,16 +1577,32 @@
             if (success && raise) {
                 // Raise: no longer Stunned, Vulnerable ends this turn
                 p.stunned = false;
-                p.shaken = false;
-                p.distracted = false; p.distractedTTL = 0;
-                p.vulnerable = true;  p.vulnerableTTL = 1; // expires end of this turn
+
+                // Only clear Distracted if it was pinned by Stunned.
+                if (p.distractedTTL === 999) {
+                    p.distracted = false;
+                    p.distractedTTL = 0;
+                }
+
+                p.vulnerable = true;
+                p.vulnerableTTL = 1;
+
+                // Do NOT touch p.shaken here.
                 desc += ` = **${best}** (RAISE) → No longer Stunned. Vulnerable until end of THIS turn.`;
             } else if (success) {
                 // Success: no longer Stunned, but Vulnerable until end of NEXT turn
                 p.stunned = false;
-                p.shaken = false;
-                p.distracted = false; p.distractedTTL = 0;
-                p.vulnerable = true;  p.vulnerableTTL = 2; // expires end of next turn
+
+                // Only clear Distracted if it was pinned by Stunned.
+                if (p.distractedTTL === 999) {
+                    p.distracted = false;
+                    p.distractedTTL = 0;
+                }
+
+                p.vulnerable = true;
+                p.vulnerableTTL = 2;
+
+                // Do NOT touch p.shaken here.
                 desc += ` = **${best}** (SUCCESS) → No longer Stunned. Vulnerable until end of NEXT turn.`;
             } else {
                 desc += ` = **${best}** (FAILURE) → Still Stunned. Must try again next turn.`;
