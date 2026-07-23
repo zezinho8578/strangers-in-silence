@@ -617,8 +617,7 @@
                         <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
                             <span class="editable" id="der-pace" contenteditable="true"></span>
                             <!-- B10: Running — rolls the running die (d6, or d10 with Fleet-Footed) -->
-                            <button class="die-btn" id="run-btn" style="padding:2px 8px; font-size:0.85em;"
-                                onclick="rollRunning()" title="Free action: roll running die, add to Pace, −2 to other actions">RUN</button>
+                            <button class="die-btn" onclick="rollRunning()" ${isStunnedLocked ? 'disabled title="STUNNED: Cannot run"' : ''} title="Free action: roll running die, add to Pace, −2 to other actions">RUN</button>
                         </div>
                     </div>
                     <div class="stat-row">
@@ -1137,9 +1136,8 @@
         }
         function hasEdge(edgeName) {
             if (!charData || !charData.edges) return false;
-            let norm = charData.edges.toLowerCase().replace(/[^a-z0-9]/g, "");
-            let target = edgeName.toLowerCase().replace(/[^a-z0-9]/g, "");
-            return norm.includes(target);
+            let regex = new RegExp("\\b" + edgeName.replace(/[^a-z0-9]/gi, "[\\s\\-]*") + "\\b", "i");
+            return regex.test(charData.edges);
         }
 
         // Part 4: Called Shots
@@ -1371,6 +1369,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         (target.fatigue || 0) < 3
     ) {
         target.incapacitated = false;
+        target.incapacitationResolved = false;
     }
 
     // B7: mirror the new wound total onto the persistent character object (with a
@@ -1393,8 +1392,8 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         }
         sheet.wounds = netWounds;
         if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
-            set(ref(db, `campaignState/characters/${target.id}/wounds`), sheet.wounds);
-            set(ref(db, `campaignState/characters/${target.id}/woundLog`), sheet.woundLog);
+            await set(ref(db, `campaignState/characters/${target.id}/wounds`), sheet.wounds);
+            await set(ref(db, `campaignState/characters/${target.id}/woundLog`), sheet.woundLog);
         }
     }
 
@@ -1727,7 +1726,8 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (globalState && globalState.characters) {
                 for (const [id, c] of Object.entries(globalState.characters)) {
                     if (!c) continue;
-                    let h = c.skills && c.skills.Healing;
+                    let healKey = Object.keys(c.skills || {}).find(k => k.toLowerCase().trim() === 'healing');
+                    let h = healKey ? c.skills[healKey] : null;
                     if (h) {
                         let edgesNorm = (c.edges || "").toLowerCase().replace(/[^a-z]/g, "");
                         healers.push({
@@ -1772,9 +1772,10 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                         ? `<span style="opacity:0.7; font-size:0.85em;"> | attempted by: ${attemptedBy.map(id => (globalState.characters?.[id]?.name) || id).join(', ')}</span>`
                         : '';
                     // GM can rename the wound inline; players see a static name.
+                    let safeName = woundName.replace(/</g, "&lt;").replace(/>/g, "&gt;");
                     let nameHtml = isAdmin
-                        ? `<b class="diag-wound-name editable" contenteditable="true" data-wound-idx="${i}" style="border-bottom:1px dashed var(--theme-color); padding:0 3px;">${woundName}</b>`
-                        : `<b>${woundName}</b>`;
+                        ? `<b class="diag-wound-name editable" contenteditable="true" data-wound-idx="${i}" style="border-bottom:1px dashed var(--theme-color); padding:0 3px;">${safeName}</b>`
+                        : `<b>${safeName}</b>`;
                     woundsHtml += `<div class="diag-wound" style="border-left:2px solid ${expired ? '#ff3333' : '#ff9900'}; padding-left:8px; margin-bottom:6px; font-size:0.92em;">`
                         + `${nameHtml} <span style="opacity:0.7; font-size:0.85em;">(taken ${taken})</span><br>`
                         + `${label}${attStr}</div>`;
@@ -1977,6 +1978,11 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 logToTerminal(`> [!] ${healer.name} cannot attempt healing here — no wounds are within the Golden Hour or already attempted by ${healer.name}.`);
                 return;
             }
+            let healerParticipant = globalState.combat?.participants?.find(p => p.id === healerId);
+            if (healerParticipant && (healerParticipant.incapacitated || healerParticipant.stunned || healerParticipant.shaken)) {
+                logToTerminal(`> <b style="color:#ff3333;">[!] ${healer.name} cannot perform Healing (they are Shaken, Stunned, or Incapacitated).</b>`);
+                return;
+            }
             let kitMod = noKit ? -1 : 0;
             let healerEdgeMod = healer.hasHealerEdge ? 2 : 0;
             let totalMod = healer.mod + kitMod + healerEdgeMod;
@@ -1988,13 +1994,12 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (bestTotal >= TN) healed = 1 + Math.floor((bestTotal - TN) / 4);
             healed = Math.min(healed, eligible.length);
 
-            // Mark every wound currently within the golden hour as attempted by this healer.
-            charData.woundLog.forEach(w => {
-                if ((now - w.ts) < GOLDEN_HOUR_MS) {
-                    if (!Array.isArray(w.attemptedBy)) w.attemptedBy = [];
-                    if (!w.attemptedBy.includes(healerId)) w.attemptedBy.push(healerId);
-                }
-            });
+            // Mark ONLY the wounds being healed as attempted
+            for (let i = 0; i < healed; i++) {
+                let w = charData.woundLog[eligible[i].idx];
+                if (!Array.isArray(w.attemptedBy)) w.attemptedBy = [];
+                if (!w.attemptedBy.includes(healerId)) w.attemptedBy.push(healerId);
+            }
 
             // Remove the oldest eligible wounds first (the ones being treated).
             if (healed > 0) {
@@ -2007,7 +2012,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                     if (charData.wounds === 0 && combatParticipant.shaken) combatParticipant.shaken = false;
                     if (combatParticipant.incapacitated && charData.wounds < (combatParticipant.woundCap || 4) && (charData.fatigue || 0) < 3) combatParticipant.incapacitated = false;
                 }
-                syncCombatParticipants();
+                await syncCombatParticipants();
             }
             await saveCharacter();
             renderDiagnostics();
@@ -2061,7 +2066,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                     if (charData.wounds === 0 && combatParticipant.shaken) combatParticipant.shaken = false;
                     if (combatParticipant.incapacitated && charData.wounds < (combatParticipant.woundCap || 4) && (charData.fatigue || 0) < 3) combatParticipant.incapacitated = false;
                 }
-                syncCombatParticipants();
+                await syncCombatParticipants();
             }
             charData.naturalHealingReady = false; // consume the award
             await saveCharacter();
@@ -2099,11 +2104,10 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (combatParticipant) {
                 combatParticipant.fatigue = charData.fatigue;
             }
-            syncCombatParticipants();
+            await syncCombatParticipants();
             await saveCharacter();
             renderDiagnostics();
             refreshCombatHUD();
-            logToTerminal(`> ${charData.name} recovered 1 Fatigue level. Fatigue now ${charData.fatigue}.`);
         }
 
         // ==========================================
@@ -2171,7 +2175,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             // Update the SOAK button's disabled state in the overlay.
             let soakBtn = document.getElementById('incap-soak-btn');
             if (soakBtn) soakBtn.disabled = (charData.bennies || 0) <= 0;
-            syncCombatParticipants();
+            await syncCombatParticipants();
             await saveCharacter();
             renderDiagnostics();
             refreshCombatHUD();
@@ -2203,7 +2207,9 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             let wildRoll = rollExploding(6);
             let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
             // Critical failure = both trait die and wild die rolled a 1 (initial roll).
-            let isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
+            let isCritFail = wildRoll 
+                ? (traitRoll.history[0] === 1 && wildRoll.history[0] === 1) 
+                : (traitRoll.history[0] === 1 && rollExploding(6).history[0] === 1);
             const TN = 4;
             let outcome = "";
             let color = 0xff3333;
@@ -2237,7 +2243,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 color = 0x00ff00;
             }
             combatParticipant.incapacitationResolved = true;
-            syncCombatParticipants();
+            await syncCombatParticipants();
             await saveCharacter();
             renderDiagnostics();
             refreshCombatHUD();
@@ -2271,7 +2277,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             } else {
                 combatParticipant.dead = true;
             }
-            syncCombatParticipants();
+            await syncCombatParticipants();
             await saveCharacter();
             refreshCombatHUD();
             checkIncapacitationOverlay();
@@ -2371,10 +2377,10 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         // B7 helper: persist the combat participant list to whichever store is active
         // (Firebase when configured, localStorage otherwise). Used by the healing /
         // soak / fatigue functions so wound/fatigue changes mirror to the live tracker.
-        function syncCombatParticipants() {
+        async function syncCombatParticipants() {
             if (!globalState || !globalState.combat || !globalState.combat.participants) return;
             if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
-                set(ref(db, 'campaignState/combat/participants'), globalState.combat.participants);
+                await set(ref(db, 'campaignState/combat/participants'), globalState.combat.participants);
             } else {
                 localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
             }
@@ -2423,6 +2429,10 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             return Math.max(1, basePace - armorPen - wounds);
         }
         async function rollRunning() {
+            if (combatParticipant && combatParticipant.stunned) {
+                logToTerminal("> [!] Cannot run while STUNNED.");
+                return;
+            }
             let runDie = getRunningDie();
             // Running die does NOT Ace (p.94).
             let runRoll = Math.floor(Math.random() * runDie) + 1;
@@ -2814,7 +2824,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             // the participant array after saveCharacter can re-trigger onValue and
             // re-render loadCharacter, which previously caused the "glitch" where the
             // soak sometimes didn't stick.
-            syncCombatParticipants();
+            await syncCombatParticipants();
             await saveCharacter();
             renderDiagnostics();
             refreshCombatHUD();
@@ -2859,7 +2869,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                     weapon.name.toLowerCase().includes("grenade");
                 let modalTextEl = document.getElementById('min-str-modal-text');
                 if (isMeleeOrThrown) {
-                    modalTextEl.innerHTML = "You do not meet the minimum strength requirement for this weapon.<br>Wielding it will <b>cap your damage dice</b> at your Strength die type and you <b>do not benefit</b> from the weapon's positive abilities (Reach, Parry, etc.).";
+                    modalTextEl.innerHTML = "You do not meet the minimum strength requirement for this weapon.<br>Wielding it will <b>cap your damage dice</b> at your Strength die type and you <b>do not benefit</b> from the weapon's positive abilities (like Parry bonuses).";
                     logToTerminal(`> [!] MELEE WEAPON UNDER STR: Damage dice capped at d${currentStr}. Positive abilities (Reach, Parry) suppressed.`);
                 } else {
                     pendingMinStrPenalty = -(reqIdx - currIdx);
@@ -3049,7 +3059,8 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
         // PART 4 POLISH: WEAPON EFFECTIVE TOUGHNESS HINT
         // ==========================================
         function weaponEffHint(w) {
-            const targetId = window.lastTargetId || null;
+            const targetSelect = document.getElementById('target-select');
+            const targetId = targetSelect ? targetSelect.value : null;
             let target = null;
 
             if (targetId && globalState.combat?.participants) {
@@ -3061,7 +3072,7 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
 
             if (target) {
                 const pipeline = computeArmorPipeline(target, dmgType, ap);
-                return `<div style="grid-column:1/-1; font-size:0.8em; color:#00ff00; margin-top:4px;">
+                return `<div class="weapon-eff-hint" data-dmgtype="${dmgType}" data-ap="${w.ap || '0'}" style="grid-column:1/-1; font-size:0.8em; color:#00ff00; margin-top:4px;">
             vs ${target.name}: Eff Tgh <b>${pipeline.effectiveToughness}</b>
         </div>`;
             }
@@ -3070,16 +3081,27 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
             // a "vs generic Armor 4" hint that was more confusing than useful.)
             return "";
         }
+        function updateAllWeaponHints() {
+            let target = getSelectedTarget();
+            document.querySelectorAll('.weapon-eff-hint').forEach(el => {
+                if (!target) { el.innerHTML = ''; return; }
+                let dmgType = el.dataset.dmgtype || 'Ballistic';
+                let apRaw = el.dataset.ap || '0';
+                let ap = parseApForDamage(apRaw);
+                let pipeline = computeArmorPipeline(target, dmgType, ap);
+                el.innerHTML = `vs ${target.name}: Eff Tgh <b>${pipeline.effectiveToughness}</b>`;
+            });
+        }
         function renderWeapons() {
             const container = document.getElementById('weapons-list-container');
             container.innerHTML = '';
             const isShakenLocked = !!(combatParticipant && combatParticipant.shaken && !combatParticipant.incapacitated);
             const isStunnedLocked = !!(combatParticipant && combatParticipant.stunned && !combatParticipant.incapacitated); // B6
-            const shakenAttr = isStunnedLocked
+            const incapAttr = (combatParticipant && combatParticipant.incapacitated) ? 'disabled title="INCAPACITATED"' : '';
+            const shakenAttr = incapAttr || (isStunnedLocked
                 ? 'disabled title="STUNNED: Roll Vigor Recovery first"'
-                : isShakenLocked
-                    ? 'disabled title="SHAKEN: Roll Spirit Recovery first"'
-                    : '';
+                : (isShakenLocked ? 'disabled title="SHAKEN: Roll Spirit Recovery first"'
+                    : ''));
             let unarmedDamage = getUnarmedDamageDisplay();
             let unarmedIcon = "https://i.imgur.com/TimqS8i.png";
             container.innerHTML += `
@@ -3160,7 +3182,7 @@ ${weaponEffHint(w)}
 </div>
 <div class="weapon-actions">
 <button class="die-btn" onclick="rollWeaponAttack(${index})" ${shakenAttr}>ATTACK</button>
-<button class="die-btn" ${damageOnclick}>DAMAGE</button>
+<button class="die-btn" ${isStunnedLocked ? 'disabled title="STUNNED: Cannot act"' : damageOnclick}>DAMAGE</button>
 <button class="die-btn dmg-reroll-btn" id="dmg-reroll-${index}" onclick="rerollWeaponDamage(${index})" style="display:none;">REROLL DMG (1 BENNY)</button>
 ${reloadBtn}
 <button class="die-btn del-btn" onclick="removeWeaponFromCharacter(${index})">UNEQUIP</button>
@@ -3210,11 +3232,18 @@ ${reloadBtn}
         }
         function removeWeaponFromCharacter(index) {
             charData.weapons.splice(index, 1);
-            // Weapon indices have shifted — clear pending weapon damage rolls so the
-            // reroll buttons never reference the wrong weapon. Unarmed is index-independent.
-            let unarmedRoll = lastDamageRolls['unarmed'];
-            lastDamageRolls = {};
-            if (unarmedRoll) lastDamageRolls['unarmed'] = unarmedRoll;
+            
+            let newRolls = {};
+            Object.keys(lastDamageRolls).forEach(k => {
+                if (k === 'unarmed') newRolls[k] = lastDamageRolls[k];
+                else {
+                    let idx = parseInt(k);
+                    if (idx < index) newRolls[idx] = lastDamageRolls[idx];
+                    else if (idx > index) newRolls[idx - 1] = lastDamageRolls[idx];
+                }
+            });
+            lastDamageRolls = newRolls;
+
             saveCharacter();
             renderWeapons();
             document.getElementById('tn-modal').style.display = 'none';
@@ -4208,7 +4237,23 @@ function updateDefenderModifierAndStatus() {
             let melee = isMeleeWeapon(activeWeaponContext);
 
             globalState.combat.participants.forEach(p => {
-                if (p.id === activeCharId || p.name === charData.name) return;
+                if (p.id === activeCharId || p.name === charData.name) {
+                    let label = '';
+                    if (melee) {
+                        label = `[SELF] ${p.name} — Parry ${parseInt(p.parry) || 0}`;
+                    } else {
+                        let toughness = parseInt(p.toughness) || 0;
+                        let armor = parseInt(p.armor) || 0;
+                        let armorLabel = armor > 0 ? "+" + armor : "";
+                        label = `[SELF] ${p.name} — Tgh ${toughness}${armorLabel} | W ${p.wounds || 0} | F ${p.fatigue || 0}`;
+                    }
+                    let opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = label;
+                    opt.title = label;
+                    select.appendChild(opt);
+                    return;
+                }
 
                 let parry = parseInt(p.parry) || 0;
                 let toughness = parseInt(p.toughness) || 0;
@@ -4251,7 +4296,9 @@ window.onTargetChange = function () {
             let melee = isMeleeWeapon(activeWeaponContext);
             let baseParry = parseInt(target.parry) || 4;
             let effectiveParry = baseParry + (target.defending ? 4 : 0);
-            document.getElementById('tn-input').value = melee ? effectiveParry : "4";
+            
+            let mode = document.getElementById('action-mode-select')?.value || 'normal';
+            document.getElementById('tn-input').value = (melee && mode !== 'test') ? effectiveParry : "4";
 
             if (!melee) {
         dodgeCheckbox.checked = targetHasDodge(target);
@@ -4269,7 +4316,7 @@ window.onTargetChange = function () {
 
     // Part 4 polish: weapon-card effective Toughness hints.
     window.lastTargetId = target ? target.id : null;
-    renderWeapons();
+    updateAllWeaponHints();
 };
         // ==========================================
         // PART 4: CALLED SHOT HELPERS
@@ -4332,7 +4379,7 @@ window.onTargetChange = function () {
         // ==========================================
         // B3. ROLL CONTEXT + PURE ROLL ENGINE (powers Benny rerolls)
         // ==========================================
-        function buildRollContext(name, cat, targetNumber) {
+        function buildRollContext(name, cat, targetNumber, _is3RB, _isDoubleTap, _isSupp) {
             let sides, traitModifier;
             if (cat === null) {
                 sides = 4;
@@ -4369,16 +4416,22 @@ window.onTargetChange = function () {
                 ? window.getCurrentCalledShot()
                 : { id: "none", hitMod: 0, dmgMod: 0, bypassWorn: false, bypassNatural: false, toughnessOverride: null };
             // B8: include the defender modifier (Vulnerable/Dodge) in the frozen context
+            let supportKey = `support_${activeCharId}`;
+            let supportBonus = parseInt(sessionStorage.getItem(supportKey)) || 0;
+
             let totalModifier = traitModifier
                 + customModifier
                 + statusPenalty
                 + jokerBonus
                 + wildAttackBonus
                 + defenderModifier
+                + supportBonus
                 + (parseInt(calledShot.hitMod) || 0);
-            let is3RB = pendingRoll && pendingRoll.is3RB;
-            let isDoubleTap = pendingRoll && pendingRoll.isDoubleTap;
-            let isSupp = pendingRoll && pendingRoll.isSupp;
+
+            if (supportBonus) sessionStorage.removeItem(supportKey);
+            let is3RB = _is3RB || false;
+            let isDoubleTap = _isDoubleTap || false;
+            let isSupp = _isSupp || false;
             let shotsFired = 1;
             if (activeWeaponContext && document.getElementById('rof-options-container').style.display !== 'none') {
                 if (is3RB || isDoubleTap || isSupp) {
@@ -4528,8 +4581,8 @@ window.onTargetChange = function () {
                 clearPendingDamageBonus(storageKey, ['doubleTap']);
             }
         }
-        async function executeRoll(name, cat, targetNumber) {
-            let ctx = buildRollContext(name, cat, targetNumber);
+        async function executeRoll(name, cat, targetNumber, _is3RB, _isDoubleTap, _isSupp) {
+            let ctx = buildRollContext(name, cat, targetNumber, _is3RB, _isDoubleTap, _isSupp);
             if (ctx.applyWildAttackVulnerable && combatParticipant) {
                 let participants = globalState.combat.participants;
                 let pIdx = participants.findIndex(p => p.id === activeCharId);
@@ -5028,7 +5081,11 @@ window.onTargetChange = function () {
         // Wire the shared TEM onchange handler to this page's recomputer.
         window.__temChanged = function () { updateExtraModifiers(); };
         function applyComputedModifiers(computedVal) {
-            document.getElementById('mod-override-input').value = computedVal;
+            let input = document.getElementById('mod-override-input');
+            let manual = parseInt(input.value) - parseInt(input.dataset.computed || 0);
+            if (isNaN(manual)) manual = 0;
+            input.value = computedVal + manual;
+            input.dataset.computed = computedVal;
         }
         function scrollToBottom() { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
         // ==========================================
@@ -5050,7 +5107,7 @@ window.onTargetChange = function () {
                     bulletsExpended = 3;
                 } else if (isDoubleTap) {
                     shotsFired = 1;
-                    bulletsExpended = (activeWeaponContext && activeWeaponContext.burst === true) ? 6 : 2;
+                    bulletsExpended = 2; // SWADE: Double Tap always uses 2 bullets
                 } else if (isSupp) {
                     let weaponRoF = parseInt(activeWeaponContext.rof) || 1;
                     const costMap = { 1: 1, 2: 5, 3: 10, 4: 20, 5: 40, 6: 50 };
@@ -5086,13 +5143,21 @@ window.onTargetChange = function () {
                     renderWeapons();
                 }
             }
-            pendingRoll.is3RB = is3RB;
-            pendingRoll.isDoubleTap = isDoubleTap;
-            pendingRoll.isSupp = isSupp;
-            executeRoll(pendingRoll.name, pendingRoll.cat, tn);
+            try {
+                await executeRoll(pendingRoll.name, pendingRoll.cat, tn, is3RB, isDoubleTap, isSupp);
+            } catch (e) {
+                if (activeWeaponContext) {
+                    charData.weapons[activeWeaponIndex].magAmmo += bulletsExpended; // Rollback
+                    saveCharacter();
+                    renderWeapons();
+                    logToTerminal(`> <b style="color:#ff3333;">[!] ROLL FAILED. Ammo refunded.</b>`);
+                }
+                console.error(e);
+            }
         }
         function cancelRoll() {
             document.getElementById('tn-modal').style.display = 'none';
+            document.getElementById('target-select').value = ""; // Clear selection
             pendingRoll = null;
             pendingMinStrPenalty = 0;
             // B8: clear defender state on cancel
@@ -5101,6 +5166,7 @@ window.onTargetChange = function () {
             // Clear effective toughness preview
             let previewEl = document.getElementById('effective-toughness-preview');
             if (previewEl) previewEl.style.display = "none";
+            renderWeapons(); // Clear hint
         }
         function confirmEquip() {
             let id = document.getElementById('equip-weapon-select').value;

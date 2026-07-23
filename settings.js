@@ -247,7 +247,7 @@ function computeArmorPipeline(target, weaponDmgType, ap, opts = {}) {
     const bypassNatural = !!opts.bypassNatural;
 
     const toughnessOverrideRaw =
-        (opts.toughnessOverride === undefined || opts.toughnessOverride === null || opts.toughnessOverride === "")
+        (opts.toughnessOverride === undefined || opts.toughnessOverride === null || opts.toughnessOverride === "" || isNaN(parseInt(opts.toughnessOverride)))
             ? null
             : parseInt(opts.toughnessOverride);
 
@@ -753,7 +753,7 @@ function recalcCharacterDerived(data) {
         // Known modeling limitation:
         // participant stores one armorType/BP. If primary is inactive, fall back to secondary.
         if (!(primary && isArmorInstanceActive(primary))) {
-            bp = parseInt(secondary.ballisticProtection) || 0;
+            bp = Math.floor((parseInt(secondary.ballisticProtection) || 0) / 2);
             armorType = secondary.armorType || "General";
             heavy = !!secondary.heavyArmor;
         }
@@ -1127,15 +1127,19 @@ function validateThreatTemplate(t) {
     if (!t) return warnings;
 
     // Check Toughness vs expected
-    const vigorStr = (t.attributes && t.attributes.Vigor) ? String(t.attributes.Vigor) : "d6";
-    const vigorMatch = vigorStr.match(/d(\d+)/);
-    const vigorDie = vigorMatch ? parseInt(vigorMatch[1]) : 6;
-    const totalArmor = (parseInt(t.naturalArmor) || 0) + (parseInt(t.wornArmor) || 0) + (parseInt(t.forceField) || 0);
-    const scale = parseInt(t.scale) || 0;
-    const expectedToughness = 2 + Math.floor(vigorDie / 2) + totalArmor + scale;
-    const actualToughness = parseInt(t.toughness) || 0;
-    if (actualToughness !== expectedToughness) {
-        warnings.push(`\u26a0 Toughness (${actualToughness}) \u2260 expected ${expectedToughness} (2 + Vig ${vigorDie}/2 + Armor ${totalArmor} + Scale ${scale}). May be intentional.`);
+    if (t.weakPoint?.toughnessOverride !== null && t.weakPoint?.toughnessOverride !== undefined) {
+        // Skip Toughness warning if GM intentionally hardcoded an override
+    } else {
+        const vigorStr = (t.attributes && t.attributes.Vigor) ? String(t.attributes.Vigor) : "d6";
+        const vigorMatch = vigorStr.match(/d(\d+)/);
+        const vigorDie = vigorMatch ? parseInt(vigorMatch[1]) : 6;
+        const totalArmor = (parseInt(t.naturalArmor) || 0) + (parseInt(t.wornArmor) || 0) + (parseInt(t.forceField) || 0);
+        const scale = parseInt(t.scale) || 0;
+        const expectedToughness = 2 + Math.floor(vigorDie / 2) + totalArmor + scale;
+        const actualToughness = parseInt(t.toughness) || 0;
+        if (actualToughness !== expectedToughness) {
+            warnings.push(`\u26a0 Toughness (${actualToughness}) \u2260 expected ${expectedToughness} (2 + Vig ${vigorDie}/2 + Armor ${totalArmor} + Scale ${scale}).`);
+        }
     }
 
     // Check Parry vs expected

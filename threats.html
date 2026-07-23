@@ -742,6 +742,12 @@ style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bot
                 <input type="checkbox" id="wild-attack-checkbox"> Wild Attack (+2 Hit/Dmg, Vulnerable)
             </label>
         </div>
+        <div class="setting-row" id="threat-joker-row" style="display:none;">
+            <span>Joker's Wild:</span>
+            <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                <input type="checkbox" id="threat-joker-checkbox"> Joker's Wild (+2)
+            </label>
+        </div>
         <!-- Shared TEM situational modifiers (from settings.js) -->
         <div id="tn-tem-container"></div>
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
@@ -971,12 +977,39 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     if ((target.wounds || 0) >= woundCap) {
         target.wounds = woundCap;
         target.incapacitated = true;
+        target.incapacitationResolved = false;
     } else if (
         target.incapacitated &&
         (target.wounds || 0) < woundCap &&
         (target.fatigue || 0) < 3
     ) {
         target.incapacitated = false;
+        target.incapacitationResolved = false;
+    }
+
+    // B7: mirror the new wound total onto the persistent character object (with a
+    // fresh Golden Hour timestamp per added wound) so wounds survive endCombat().
+    if (target.isPlayer && target.id && globalState.characters && globalState.characters[target.id]) {
+        let sheet = globalState.characters[target.id];
+        let netWounds = target.wounds || 0;
+        if (typeof sheet.wounds !== 'number') sheet.wounds = 0;
+        if (!Array.isArray(sheet.woundLog)) sheet.woundLog = [];
+        // Post a Discord embed per newly-added wound (with Golden Hour expiry).
+        if (woundsAdded > 0 && window.Embeds && globalState.webhook) {
+            await window.Embeds.post(globalState.webhook,
+                window.Embeds.woundTaken(target.name, woundsAdded, netWounds, attack.attackerName || null, target.incapacitated));
+        }
+        while (sheet.woundLog.length < netWounds) {
+            sheet.woundLog.push({ ts: Date.now(), attemptedBy: [] });
+        }
+        while (sheet.woundLog.length > netWounds) {
+            sheet.woundLog.pop();
+        }
+        sheet.wounds = netWounds;
+        if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
+            set(ref(db, `campaignState/characters/${target.id}/wounds`), sheet.wounds);
+            set(ref(db, `campaignState/characters/${target.id}/woundLog`), sheet.woundLog);
+        }
     }
 
     // If damage Shakes someone who was holding, they lose Hold.
@@ -1146,12 +1179,17 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
             const body = document.getElementById('weakpoint-body');
             const arrow = document.getElementById('weakpoint-collapse-arrow');
             if (!toggle || !body) return;
+            
+            const collapsed = localStorage.getItem('wpCollapsed') === 'true';
+            body.style.display = collapsed ? 'none' : 'block';
+            if (arrow) arrow.textContent = collapsed ? '[ + ]' : '[ − ]';
+
             toggle.addEventListener('click', function (e) {
-                // Don't toggle if clicking directly on a form control inside the header.
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-                const collapsed = body.style.display === 'none';
-                body.style.display = collapsed ? 'block' : 'none';
-                if (arrow) arrow.textContent = collapsed ? '[ − ]' : '[ + ]';
+                const isCollapsed = body.style.display === 'none';
+                body.style.display = isCollapsed ? 'block' : 'none';
+                if (arrow) arrow.textContent = isCollapsed ? '[ − ]' : '[ + ]';
+                localStorage.setItem('wpCollapsed', isCollapsed ? 'false' : 'true');
             });
         })();
         function renderCodex() {
@@ -1200,7 +1238,6 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
                 attributes: JSON.parse(JSON.stringify(defaultAttributes)), skills: JSON.parse(JSON.stringify(defaultSkills)), abilities: "", weapons: []
             };
             activeTemplateId = id;
-            warningsDismissed = true;   // fresh template: keep warnings hidden until first edit
             renderEditor(); renderCodex();
         };
         window.loadTemplate = function (id) {
@@ -1223,7 +1260,6 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
                 };
             }
             activeThreat.calledShotConfig = normalizeCsConfig(activeThreat.calledShotConfig);
-            warningsDismissed = true;   // loaded template: keep warnings hidden until first edit
             renderEditor(); renderCodex();
         };
         // ==========================================
@@ -1268,6 +1304,7 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
             }
             list.innerHTML = html;
         }
+        let csConfigDebounce = null;
         window.syncCsConfigFromInputs = function () {
             if (!activeThreat) return;
             activeThreat.calledShotConfig = normalizeCsConfig(activeThreat.calledShotConfig);
@@ -1300,7 +1337,10 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
                 if (cfg[k].hitPenalty > 0) cfg[k].hitPenalty = -cfg[k].hitPenalty;
             }
             // Persist immediately so the config survives reloads / is shared.
-            saveTemplateToDB(true);
+            if (csConfigDebounce) clearTimeout(csConfigDebounce);
+            csConfigDebounce = setTimeout(() => {
+                saveTemplateToDB(true);
+            }, 1000);
         };
         function renderEditor() {
             if (!activeThreat) return;
@@ -1522,23 +1562,39 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
         window.seedBestiary = async function () {
             if (!confirm("Initialize Master HL2 Bestiary? This will overwrite standard templates with 19 pre-configured threats.")) return;
             const hl2Threats = {
-                "hl2_headcrab": { name: "Headcrab", isWildCard: false, pace: 6, parry: 5, toughness: 4, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d6", Notice: "d6", Stealth: "d8" }, abilities: "Leap: Jumps 6\" ignoring elevation.\nLatch: Raise on Fighting roll latches onto head. Victim rolls Vigor or becomes Shaken and starts transforming.", weapons: [{ name: "Latch/Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_headcrab": { name: "Headcrab", isWildCard: false, pace: 6, parry: 5, toughness: 4, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d6", Notice: "d6", Stealth: "d8" }, abilities: `Leap: Jumps 6" ignoring elevation.
+Latch: Raise on Fighting roll latches onto head. Victim rolls Vigor or becomes Shaken and starts transforming.`, weapons: [{ name: "Latch/Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
                 "hl2_headcrab_fast": { name: "Fast Headcrab", isWildCard: false, pace: 8, parry: 5, toughness: 3, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d10", Smarts: "d4", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Athletics: "d10", Fighting: "d6", Notice: "d8", Stealth: "d10" }, abilities: "Leap & Latch.", weapons: [{ name: "Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_headcrab_poison": { name: "Poison Headcrab", isWildCard: false, pace: 6, parry: 6, toughness: 5, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8", Intimidation: "d10" }, abilities: "Leap & Latch.\nToxic Bite: Hit requires Vigor roll. Fail = Fatigue. Success = Shaken with pain (no Spirit recovery next round).", weapons: [{ name: "Toxic Bite", range: "Melee", damage: "Str", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_zombie": { name: "Zombie", isWildCard: false, pace: 4, parry: 5, toughness: 7, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d8", Vigor: "d8" }, skills: { Fighting: "d6", Intimidation: "d6", Notice: "d6", Throwing: "d6", Athletics: "d6" }, abilities: "Undead: +2 recover Shaken, no Called Shot dmg, immune poison/disease.\nHeadcrab Survivor: Destroying body drops 1-Wound Headcrab.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }, { name: "Swat Object", range: "3/6/12", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: defaultWeaponIcon }] },
-                "hl2_zombie_fast": { name: "Fast Zombie", isWildCard: false, pace: 8, parry: 6, toughness: 5, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d10", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d6" }, abilities: "Undead.\nWall Crawler: Climb verticals at Pace 8.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_zombie_poison": { name: "Poison Zombie", isWildCard: false, pace: 4, parry: 6, toughness: 8, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Undead.\nToxic Aura: Start turn in melee = Vigor roll or Fatigue.\nHive: Can throw 2-3 Poison Headcrabs.", weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }, { name: "Throw Headcrab", range: "4/8/16", damage: "Special", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: defaultWeaponIcon }] },
-                "hl2_antlion": { name: "Antlion", isWildCard: false, pace: 8, parry: 6, toughness: 6, naturalArmor: 1, wornArmor: 0, armor: 1, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Flight: Winged flight at Pace 8.\nBurrower: Hides underground, pops out as action.", weapons: [{ name: "Bite/Claws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_antlion_guard": { name: "Antlion Guard", isWildCard: true, pace: 8, parry: 6, toughness: 12, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: 2, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d12+2", Vigor: "d12" }, skills: { Athletics: "d8", Fighting: "d8", Intimidation: "d10", Notice: "d6" }, abilities: "Charge: +4 Dmg and +2 Athletics pushback if runs 6\" straight line.\nCarapace: +2 Armor.\nSize +2: Large.", weapons: [{ name: "Ram/Gore", range: "Melee", damage: "Str+d8", ap: "2", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_scanner": { name: "City Scanner", isWildCard: false, pace: 10, parry: 4, toughness: 6, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Driving: "d8", Notice: "d10", Taunt: "d6" }, abilities: "Construct: +2 recover Shaken, immune poison/disease, no Called Shot dmg.\nMark Target: Grants Combine +1 hit vs target.\nFlashbulb: Small Burst, Vigor or Distracted 1d4 rnds.", weapons: [] },
-                "hl2_manhack": { name: "Manhack", isWildCard: false, pace: 8, parry: 6, toughness: 5, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d6" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: "Construct.\nSmall: Attackers -2 to hit.", weapons: [{ name: "Buzzsaw", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_rollermine": { name: "Rollermine", isWildCard: false, pace: 8, parry: 4, toughness: 8, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -1, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d8", Notice: "d8" }, abilities: "Construct.\nEMP Burst: Explodes Small Burst 2d6 electrical damage when destroyed.", weapons: [{ name: "Electric Shock", range: "Melee", damage: "2d6", ap: "2", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_headcrab_poison": { name: "Poison Headcrab", isWildCard: false, pace: 6, parry: 6, toughness: 5, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8", Intimidation: "d10" }, abilities: `Leap & Latch.
+Toxic Bite: Hit requires Vigor roll. Fail = Fatigue. Success = Shaken with pain (no Spirit recovery next round).`, weapons: [{ name: "Toxic Bite", range: "Melee", damage: "Str", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_zombie": { name: "Zombie", isWildCard: false, pace: 4, parry: 5, toughness: 7, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d8", Vigor: "d8" }, skills: { Fighting: "d6", Intimidation: "d6", Notice: "d6", Throwing: "d6", Athletics: "d6" }, abilities: `Undead: +2 recover Shaken, no Called Shot dmg, immune poison/disease.
+Headcrab Survivor: Destroying body drops 1-Wound Headcrab.`, weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }, { name: "Swat Object", range: "3/6/12", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: defaultWeaponIcon }] },
+                "hl2_zombie_fast": { name: "Fast Zombie", isWildCard: false, pace: 8, parry: 6, toughness: 5, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d10", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d6" }, abilities: `Undead.
+Wall Crawler: Climb verticals at Pace 8.`, weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_zombie_poison": { name: "Poison Zombie", isWildCard: false, pace: 4, parry: 6, toughness: 8, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: `Undead.
+Toxic Aura: Start turn in melee = Vigor roll or Fatigue.
+Hive: Can throw 2-3 Poison Headcrabs.`, weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }, { name: "Throw Headcrab", range: "4/8/16", damage: "Special", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: defaultWeaponIcon }] },
+                "hl2_antlion": { name: "Antlion", isWildCard: false, pace: 8, parry: 6, toughness: 6, naturalArmor: 1, wornArmor: 0, armor: 1, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: `Flight: Winged flight at Pace 8.
+Burrower: Hides underground, pops out as action.`, weapons: [{ name: "Bite/Claws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_antlion_guard": { name: "Antlion Guard", isWildCard: true, pace: 8, parry: 6, toughness: 12, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: 2, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d12+2", Vigor: "d12" }, skills: { Athletics: "d8", Fighting: "d8", Intimidation: "d10", Notice: "d6" }, abilities: `Charge: +4 Dmg and +2 Athletics pushback if runs 6" straight line.
+Carapace: +2 Armor.
+Size +2: Large.`, weapons: [{ name: "Ram/Gore", range: "Melee", damage: "Str+d8", ap: "2", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_scanner": { name: "City Scanner", isWildCard: false, pace: 10, parry: 4, toughness: 6, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Driving: "d8", Notice: "d10", Taunt: "d6" }, abilities: `Construct: +2 recover Shaken, immune poison/disease, no Called Shot dmg.
+Mark Target: Grants Combine +1 hit vs target.
+Flashbulb: Small Burst, Vigor or Distracted 1d4 rnds.`, weapons: [] },
+                "hl2_manhack": { name: "Manhack", isWildCard: false, pace: 8, parry: 6, toughness: 5, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d6" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: `Construct.
+Small: Attackers -2 to hit.`, weapons: [{ name: "Buzzsaw", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_rollermine": { name: "Rollermine", isWildCard: false, pace: 8, parry: 4, toughness: 8, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -1, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d8", Notice: "d8" }, abilities: `Construct.
+EMP Burst: Explodes Small Burst 2d6 electrical damage when destroyed.`, weapons: [{ name: "Electric Shock", range: "Melee", damage: "2d6", ap: "2", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
                 "hl2_metrocop": { name: "Civil Protection (Metrocop)", isWildCard: false, pace: 6, parry: 4, toughness: 6, naturalArmor: 0, wornArmor: 1, armor: 1, ballisticProtection: 1, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Driving: "d6", Fighting: "d6", Intimidation: "d6", Notice: "d6", Shooting: "d6", Taunt: "d6", Athletics: "d6" }, abilities: "Tactical Doctrine: +1 recover Shaken near command.", weapons: [{ id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/sAz8rBR.png" }, { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/oAbqfGW.png" }, { id: "stunstick", name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: "https://i.imgur.com/pMPZprv.png" }] },
                 "hl2_combine_soldier": { name: "Combine Soldier", isWildCard: false, pace: 6, parry: 5, toughness: 8, naturalArmor: 0, wornArmor: 2, armor: 2, ballisticProtection: 2, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8", Stealth: "d6", Throwing: "d6" }, abilities: "Edges: Steady Hands.", weapons: [{ id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/oAbqfGW.png" }, { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/3rgRKGo.png" }, { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/9a4Uprg.png" }] },
                 "hl2_combine_shotgunner": { name: "Combine Shotgunner", isWildCard: false, pace: 6, parry: 5, toughness: 8, naturalArmor: 0, wornArmor: 2, armor: 2, ballisticProtection: 2, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8" }, abilities: "Edges: Sweep.", weapons: [{ id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" }, { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" }] },
                 "hl2_combine_elite": { name: "Combine Elite", isWildCard: true, pace: 6, parry: 6, toughness: 9, naturalArmor: 0, wornArmor: 3, armor: 3, ballisticProtection: 4, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d8", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Shooting: "d10", Stealth: "d8" }, abilities: "Edges: Rock and Roll!", weapons: [{ id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/3rgRKGo.png" }, { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/4lFt2CC.png" }] },
-                "hl2_gunship": { name: "Combine Gunship", isWildCard: true, pace: 15, parry: 7, toughness: 17, naturalArmor: 4, wornArmor: 0, armor: 4, ballisticProtection: 0, forceField: 0, scale: 4, heavyArmor: true, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: "Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms).\nPoint Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.", weapons: [{ name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }] },
-                "hl2_strider": { name: "Strider", isWildCard: true, pace: 12, parry: 7, toughness: 28, naturalArmor: 6, wornArmor: 0, armor: 6, ballisticProtection: 0, forceField: 0, scale: 8, heavyArmor: true, armorType: "General", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: "Construct. Massive (+8 Tgh, -8 to be hit by small arms).\nImpale: Legs deal Str+d10 AP4 in melee.\nCrouch: Can lower body to enter buildings.", weapons: [{ name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: "10", rof: "1", heavyWeapon: true, damageType: "Energy", icon: defaultWeaponIcon }] },
+                "hl2_gunship": { name: "Combine Gunship", isWildCard: true, pace: 15, parry: 7, toughness: 17, naturalArmor: 4, wornArmor: 0, armor: 4, ballisticProtection: 0, forceField: 0, scale: 4, heavyArmor: true, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: `Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms).
+Point Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.`, weapons: [{ name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }] },
+                "hl2_strider": { name: "Strider", isWildCard: true, pace: 12, parry: 7, toughness: 28, naturalArmor: 6, wornArmor: 0, armor: 6, ballisticProtection: 0, forceField: 0, scale: 8, heavyArmor: true, armorType: "General", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: `Construct. Massive (+8 Tgh, -8 to be hit by small arms).
+Impale: Legs deal Str+d10 AP4 in melee.
+Crouch: Can lower body to enter buildings.`, weapons: [{ name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: "10", rof: "1", heavyWeapon: true, damageType: "Energy", icon: defaultWeaponIcon }] },
                 "hl2_barnacle": { name: "Barnacle", isWildCard: false, pace: 0, parry: 2, toughness: 6, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", weakPoint: {
                     enabled: true,
                     name: "Tongue",
@@ -1547,8 +1603,10 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
                     bypassNatural: true,
                     toughnessOverride: 5,
                     notes: "Tongue is Toughness 5 to sever."
-                }, attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: "Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3\" up per round.\nWeak Point: Tongue is Toughness 5 to sever.", weapons: [{ name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
-                "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, naturalArmor: 1, wornArmor: 0, armor: 1, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Aquatic: Pace 10 in water.\nDrag: Raise on bite pulls target underwater (hold breath).", weapons: [{ name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] }
+                }, attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: `Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3" up per round.
+Weak Point: Tongue is Toughness 5 to sever.`, weapons: [{ name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, naturalArmor: 1, wornArmor: 0, armor: 1, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: `Aquatic: Pace 10 in water.
+Drag: Raise on bite pulls target underwater (hold breath).`, weapons: [{ name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] }
             };
             await update(ref(db, 'campaignState/threatTemplates'), hl2Threats);
             logToTerminal("> OVERWATCH BESTIARY FULLY INTEGRATED.");
@@ -1567,10 +1625,7 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
             let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
             let sides = match ? parseInt(match[1]) : 4;
             let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
-            let isJokerActive = activeThreat && globalState.combat?.participants?.some(p =>
-                p.name === activeThreat.name && p.card?.isJoker && p.jokerRound === globalState.combat?.round
-            );
-            let jokerBonus = isJokerActive ? 2 : 0;
+            let jokerBonus = document.getElementById('threat-joker-checkbox')?.checked ? 2 : 0;
             let totalMod = modifier + intrinsicMod + jokerBonus;
             let tRoll = rollExploding(sides);
             let wRoll = activeThreat.isWildCard ? rollExploding(6) : null;
@@ -1760,6 +1815,8 @@ function updateDefenderModifierAndStatus() {
         async function handleTestOrSupportOutcome(ctx, results, target) {
             let mode = document.getElementById('action-mode-select')?.value || 'normal';
             if (mode === 'normal' || !target) return;
+            
+            if (!globalState.combat || !globalState.combat.participants) return;
 
             let hit = results.some(r => r.outcome.includes("SUCCESS"));
             let hasRaise = results.some(r => r.hasRaise);
@@ -1805,8 +1862,10 @@ function updateDefenderModifierAndStatus() {
             }
 
             let results = [];
+            let currentCalledShot = window.getCurrentCalledShot ? window.getCurrentCalledShot() : null;
+
             for (let targetId of selectedTargetIds) {
-                let attackKey = `mass_blast_${targetId}_${Date.now()}`;
+                let attackKey = `mass_blast_${targetId}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
                 setAttackContext(attackKey, {
                     targetId: targetId,
                     targetName: globalState.combat.participants.find(p => p.id === targetId)?.name || "Target",
@@ -1815,7 +1874,8 @@ function updateDefenderModifierAndStatus() {
                     ap: weaponObj.ap || "0",
                     weaponName: weaponObj.name,
                     round: globalState.combat?.round || 1,
-                    savedAt: Date.now()
+                    savedAt: Date.now(),
+                    calledShot: currentCalledShot
                 });
                 let res = await applyDamageToTracker(attackKey, weaponObj, damageTotal);
                 results.push(res);
@@ -1837,13 +1897,19 @@ function updateDefenderModifierAndStatus() {
                 (activeWeaponContext.name || "").toLowerCase().includes("grenade") ||
                 (activeWeaponContext.name || "").toLowerCase().includes("rpg") ||
                 (activeWeaponContext.name || "").toLowerCase().includes("orb") ||
-                (activeWeaponContext.name || "").toLowerCase().includes("mine")
+                (activeWeaponContext.name || "").toLowerCase().includes("mine") ||
+                (activeWeaponContext.name || "").toLowerCase().includes("blast") ||
+                (activeWeaponContext.range || "").toLowerCase().includes("blast") ||
+                (activeWeaponContext.name || "").toLowerCase().includes("burst") ||
+                (activeWeaponContext.range || "").toLowerCase().includes("burst")
             );
 
+            if (!globalState.combat || !globalState.combat.participants || globalState.combat.participants.length === 0) {
+                multiRow.style.display = 'none';
+                return;
+            }
+
             multiRow.style.display = isAreaEffect ? 'flex' : 'none';
-
-            if (!globalState.combat || !globalState.combat.participants) return;
-
             let melee = isMeleeWeapon(activeWeaponContext);
 
             globalState.combat.participants.forEach(p => {
@@ -1854,10 +1920,10 @@ function updateDefenderModifierAndStatus() {
                 let fatigue = p.fatigue || 0;
 
                 let armorLabel = armor > 0 ? "+" + armor : "";
-
+                let prefix = p.isPlayer ? "[PC]" : "[NPC]";
                 let label = melee
-                    ? `${p.name} — Parry ${parry}`
-                    : `${p.name} — Tgh ${toughness}${armorLabel} | W ${wounds} | F ${fatigue}`;
+                    ? `${prefix} ${p.name} — Parry ${parry}`
+                    : `${prefix} ${p.name} — Tgh ${toughness}${armorLabel} | W ${wounds} | F ${fatigue}`;
 
                 let opt = document.createElement('option');
                 opt.value = p.id;
@@ -1890,7 +1956,9 @@ window.onTargetChange = function () {
             let melee = isMeleeWeapon(activeWeaponContext);
             let baseParry = parseInt(target.parry) || 4;
             let effectiveParry = baseParry + (target.defending ? 4 : 0);
-            document.getElementById('tn-input').value = melee ? effectiveParry : "4";
+            
+            let mode = document.getElementById('action-mode-select')?.value || 'normal';
+            document.getElementById('tn-input').value = (melee && mode !== 'test') ? effectiveParry : "4";
             
             if (!melee) {
         dodgeCheckbox.checked = targetHasDodge(target);
@@ -1907,14 +1975,6 @@ window.onTargetChange = function () {
     refreshCalledShotOptions();
     window.updateCalledShot();
 
-    // --- TROMBLEY DODGE REMINDER ---
-    if (target.id === 'trombley-hicks' || target.name.toLowerCase().includes('trombley')) {
-        if (!melee && !dodgeCheckbox.checked) {
-            dodgeCheckbox.checked = true;
-            onTargetDodgeChange(); // Recalculate modifiers
-        }
-        logToTerminal(`> <span style="color:#00ccff;">[ REMINDER: ${target.name} has the DODGE edge. Ranged attacks suffer -2. Checkbox auto-enabled.]</span>`);
-    }
 };
 // ==========================================
 // PART 4: CALLED SHOT HELPERS
@@ -1994,6 +2054,8 @@ window.onTargetDodgeChange = async function () {
             document.getElementById('tn-input').value = "4";
             document.getElementById('mod-override-input').value = "0";
             document.getElementById('map-select').value = "0";
+            document.getElementById('action-mode-select').value = "normal";
+            document.getElementById('test-options-row').style.display = "none";
             // Reset the shared TEM situational modifiers.
             if (window.resetTEMModifiers) window.resetTEMModifiers('tn');
 
@@ -2001,7 +2063,6 @@ window.onTargetDodgeChange = async function () {
             const calledShotRow = document.getElementById('called-shot-row');
             const calledShotSelect = document.getElementById('called-shot-select');
             calledShotRow.style.display = "flex";
-            if (calledShotSelect) calledShotSelect.value = "none";
             refreshCalledShotOptions();
             window.updateCalledShot();
             // B8: Reset defender state and populate the target list when combat is live
@@ -2029,6 +2090,7 @@ window.onTargetDodgeChange = async function () {
                 rofOpts.style.display = "block";
                 document.getElementById('scope-row').style.display = "flex";
                 document.getElementById('wild-attack-row').style.display = "none";
+                document.getElementById('threat-joker-row').style.display = "none";
                 let rofVal = parseInt(wep.rof) || 1;
                 const rofSelect = document.getElementById('rof-select');
                 rofSelect.innerHTML = `<option value="1">Single Shot (1 Bullet)</option>`;
@@ -2049,6 +2111,7 @@ window.onTargetDodgeChange = async function () {
                 document.getElementById('aim-mode-row').style.display = "none";
                 document.getElementById('aim-scope-row').style.display = "none";
                 document.getElementById('wild-attack-row').style.display = "flex";
+                document.getElementById('threat-joker-row').style.display = "flex";
             }
             document.getElementById('tn-modal').style.display = 'block';
         };
@@ -2116,8 +2179,15 @@ window.onTargetDodgeChange = async function () {
             if (!window.getTEMModifierValues || !document.getElementById('tn-sit-cover')) return 0;
             let tem = window.getTEMModifierValues('tn', { isMelee: threatsIsMelee() });
             let total = tem.total;
+            
+            let target = getSelectedTarget();
+            let targetAlreadyDefending = target ? target.defending : false;
+            
             // Defend = target defending (+4 Parry = -4 to roll, melee only).
-            if (tem.values.defend && threatsIsMelee()) total -= 4;
+            // Do not subtract 4 if the target's native 'defending' flag is already inflating Parry.
+            if (tem.values.defend && threatsIsMelee() && !targetAlreadyDefending) {
+                total -= 4;
+            }
             return total;
         }
         window.__temChanged = function () { window.updateModifierAdjust(); };
@@ -2129,6 +2199,7 @@ window.onTargetDodgeChange = async function () {
             }
         })();
         window.confirmRoll = function () {
+            if (!pendingRoll) return;
             let tn = parseInt(document.getElementById('tn-input').value) || 4;
             let is3RB = false;
             let isSupp = false;
@@ -2147,8 +2218,7 @@ window.onTargetDodgeChange = async function () {
             document.getElementById('tn-modal').style.display = 'none';
             pendingRoll.is3RB = is3RB;
             pendingRoll.isSupp = isSupp;
-            let wepRoF = activeWeaponContext ? (activeWeaponContext.rof || 1) : 1;
-            executeThreatRoll(pendingRoll.skill, tn, shotsFired, is3RB, isSupp, wepRoF);
+            executeThreatRoll(pendingRoll.skill, tn, shotsFired, is3RB, isSupp);
         };
         window.cancelRoll = function () {
             document.getElementById('tn-modal').style.display = 'none';
@@ -2257,7 +2327,7 @@ function summarizeVolley(results, isCritFail) {
     return `${totals} (${hits} hit${hits !== 1 ? 's' : ''})`;
 }
 
-window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, is3RB, isSuppressive, wepRoF) {
+window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, is3RB, isSuppressive) {
     let dieValue = activeThreat.skills[skillName] || "d4";
     let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
     let sides = match ? parseInt(match[1]) : 4;
@@ -2270,29 +2340,32 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
         ? window.getCurrentCalledShot()
         : { id: "none", hitMod: 0, dmgMod: 0 };
 
-    let isJokerActive = activeThreat && globalState.combat?.participants?.some(p =>
-        p.name === activeThreat.name && p.card?.isJoker && p.jokerRound === globalState.combat?.round
-    );
-    let jokerBonus = isJokerActive ? 2 : 0;
+            let jokerBonus = document.getElementById('threat-joker-checkbox')?.checked ? 2 : 0;
+    let supportKey = `support_${activeThreat?.name}`;
+    let supportBonus = parseInt(sessionStorage.getItem(supportKey)) || 0;
+
     let totalModifier = intrinsicMod
         + unskilledMod
         + customMod
         + mapPenalty
         + defenderModifier
         + jokerBonus
+        + supportBonus
         + (parseInt(calledShot.hitMod) || 0);
+    
+    if (supportBonus) sessionStorage.removeItem(supportKey);
     
     let isWildAttack = !isMeleeWeapon(activeWeaponContext) ? false : document.getElementById('wild-attack-checkbox').checked;
     if (isWildAttack) {
         totalModifier += 2;
-        logToTerminal(`> <span style="color:#ff3333;">[!] WILD ATTACK: +2 to hit. Attacker is now VULNERABLE until next turn.</span>`);
+        logToTerminal(`> <span style="color:#ff3333;">[!] WILD ATTACK: +2 to hit. GM must manually apply VULNERABLE to the attacking NPC on the Combat Tracker.</span>`);
     }
 
     let outcome = performThreatRoll(sides, totalModifier, targetNumber, shotsFired, is3RB, isSuppressive);
     
     // Save context for reroll
     lastRollContext = {
-        skillName, targetNumber, shotsFired, is3RB, isSuppressive, wepRoF,
+        skillName, targetNumber, shotsFired, is3RB, isSuppressive,
         sides, totalModifier, isWildAttack,
         results: outcome.results,
         isCritFail: outcome.isCritFail,
@@ -2309,11 +2382,12 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
 
     let attackHit = isSuppressive ? outcome.results.some(r => r.hasRaise) : hit;
     storeThreatAttackContext(attackHit, outcome.results, calledShot);
-    if (!isSuppressive) {
+    let mode = document.getElementById('action-mode-select')?.value || 'normal';
+    if (mode !== 'normal') {
         let target = getSelectedTarget();
-        await handleTestOrSupportOutcome(null, outcome.results, target);
+        await handleTestOrSupportOutcome({}, outcome.results, target);
     }
-    renderAttackEmbed(skillName, sides, totalModifier, targetNumber, outcome.results, outcome.isCritFail, is3RB, isSuppressive, wepRoF, null, calledShot);
+    renderAttackEmbed(skillName, sides, totalModifier, targetNumber, outcome.results, outcome.isCritFail, is3RB, isSuppressive, null, calledShot);
 };
 
 window.rerollLastRoll = async function () {
@@ -2362,14 +2436,14 @@ window.rerollLastRoll = async function () {
         : keptResults.some(r => r.outcome.includes("SUCCESS"));
     storeThreatAttackContext(attackHit, keptResults, lastRollContext.calledShot);
 
-    renderAttackEmbed(lastRollContext.skillName, lastRollContext.sides, lastRollContext.totalModifier, lastRollContext.targetNumber, keptResults, keptIsCritFail, lastRollContext.is3RB, lastRollContext.isSuppressive, lastRollContext.wepRoF, {
+    renderAttackEmbed(lastRollContext.skillName, lastRollContext.sides, lastRollContext.totalModifier, lastRollContext.targetNumber, keptResults, keptIsCritFail, lastRollContext.is3RB, lastRollContext.isSuppressive, {
         which: keptWhich,
         oldSummary: summarizeVolley(lastRollContext.results, lastRollContext.isCritFail),
         newSummary: summarizeVolley(newOutcome.results, newOutcome.isCritFail)
     }, lastRollContext.calledShot);
 };
 
-async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, wepRoF, rerollInfo = null, calledShot = null) {
+async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, rerollInfo = null, calledShot = null) {
     let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
     let modStrDisplay = totalModifier !== 0 ? ` (${totalModifier > 0 ? '+' : ''}${totalModifier})` : "";
     let title = `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
@@ -2438,8 +2512,10 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
             embed.fields.push({ name: "Called Shot", value: calledShot.label || calledShot.id, inline: true });
         }
         
-        let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || defaultWeaponIcon;
-        embed.thumbnail = { url: imgUrl };
+        let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || "";
+        if (imgUrl && !imgUrl.includes("Orange_lambda.svg")) {
+            embed.thumbnail = { url: imgUrl };
+        }
         
         fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
     }
@@ -2495,11 +2571,10 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                 return;
             }
             total += flatMod;
-            let isJokerActive = activeThreat && globalState.combat?.participants?.some(p =>
-                p.name === activeThreat.name && p.card?.isJoker && p.jokerRound === globalState.combat?.round
-            );
-            let jokerBonus = isJokerActive ? 2 : 0;
+            let jokerBonus = document.getElementById('threat-joker-checkbox')?.checked ? 2 : 0;
             total += jokerBonus;
+            let wildAttackDmgBonus = (!isMeleeWeapon(activeWeaponContext) ? false : document.getElementById('wild-attack-checkbox')?.checked) ? 2 : 0;
+            total += wildAttackDmgBonus;
             let bonusStr = ""; let bonusRolls = [];
             if (addRaise) {
                 let rRoll = rollExploding(6);
@@ -2515,7 +2590,17 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
             total += calledDmg;
             let calledStr = calledDmg > 0 ? ` + ${calledDmg} (Called Shot)` : "";
 
-            let application = await applyDamageToTracker(attackKey, wep, total);
+            let multiSelect = document.getElementById('multi-target-select');
+            let application;
+            if (document.getElementById('multi-target-row').style.display !== 'none' && multiSelect && multiSelect.selectedOptions.length > 0) {
+                let massResults = await applyMassDamageToTracker(wep, total);
+                application = {
+                    message: massResults.map(r => r.message).filter(Boolean).join('<br>&nbsp;&nbsp;'),
+                    plainText: massResults.map(r => r.plainText).filter(Boolean).join('\n')
+                };
+            } else {
+                application = await applyDamageToTracker(attackKey, wep, total);
+            }
 
             // Store context for a Benny damage reroll (one reroll per damage roll).
             lastDamageContext = {
@@ -2524,7 +2609,7 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                 baseDice,
                 baseModifier: flatMod,
                 hasRaise: addRaise,
-                staticBonus: calledDmg,
+                staticBonus: jokerBonus + wildAttackDmgBonus + calledDmg, // BUG 1 & 16 FIX
                 total: total,
                 rolls: rolls.slice(),
                 formula: dmgStr,
@@ -2577,8 +2662,10 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
 *(Includes +${calledDmg} Called Shot damage)*`;
                     }
                 }
-                let imgUrl = wep.image || wep.icon || defaultWeaponIcon;
-                embed.thumbnail = { url: imgUrl };
+                let imgUrl = wep.image || wep.icon || "";
+                if (imgUrl && !imgUrl.includes("Orange_lambda.svg")) {
+                    embed.thumbnail = { url: imgUrl };
+                }
                 embed.fields.push({ name: "Weapon Specifications", value: `Range: ${wep.range || "—"}\nDamage: ${wep.damage || "—"}\nAP: ${wep.ap || "0"}\nRoF: ${wep.rof || "1"}` });
 
                 if (application.plainText) {
@@ -2633,7 +2720,8 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                 newRolls.push(`Raise:${bRoll.history.join('+')}`);
             }
             newTotal += last.staticBonus;
-            newTotal += (window.hasEdge ? (window.hasEdge("No Mercy") ? 2 : 0) : 0);
+            let hasNoMercy = !!(activeThreat && activeThreat.abilities && /\bno\s*mercy\b/i.test(activeThreat.abilities));
+            newTotal += (hasNoMercy ? 2 : 0);
 
             last.usedReroll = true;
             updateDamageRerollButton(wepIndex);
@@ -2660,8 +2748,8 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                     color: 0xff3333,
                     fields: [{ name: "Kept Dice History", value: keptRolls.join(' + '), inline: true }]
                 };
-                let imgUrl = wep.image || wep.icon || defaultWeaponIcon;
-                if (imgUrl) embed.thumbnail = { url: imgUrl };
+                let imgUrl = wep.image || wep.icon || "";
+                if (imgUrl && !imgUrl.includes("Orange_lambda.svg")) embed.thumbnail = { url: imgUrl };
                 fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
             }
         };
@@ -2695,6 +2783,8 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                     scale: parseInt(activeThreat.scale) || 0, pace: activeThreat.pace || 6,
                     heavyArmor: !!activeThreat.heavyArmor,
                     armorType: activeThreat.armorType || "General",
+                    attributes: JSON.parse(JSON.stringify(activeThreat.attributes || defaultAttributes)),
+                    skills: JSON.parse(JSON.stringify(activeThreat.skills || defaultSkills)),
                     weakPoint: JSON.parse(JSON.stringify(activeThreat.weakPoint || null)),
                     calledShotConfig: normalizeCsConfig(activeThreat.calledShotConfig),
                     bennies: 0, // NPCs use shared GM pool

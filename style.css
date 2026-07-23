@@ -138,7 +138,7 @@ body::after {
     border: 2px solid var(--theme-color);
     background-color: var(--bg-color);
     padding: 25px;
-    z-index: 999999 !important; /* Fixed: Now renders on top of the terminal */
+    z-index: 9999999 !important; /* Added an extra 9 to sit above TN modal */
     width: max-content;
     min-width: 400px;
     max-width: 95vw;

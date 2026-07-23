@@ -26,7 +26,7 @@
     async function postTracked(webhook, embed) {
         if (!webhook) return null;
         try {
-            const url = webhook.includes('?') ? `${webhook}&wait=true` : `${webhook}?wait=true`;
+            const url = webhook.includes('wait=true') ? webhook : (webhook.includes('?') ? `${webhook}&wait=true` : `${webhook}?wait=true`);
             const resp = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -103,7 +103,7 @@
     function soak(name, vigorDie, traitHistory, wildHistory, totalMod, bestTotal, removed, allSoaked) {
         const embed = {
             title: `${name} spent a Benny to Soak`,
-            description: `**Result: ${bestTotal}** (Vigor vs TN 4)\n**Soaked ${removed} Wound(s)** — removed from the sheet${allSoaked ? " (Shaken cleared)" : ""}.`,
+            description: `**Result: ${bestTotal}** (Vigor vs TN 4)\n**Soaked ${removed} Wound(s)** — removed from the target${allSoaked ? " (Shaken cleared)" : ""}.`,
             color: removed > 0 ? 0x00ff00 : 0xff3333,
             fields: traitFields(`Vigor (d${vigorDie})`, traitHistory, wildHistory)
         };
@@ -123,7 +123,7 @@
 
     // Wound applied (auto-damage or GM). Includes Golden Hour expiry timestamp.
     function woundTaken(name, woundsAdded, totalWounds, attackerName, incapacitated) {
-        const ghExpiry = new Date(Date.now() + (60 * 60 * 1000)).toLocaleString();
+        const ghExpiry = `<t:${Math.floor(Date.now() / 1000) + 3600}:t>`;
         return {
             title: `Wound taken: ${name}`,
             description: `**${woundsAdded} wound(s)** applied${attackerName ? ` by ${attackerName}` : ''}.\nTotal wounds: **${totalWounds}**${incapacitated ? '\n**INCAPACITATED**' : ''}`,
@@ -136,7 +136,7 @@
 
     // Fatigue gained (GM). Includes hourly recovery timestamp.
     function fatigueGained(name, totalFatigue, incapacitated) {
-        const recExpiry = new Date(Date.now() + (60 * 60 * 1000)).toLocaleString();
+        const recExpiry = `<t:${Math.floor(Date.now() / 1000) + 3600}:t>`;
         return {
             title: `Fatigue gained: ${name}`,
             description: `**1 fatigue level** added by the GM.\nTotal fatigue: **${totalFatigue}**${incapacitated ? '\n**INCAPACITATED**' : ''}`,
@@ -149,7 +149,7 @@
 
     // Injury sustained (GM roll or incap roll).
     function injurySustained(name, roll, location, description, sub) {
-        const fields = [{ name: "Sustained", value: new Date().toLocaleString(), inline: true }];
+        const fields = [{ name: "Sustained", value: `<t:${Math.floor(Date.now() / 1000)}:f>`, inline: true }];
         if (sub) fields.push({ name: "Detail", value: sub, inline: true });
         return {
             title: `Injury sustained: ${name}`,

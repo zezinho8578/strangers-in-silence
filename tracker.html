@@ -552,6 +552,9 @@
                     <div class="calc-row">
                         <span style="width: 80px;">Attack Roll:</span>
                         <input type="number" id="calc-attack" class="calc-input">
+                        <label style="font-size:0.85em; display:flex; align-items:center; gap:4px; margin-left:10px;">
+                            <input type="checkbox" id="calc-is-melee" checked> Melee Attack?
+                        </label>
                         <button class="die-btn" onclick="calcAttack()">COMPARE PARRY</button>
                     </div>
                     <div class="calc-row">
@@ -971,7 +974,7 @@
                     else if (edgesNorm.includes("toughasnails")) woundCap = 5;
                     // B5: Detect initiative Edges/Hindrances from the sheet's edges text.
                     let edgesLower = (data.edges || "").toLowerCase();
-                    let hasQuick = /\bquick\b/.test(edgesLower) && !/\bquick\s*draw\b/.test(edgesLower);
+                    let hasQuick = /\bquick\b/.test(edgesLower) && !/\bquick[\s-]*draw\b/.test(edgesLower);
                     let initFlags = {
                         hesitant: edgesNorm.includes("hesitant"),
                         quick: hasQuick,
@@ -999,6 +1002,7 @@
                         // over from the character sheet instead of resetting to 0.
                         wounds: data.wounds || 0,
                         fatigue: data.fatigue || 0,
+                        injuries: data.injuries || [],
                         woundCap: woundCap,
                         // B7: if carried-over wounds/fatigue already meet the cap, mark incapacitated.
                         incapacitated: (data.wounds || 0) >= woundCap || (data.fatigue || 0) >= 3,
@@ -1100,16 +1104,23 @@
                         let count = f.improvedLevelHeaded ? 3 : 2;
                         let drawn = [];
                         for (let i = 0; i < count; i++) drawn.push(drawCard(combat));
-                        let chosenIdx = await showCardPicker(drawn, p.name, f.improvedLevelHeaded);
-                        finalCard = drawn[chosenIdx];
+                        if (p.isPlayer) {
+                            let chosenIdx = await showCardPicker(drawn, p.name, f.improvedLevelHeaded);
+                            finalCard = drawn[chosenIdx];
+                        } else {
+                            drawn.sort((a,b) => (b.rank !== a.rank) ? b.rank - a.rank : b.suit - a.suit);
+                            finalCard = drawn[0]; // NPCs automatically take best card
+                        }
                     } else {
                         finalCard = drawCard(combat);
                     }
                     // QUICK (p.45): may redraw any card of Five or lower (one redraw).
                     if (f.quick && finalCard && !finalCard.isJoker && finalCard.rank <= 5) {
-                        let redraw = await showYesNo(`${p.name} drew the ${finalCard.label} and has QUICK. Redraw it?`);
-                        if (redraw) {
-                            finalCard = drawCard(combat);
+                        if (p.isPlayer) {
+                            let redraw = await showYesNo(`${p.name} drew the ${finalCard.label} and has QUICK. Redraw it?`);
+                            if (redraw) finalCard = drawCard(combat);
+                        } else {
+                            finalCard = drawCard(combat); // NPCs automatically redraw
                         }
                     }
                     p.card = finalCard;
@@ -1170,7 +1181,7 @@
                 if (rankB !== rankA) return rankB - rankA;
                 return suitB - suitA;
             });
-            let firstValidIdx = combat.participants.findIndex(p => !p.card.isJoker && !p.incapacitated);
+            let firstValidIdx = combat.participants.findIndex(p => !p.card.isJoker && !p.incapacitated && !p.onHold);
             combat.activeTurnIndex = firstValidIdx !== -1 ? firstValidIdx : 0;
             combat.jokerActiveIndex = -1;
             combat.holdActiveIndex = -1; // B5
@@ -1221,11 +1232,9 @@
                 alert("Round Complete! Deal initiative for the next round.");
                 if (combat.round === undefined || combat.round === null) combat.round = 1;
                 else combat.round += 1;
-                let lastValid = combat.participants.length - 1;
-                while (lastValid >= 0 && combat.participants[lastValid].card && (combat.participants[lastValid].card.isJoker || combat.participants[lastValid].incapacitated || combat.participants[lastValid].onHold)) {
-                    lastValid--;
-                }
-                combat.activeTurnIndex = lastValid >= 0 ? lastValid : 0;
+                combat.participants.forEach(p => p.bleedingOutResolvedThisTurn = false);
+                let firstValid = combat.participants.findIndex(p => p.card && !p.card.isJoker && !p.incapacitated && !p.onHold);
+                combat.activeTurnIndex = firstValid >= 0 ? firstValid : 0;
                 await update(ref(db, 'campaignState/combat'), {
                     activeTurnIndex: combat.activeTurnIndex,
                     round: combat.round
@@ -1335,6 +1344,7 @@
             let idx = participants.findIndex(x => x.id === selectedParticipantId);
             if (idx === -1) return;
             let p = participants[idx];
+            if (p.incapacitated) { alert(`${p.name} is Incapacitated and cannot act.`); return; }
             if (!p.card) { alert("Cards have not been dealt yet. Deal initiative first."); return; }
             if (getBennies(globalState.combat, p) <= 0) { alert(`${p.name} has no Bennies to spend.`); return; }
             if (!combat.deck || combat.deck.length === 0) { alert("The deck is empty. Reshuffle is pending — deal initiative next round."); return; }
@@ -1434,9 +1444,8 @@
             let groupOn = combat.groupExtras !== false; // B14
             // Inject the shared TEM panel into the calculator once.
             let temHost = document.getElementById('calc-tem-container');
-            if (temHost && window.buildTEMModifiersHTML && !temHost.dataset.injected) {
+            if (temHost && window.buildTEMModifiersHTML && !temHost.querySelector('.tem-shared-section')) {
                 temHost.innerHTML = window.buildTEMModifiersHTML('calc');
-                temHost.dataset.injected = '1';
             }
             document.getElementById('round-display').innerText = `ROUND: ${combat.round || 1}`;
             document.getElementById('deck-display').innerText = `ACTIVE DECK: ${combat.deck ? combat.deck.length : 0}/54 CARDS${combat.needsReshuffle ? ' [RESHUFFLE PENDING]' : ''}`;
@@ -1754,6 +1763,7 @@
             // B7: mirror wounds/fatigue onto the persistent character object (with a
             // fresh Golden Hour wound timestamp per added wound) so they survive
             // endCombat(). This mirrors the existing benny sync above.
+            let updates = {};
             if (p.isPlayer && (stat === 'wounds' || stat === 'fatigue')) {
                 if (stat === 'wounds') {
                     let sheet = globalState.characters && globalState.characters[p.id];
@@ -1762,13 +1772,13 @@
                         while (sheet.woundLog.length < newVal) sheet.woundLog.push({ ts: Date.now(), attemptedBy: [] });
                         while (sheet.woundLog.length > newVal) sheet.woundLog.pop();
                         sheet.wounds = newVal;
-                        await set(ref(db, `campaignState/characters/${p.id}/wounds`), newVal);
-                        await set(ref(db, `campaignState/characters/${p.id}/woundLog`), sheet.woundLog);
+                        updates[`campaignState/characters/${p.id}/wounds`] = newVal;
+                        updates[`campaignState/characters/${p.id}/woundLog`] = sheet.woundLog;
                     }
                     // Discord embed when a wound is ADDED (with Golden Hour expiry).
                     if (amount > 0 && globalState.webhook && window.Embeds) {
                         await window.Embeds.post(globalState.webhook,
-                            window.Embeds.woundTaken(p.name, 1, newVal, null, p.incapacitated));
+                            window.Embeds.woundTaken(p.name, amount, newVal, null, p.incapacitated));
                     }
                 } else {
                     let sheet = globalState.characters && globalState.characters[p.id];
@@ -1777,8 +1787,8 @@
                         while (sheet.fatigueLog.length < newVal) sheet.fatigueLog.push({ ts: Date.now() });
                         while (sheet.fatigueLog.length > newVal) sheet.fatigueLog.pop();
                         sheet.fatigue = newVal;
-                        await set(ref(db, `campaignState/characters/${p.id}/fatigue`), newVal);
-                        await set(ref(db, `campaignState/characters/${p.id}/fatigueLog`), sheet.fatigueLog);
+                        updates[`campaignState/characters/${p.id}/fatigue`] = newVal;
+                        updates[`campaignState/characters/${p.id}/fatigueLog`] = sheet.fatigueLog;
                     }
                     // Discord embed when fatigue is ADDED (with hourly recovery note).
                     if (amount > 0 && globalState.webhook && window.Embeds) {
@@ -1787,7 +1797,8 @@
                     }
                 }
             }
-            await set(ref(db, 'campaignState/combat/participants'), participants);
+            updates['campaignState/combat/participants'] = participants;
+            await update(ref(db), updates);
         };
         window.toggleStatus = async function (status) {
             if (!selectedParticipantId) return;
@@ -1802,8 +1813,10 @@
                 p.onHold = false;
             }
             if (isOn) {
-                const activeIdx = effectiveActiveIndex(globalState.combat);
-                p[status + "TTL"] = (idx === activeIdx) ? 2 : 1;
+                let isCurrentlyActing = (idx === globalState.combat.activeTurnIndex) || 
+                                        (idx === globalState.combat.jokerActiveIndex) || 
+                                        (idx === globalState.combat.holdActiveIndex);
+                p[status + "TTL"] = (status === 'defending') ? 1 : (isCurrentlyActing ? 2 : 1);
             } else {
                 p[status + "TTL"] = 0;
             }
@@ -1847,7 +1860,9 @@
             if (!p.stunned) return;
             // Determine Vigor die
             let vigorDie = 6;
-            if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
+            if (p.attributes?.Vigor?.die) {
+                vigorDie = parseInt(p.attributes.Vigor.die) || 6;
+            } else if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
                 vigorDie = parseInt(globalState.characters[p.id].attributes?.Vigor?.die) || 6;
             }
             let penalty = Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2);
@@ -1940,12 +1955,15 @@
             if (getBennies(globalState.combat, p) <= 0) { alert("No Bennies remaining to Soak."); return; }
             if ((p.wounds || 0) <= 0) { alert("No Wounds to Soak."); return; }
             let vigorDie = 6;
-            if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
+            if (p.attributes?.Vigor?.die) {
+                vigorDie = parseInt(p.attributes.Vigor.die) || 6;
+            } else if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
                 vigorDie = parseInt(globalState.characters[p.id].attributes?.Vigor?.die) || 6;
             }
             let tRoll = rollExplodingDice(vigorDie);
             let wRoll = p.isWildCard ? rollExplodingDice(6) : null;
-            let best = wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total;
+            let statusPenalty = -(Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2));
+            let best = (wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total) + statusPenalty;
             let soaked = 0;
             if (best >= 4) soaked = 1 + Math.floor((best - 4) / 4);
             soaked = Math.min(soaked, p.wounds);
@@ -2064,8 +2082,7 @@
             let baseParry = parseInt(target.parry) || 4;
             // Shared TEM: Defend = TARGET defending (+4 Parry, melee only). Applied ONLY
             // to Parry (not also to the roll) to avoid double-counting.
-            let dmgType = document.getElementById('calc-dmgtype')?.value || 'Melee';
-            let isMelee = (dmgType === 'Melee');
+            let isMelee = document.getElementById('calc-is-melee')?.checked || false;
             let temVals = window.getTEMModifierValues ? window.getTEMModifierValues('calc', { isMelee: isMelee }) : { total: 0, summary: [], values: {} };
             let targetDefending = target.defending || temVals.values.defend;
             let defendBonus = (targetDefending && isMelee) ? 4 : 0;
@@ -2152,6 +2169,10 @@
                             }
                             await set(ref(db, 'campaignState/combat/participants'), participants);
                         }
+                        // Discord Embed Addition:
+                        if (globalState && globalState.webhook && window.Embeds) {
+                            await window.Embeds.post(globalState.webhook, window.Embeds.woundTaken(target.name, wounds, target.wounds, null, target.incapacitated));
+                        }
                         output = `Target was already SHAKEN — physical damage inflicts **1 WOUND** (applied to tracker).`;
                     } else {
                         output = `Target is **SHAKEN**. (If already shaken, causes 1 Wound).`;
@@ -2198,17 +2219,17 @@
             if (!combat || !combat.participants || !combat.participants.length) return;
             if (!globalState || !globalState.webhook) return;
             if (!window.Embeds) return;
-            // Delete the previous turn-order message (if any) so we don't spam.
-            if (_turnOrderMessageId) {
-                await window.Embeds.deleteMessage(globalState.webhook, _turnOrderMessageId);
-                _turnOrderMessageId = null;
+            let msgId = globalState.combat.turnOrderMessageId;
+            if (msgId) {
+                await window.Embeds.deleteMessage(globalState.webhook, msgId);
             }
             let activeIdx = effectiveActiveIndex(combat);
             let isJokerInt = idxValid(combat.jokerActiveIndex);
             let isHoldInt = idxValid(combat.holdActiveIndex);
             let embed = window.Embeds.turnOrder(combat, activeIdx, isJokerInt, isHoldInt);
             if (embed) {
-                _turnOrderMessageId = await window.Embeds.postTracked(globalState.webhook, embed);
+                let newId = await window.Embeds.postTracked(globalState.webhook, embed);
+                if (newId) await set(ref(db, 'campaignState/combat/turnOrderMessageId'), newId);
             }
         }
         // Post the turn-order embed after initiative is dealt too.
