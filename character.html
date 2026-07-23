@@ -838,7 +838,7 @@
     <!-- Firebase Realtime WebSockets Integration -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, update, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
         // ==========================================
         // 1. CONFIGURATION
         // ==========================================
@@ -1826,6 +1826,7 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
             let armorPen = parseInt(charData.derived.armorPenalty) || 0;
             let effectivePace = Math.max(1, basePace - armorPen);
             document.getElementById('der-pace').innerText = effectivePace + (armorPen > 0 ? ` (base ${basePace}, −${armorPen} armor)` : '');
+            charData.derived.paceEffective = effectivePace;
             document.getElementById('notes-edges').value = charData.edges;
             document.getElementById('notes-gear').value = charData.gear;
             attachEditListeners();
@@ -3647,6 +3648,45 @@ window.onTargetDodgeChange = async function () {
             if (preset.notes) html += `<br><i>${preset.notes}</i>`;
             preview.innerHTML = html;
         }
+        async function syncArmorToCombat() {
+            if (typeof isFirebaseConfigured === 'undefined' || !isFirebaseConfigured) return;
+            if (!activeCharId) return;
+            try {
+                const snap = await get(ref(db, 'campaignState/combat'));
+                const combat = snap && snap.val ? snap.val() : null;
+                if (!combat || !combat.participants) return;
+
+                const parts = combat.participants;
+                const isArray = Array.isArray(parts);
+                const entries = isArray ? parts.map((p, i) => [String(i), p]) : Object.entries(parts);
+                let changed = false;
+
+                for (const [, p] of entries) {
+                    if (!p || !p.isPlayer) continue;
+                    const matches = (p.id === activeCharId) || (p.charId === activeCharId) ||
+                                    (p.isPlayer && p.name && p.name === charData.name);
+                    if (!matches) continue;
+
+                    p.toughness          = parseInt(charData.derived.toughness) || 0;
+                    p.armor              = parseInt(charData.derived.armor) || 0;
+                    p.naturalArmor       = parseInt(charData.derived.naturalArmor) || 0;
+                    p.wornArmor          = parseInt(charData.derived.wornArmor) || 0;
+                    p.ballisticProtection= parseInt(charData.derived.ballisticProtection) || 0;
+                    p.forceField         = parseInt(charData.derived.forceField) || 0;
+                    p.armorType          = charData.derived.armorType || "General";
+                    p.heavyArmor         = !!charData.derived.heavyArmor;
+                    p.pace               = parseInt(charData.derived.paceEffective ?? charData.derived.pace) || 6;
+                    changed = true;
+                }
+
+                if (changed) {
+                    await set(ref(db, 'campaignState/combat/participants'),
+                              isArray ? parts : Object.fromEntries(entries));
+                }
+            } catch (e) {
+                console.warn("syncArmorToCombat failed:", e);
+            }
+        }
         function confirmArmorEquip() {
             const slot = document.getElementById('armor-slot-select').value;
             const id = document.getElementById('equip-armor-select').value;
@@ -3692,6 +3732,7 @@ window.onTargetDodgeChange = async function () {
             renderSheet();
             renderArmor();
             saveCharacter();
+            syncArmorToCombat();
             document.getElementById('armor-equip-modal').style.display = 'none';
             if (globalState && globalState.webhook) {
                 const embed = {
@@ -3734,6 +3775,7 @@ window.onTargetDodgeChange = async function () {
             renderSheet();
             renderArmor();
             saveCharacter();
+            syncArmorToCombat();
             if (removed && globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name} unequipped armor`,
@@ -3748,6 +3790,7 @@ window.onTargetDodgeChange = async function () {
             renderSheet();
             renderArmor();
             saveCharacter();
+            syncArmorToCombat();
         }
         function renderArmor() {
             const container = document.getElementById('armor-list-container');
