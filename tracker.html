@@ -858,7 +858,7 @@
                         armorType: data.derived?.armorType || "General",
                         heavyArmor: !!data.derived?.heavyArmor,
                         scale: parseInt(data.derived?.scale) || 0,
-                        pace: parseInt(data.derived?.pace) || 6,
+                        pace: parseInt(data.derived?.paceEffective ?? data.derived?.pace) || 6,
                         wounds: 0,
                         fatigue: 0,
                         woundCap: woundCap,
