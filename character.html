@@ -162,6 +162,47 @@
             background: rgba(255, 51, 51, 0.05);
         }
 
+        /* Force-field cards keep their cyan accent border (replaces a former
+           inline style so the state classes below can override it by source
+           order — equal specificity, later declaration wins). */
+        .weapon-card.force-field-card {
+            border-color: #00ccff;
+        }
+
+        /* Ruined armor — red treatment mirroring the unequip (del) button.
+           Applies to primary/secondary armor and to a force field that was
+           ruined while still holding charge. */
+        .weapon-card.ruined {
+            border-color: #ff3333;
+            background: rgba(255, 51, 51, 0.08);
+            color: #ff3333;
+        }
+        .weapon-card.ruined .die-btn {
+            border-color: #ff3333;
+            color: #ff3333;
+        }
+        .weapon-card.ruined .die-btn:hover {
+            background: #ff3333;
+            color: var(--bg-color);
+        }
+
+        /* Depleted force field — greyed-out treatment. Declared AFTER .ruined
+           so it wins by source order: a drained FF is ruined=true but should
+           read as "out of charge", not "destroyed". */
+        .weapon-card.out-of-charge {
+            border-color: #888888;
+            background: rgba(136, 136, 136, 0.08);
+            color: #999999;
+        }
+        .weapon-card.out-of-charge .die-btn {
+            border-color: #888888;
+            color: #999999;
+        }
+        .weapon-card.out-of-charge .die-btn:hover {
+            background: #888888;
+            color: var(--bg-color);
+        }
+
         .weapon-icon {
             width: 90px;
             height: 45px;
@@ -2003,20 +2044,9 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
         </div>`;
             }
 
-            const dummy = {
-                toughness: 0,
-                naturalArmor: 0,
-                wornArmor: 4,
-                ballisticProtection: 0,
-                forceField: 0,
-                armorType: "General"
-            };
-
-            const pipeline = computeArmorPipeline(dummy, dmgType, ap);
-
-            return `<div style="grid-column:1/-1; font-size:0.8em; opacity:0.7; margin-top:4px;">
-        vs generic Armor 4: effective armor ${pipeline.armorAfterAP}${ap.ignore ? " (ignored)" : ""}
-    </div>`;
+            // No target selected — nothing to show. (Previously this rendered
+            // a "vs generic Armor 4" hint that was more confusing than useful.)
+            return "";
         }
         function renderWeapons() {
             const container = document.getElementById('weapons-list-container');
@@ -2412,7 +2442,7 @@ ${reloadBtn}
 <td style="text-align:center;"><input type="checkbox" class="armor-ff-toggle" data-index="${index}" ${p.forceField ? "checked" : ""} style="width:18px; height:18px;" title="Force Field — ignores AP, stacks with all armor"></td>
 <td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="minStr">${p.minStr}</td>
 <td>
-<select class="armor-degrade-select" data-index="${index}" style="width:110px;">
+<select class="ammo-tier-select armor-degrade-select" data-index="${index}" style="width:110px;">
 <option value="none" ${p.degradationPolicy === 'none' ? 'selected' : ''}>None</option>
 <option value="perWoundRoll" ${p.degradationPolicy === 'perWoundRoll' ? 'selected' : ''}>Per-Wound</option>
 <option value="threshold" ${p.degradationPolicy === 'threshold' ? 'selected' : ''}>Threshold</option>
@@ -4158,11 +4188,17 @@ Armor: +${newArmor.armor} | Type: ${newArmor.armorType} | BP: ${newArmor.ballist
         function armorGmButtons(slot) {
             if (!isAdmin) return "";
 
+            // RECHARGE / -1 CHARGE only apply to force-field (charge-policy)
+            // armor — hide them from non-FF armor.
+            const chargeButtons = (slot === 'forcefield')
+                ? `
+        <button class="die-btn" style="font-size:0.75em;" onclick="rechargeArmor('${slot}')">RECHARGE</button>
+        <button class="die-btn" style="font-size:0.75em;" onclick="adjustArmorCharge('${slot}', -1)">-1 CHARGE</button>`
+                : "";
+
             return `
         <button class="die-btn" style="font-size:0.75em;" onclick="markArmorRuined('${slot}', true)">RUIN</button>
-        <button class="die-btn" style="font-size:0.75em;" onclick="markArmorRuined('${slot}', false)">REPAIR</button>
-        <button class="die-btn" style="font-size:0.75em;" onclick="rechargeArmor('${slot}')">RECHARGE</button>
-        <button class="die-btn" style="font-size:0.75em;" onclick="adjustArmorCharge('${slot}', -1)">-1 CHARGE</button>
+        <button class="die-btn" style="font-size:0.75em;" onclick="markArmorRuined('${slot}', false)">REPAIR</button>${chargeButtons}
     `;
         }
 
@@ -4226,8 +4262,9 @@ Armor: +${newArmor.armor} | Type: ${newArmor.armorType} | BP: ${newArmor.ballist
             document.getElementById('natural-armor-input').value = charData.naturalArmor || 0;
             if (charData.equippedArmor) {
                 let a = charData.equippedArmor;
+                const ruinedClass = (a.ruined) ? " ruined" : "";
                 container.innerHTML += `
-<div class="weapon-card">
+<div class="weapon-card${ruinedClass}">
 <img class="weapon-icon" src="${a.icon}" alt="${a.name}" style="width:64px; height:64px;">
 <div class="weapon-details" style="grid-template-columns: repeat(2, 1fr);">
 <div><b>${a.name.toUpperCase()}</b> <span style="opacity:0.6;">[PRIMARY]</span></div>
@@ -4247,8 +4284,9 @@ ${armorGmButtons('primary')}
             if (charData.equippedArmorSecondary) {
                 let a = charData.equippedArmorSecondary;
                 let halfVal = Math.floor((parseInt(a.armor) || 0) / 2);
+                const ruinedClass = (a.ruined) ? " ruined" : "";
                 container.innerHTML += `
-<div class="weapon-card" style="opacity: 0.8;">
+<div class="weapon-card${ruinedClass}" style="opacity: 0.8;">
 <img class="weapon-icon" src="${a.icon}" alt="${a.name}" style="width:64px; height:64px;">
 <div class="weapon-details" style="grid-template-columns: repeat(2, 1fr);">
 <div><b>${a.name.toUpperCase()}</b> <span style="opacity:0.6;">[SECONDARY — half value]</span></div>
@@ -4265,8 +4303,19 @@ ${armorGmButtons('secondary')}
             }
             if (charData.equippedForceField) {
                 let a = charData.equippedForceField;
+                // Out-of-charge (grey + OUT OF CHARGE banner) takes precedence
+                // over the generic ruined (red) treatment for force fields.
+                const isOutOfCharge = (a.degradationPolicy === "charge")
+                    && ((parseInt(a.chargeRemaining) || 0) <= 0);
+                const ffStateClass = isOutOfCharge
+                    ? " force-field-card out-of-charge"
+                    : (a.ruined ? " force-field-card ruined" : " force-field-card");
+                const ffWrap = isOutOfCharge ? ' style="flex-wrap:wrap;"' : "";
+                const chargeBanner = isOutOfCharge
+                    ? `<div style="flex-basis:100%; width:100%; text-align:center; color:#ff3333; font-weight:bold; letter-spacing:2px; padding-top:8px; border-top:1px dashed #ff3333; text-shadow:0 0 4px rgba(255,51,51,0.6);">OUT OF CHARGE</div>`
+                    : "";
                 container.innerHTML += `
-<div class="weapon-card" style="border-color: #00ccff;">
+<div class="weapon-card${ffStateClass}"${ffWrap}>
 <img class="weapon-icon" src="${a.icon}" alt="${a.name}" style="width:64px; height:64px;">
 <div class="weapon-details" style="grid-template-columns: repeat(2, 1fr);">
 <div><b>${a.name.toUpperCase()}</b> <span style="color:#00ccff;">[FORCE FIELD]</span></div>
@@ -4279,6 +4328,7 @@ ${armorStatusHtml(charData.equippedForceField)}
 ${armorGmButtons('forcefield')}
 <button class="die-btn del-btn" onclick="unequipArmor('forcefield')">UNEQUIP</button>
 </div>
+${chargeBanner}
 </div>`;
             }
             if (!charData.equippedArmor && !charData.equippedArmorSecondary && !charData.equippedForceField) {
