@@ -215,21 +215,19 @@ body::after {
     min-height: 40px;
 }
 .armor-preset-table {
-    table-layout: fixed;
-    width: 100%;
+    width: auto;
+    max-width: 100%;
 }
 .armor-preset-table td,
 .armor-preset-table th {
-    padding: 4px 3px;
-    font-size: 0.8em;
+    padding: 4px 6px;
+    font-size: 0.85em;
+}
+.armor-preset-table .armor-preset-edit {
+    max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-.armor-preset-table .armor-preset-edit {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 .badge {
     display: inline-block;
@@ -274,3 +272,33 @@ body::after {
         padding: 12px 15px;
     }
 }
+
+/* Threat editor: tidy, uniform stat grid */
+.stats-row.editor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 8px 12px;
+    align-items: center;
+}
+.stats-row.editor-grid .form-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    width: auto;
+    flex: none;
+    margin: 0;
+}
+.stats-row.editor-grid .form-row > span:first-child {
+    min-width: 96px;
+    white-space: nowrap;
+}
+.stats-row.editor-grid #edit-armortype { width: 100px !important; }
+.stats-row.editor-grid #edit-totalarmor {
+    display: inline-block;
+    min-width: 34px;
+    border: 1px solid var(--theme-color);
+    padding: 1px 6px;
+    text-align: center;
+}
+.stats-row.editor-grid #editor-warnings { grid-column: 1 / -1; }
