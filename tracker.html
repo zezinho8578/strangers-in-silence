@@ -522,7 +522,7 @@
                 <div class="target-calc" id="target-calc-container">
                     <div style="margin-bottom: 10px;">> QUICK TARGET CALCULATOR</div>
                     <div class="calc-row">
-                        <select id="calc-target" class="calc-select">
+                        <select id="calc-target" class="calc-select" onchange="onCalcTargetChange()">
                             <option value="">-- Select Target --</option>
                         </select>
                     </div>
@@ -542,6 +542,13 @@
                             <option value="Melee">Melee</option>
                         </select>
                         <button class="die-btn" onclick="calcDamage()">COMPARE TOUGHNESS</button>
+                    </div>
+
+                    <div class="calc-row">
+                        <span style="width: 80px;">Called Shot:</span>
+                        <select id="calc-calledshot" class="calc-select">
+                            <option value="none">None</option>
+                        </select>
                     </div>
                     <div id="calc-result">> WAITING FOR INPUT...</div>
                 </div>
@@ -1419,6 +1426,11 @@
                 targetSelect.innerHTML += `<option value="${p.id}" ${prevTarget === p.id ? 'selected' : ''}>${p.name}</option>`;
             });
             updateDetailPanel();
+
+            // Part 4: keep calculator called-shot options synced to selected target.
+            if (window.onCalcTargetChange) {
+                window.onCalcTargetChange();
+            }
         }
         window.selectParticipant = function (id) {
             selectedParticipantId = id;
@@ -1788,6 +1800,33 @@
         // ==========================================
         // 7. TARGET CALCULATOR (GM ASSIST)
         // ==========================================
+        // ==========================================
+        // PART 4: TRACKER CALCULATOR CALLED SHOTS
+        // ==========================================
+        function getCalcTarget() {
+            const id = document.getElementById('calc-target').value;
+            if (!id || !globalState.combat || !globalState.combat.participants) return null;
+            return globalState.combat.participants.find(p => p.id === id) || null;
+        }
+
+        window.onCalcTargetChange = function () {
+            const sel = document.getElementById('calc-calledshot');
+            if (!sel) return;
+
+            if (window.populateCalledShotSelect) {
+                window.populateCalledShotSelect(sel, getCalcTarget());
+            }
+        };
+
+        window.getCalcCalledShot = function () {
+            const sel = document.getElementById('calc-calledshot');
+            if (!sel) return { id: "none", hitMod: 0, dmgMod: 0 };
+
+            const target = getCalcTarget();
+            return window.getCalledShotConfig
+                ? window.getCalledShotConfig(sel.value, target)
+                : { id: "none", hitMod: 0, dmgMod: 0 };
+        };
         window.calcAttack = function () {
             let targetId = document.getElementById('calc-target').value;
             let roll = parseInt(document.getElementById('calc-attack').value);
@@ -1798,18 +1837,22 @@
             }
             let target = globalState.combat.participants.find(x => x.id === targetId);
             let parry = parseInt(target.parry);
-            let effectiveRoll = target.vulnerable ? roll + 2 : roll;
+            let calcCalled = window.getCalcCalledShot ? window.getCalcCalledShot() : { hitMod: 0 };
+            let effectiveRoll = roll + (parseInt(calcCalled.hitMod) || 0) + (target.vulnerable ? 2 : 0);
             resultBox.style.borderColor = "var(--theme-color)";
             if (effectiveRoll < parry) {
-                resultBox.innerHTML = `FAILURE against ${target.name}'s Parry (${target.parry}).`;
+                resultBox.innerHTML = `FAILURE against ${target.name}'s Parry (${target.parry}).` +
+                    (calcCalled.label ? `<br><span style="font-size:0.9em;">Called Shot: ${calcCalled.label}</span>` : "");
                 resultBox.style.color = "var(--theme-color)";
             } else {
                 let raises = Math.floor((effectiveRoll - parry) / 4);
                 if (raises > 0) {
-                    resultBox.innerHTML = `HIT WITH ${raises} RAISE(S)! (+1d6 Dmg)`;
+                    resultBox.innerHTML = `HIT WITH ${raises} RAISE(S)! (+1d6 Dmg)` +
+                        (calcCalled.label ? `<br><span style="font-size:0.9em;">Called Shot: ${calcCalled.label}</span>` : "");
                     resultBox.style.color = "#00ff00";
                 } else {
-                    resultBox.innerHTML = `SUCCESS! Hit against ${target.name}.`;
+                    resultBox.innerHTML = `SUCCESS! Hit against ${target.name}.` +
+                        (calcCalled.label ? `<br><span style="font-size:0.9em;">Called Shot: ${calcCalled.label}</span>` : "");
                     resultBox.style.color = "#00ff00";
                 }
             }
@@ -1826,12 +1869,17 @@
             let apInput = document.getElementById('calc-ap').value || "0";
             let ap = parseApForDamage(apInput);
             let selectedDmgType = document.getElementById('calc-dmgtype').value || "Ballistic";
-            let pipeline = computeArmorPipeline(target, selectedDmgType, ap);
+            let calcCalled = window.getCalcCalledShot ? window.getCalcCalledShot() : {};
+            let calledDmg = parseInt(calcCalled.dmgMod) || 0;
+            roll += calledDmg;
+
+            let pipeline = computeArmorPipeline(target, selectedDmgType, ap, calcCalled);
             let effectiveToughness = pipeline.effectiveToughness;
             let breakdown = buildDamageBreakdown(roll, pipeline);
             resultBox.style.borderColor = "var(--theme-color)";
             if (roll < effectiveToughness) {
-                resultBox.innerHTML = `NO EFFECT. ${breakdown}.`;
+                resultBox.innerHTML = `NO EFFECT. ${breakdown}.` +
+                    (calcCalled.label ? `<br><span style="font-size:0.9em;">Called Shot: ${calcCalled.label}</span>` : "");
                 resultBox.style.color = "var(--theme-color)";
             } else {
                 let extra = roll - effectiveToughness;
@@ -1854,7 +1902,8 @@
                 } else {
                     output = `Target is **SHAKEN** and takes **${wounds} WOUND(S)**!`;
                 }
-                resultBox.innerHTML = `${output}<br><span style="font-size:0.9em;">${breakdown}</span>`;
+                resultBox.innerHTML = `${output}<br><span style="font-size:0.9em;">${breakdown}</span>` +
+                    (calcCalled.label ? `<br><span style="font-size:0.9em;">Called Shot: ${calcCalled.label}</span>` : "");
                 resultBox.style.color = "#ff9900";
             }
         };
