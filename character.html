@@ -638,6 +638,9 @@
                             <th>HW?</th>
                             <th>FF?</th>
                             <th>Min Str</th>
+                            <th>Degradation</th>
+                            <th>Param</th>
+                            <th>Desc/Wt</th>
                             <th>Icon Image Link</th>
                             <th>Action</th>
                         </tr>
@@ -683,6 +686,17 @@
                 <input type="checkbox" id="target-dodge-checkbox" onchange="onTargetDodgeChange()"
                     style="width:20px; height:20px; pointer-events: auto !important;">
             </div>
+        </div>
+        <div class="setting-row" id="called-shot-row"
+            style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Called Shot:</span>
+            <select id="called-shot-select" class="admin-input" style="width:280px; pointer-events: auto !important;"
+                onchange="updateCalledShot()">
+                <option value="none">None</option>
+            </select>
+        </div>
+        <div id="called-shot-status"
+            style="font-size:0.85em; color:#ff9900; text-align:left; min-height:1.2em; margin: 4px 0; display:none;">
         </div>
         <div id="ranged-options-container"
             style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
@@ -816,6 +830,26 @@
             <button class="die-btn" onclick="cancelArmorEquip()" style="pointer-events: auto !important;">CANCEL</button>
         </div>
     </div>
+    <!-- Armor Details Modal -->
+    <div id="armor-details-modal"
+        style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid var(--theme-color); background: var(--bg-color); padding: 25px; z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(0, 0, 0, 0.9); width: max-content; min-width: 380px; pointer-events: auto !important;">
+        <h3 style="margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px;">EDIT ARMOR DESCRIPTION & WEIGHT</h3>
+
+        <div class="setting-row">
+            <span>Description:</span>
+            <textarea id="armor-details-notes" class="edit-area" style="min-height:120px; width:320px;"></textarea>
+        </div>
+
+        <div class="setting-row">
+            <span>Weight (lbs):</span>
+            <input type="number" id="armor-details-weight" class="admin-input" style="width:100px; text-align:center;">
+        </div>
+
+        <div class="tn-buttons">
+            <button class="die-btn" onclick="saveArmorDetails()">SAVE</button>
+            <button class="die-btn" onclick="cancelArmorDetails()">CANCEL</button>
+        </div>
+    </div>
     <!-- Minimum Strength Warning Modal -->
     <div id="min-str-modal"
         style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid #ff3333; background: var(--bg-color); padding: 25px; z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(255,0,0,0.9); width: max-content; min-width: 350px; pointer-events: auto !important;">
@@ -832,6 +866,23 @@
             <button class="die-btn" style="border-color:#ff3333; color:#ff3333; pointer-events: auto !important;"
                 onclick="proceedMinStr()">PROCEED ANYWAY</button>
             <button class="die-btn" onclick="cancelMinStr()" style="pointer-events: auto !important;">CANCEL</button>
+        </div>
+    </div>
+    <!-- Armor Minimum Strength Warning Modal -->
+    <div id="armor-min-str-modal"
+        style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid #ff3333; background: var(--bg-color); padding: 25px; z-index: 999999 !important; text-align: center; box-shadow: 0 0 20px rgba(255,0,0,0.9); width: max-content; min-width: 350px; pointer-events: auto !important;">
+        <h3 style="color:#ff3333; margin-top:0; border-bottom: 1px solid #ff3333; padding-bottom: 10px;">ARMOR STRENGTH REQUIREMENT NOT MET</h3>
+        <p id="armor-min-str-modal-text"></p>
+
+        <label
+        style="display:inline-flex; align-items:center; gap:8px; margin: 15px 0; font-size: 0.9em; cursor:pointer; pointer-events: auto !important;">
+        <input type="checkbox" id="never-show-armor-min-str" style="width:16px; height:16px;"> Never show me again for future armor
+        </label>
+
+        <div class="tn-buttons">
+        <button class="die-btn" style="border-color:#ff3333; color:#ff3333; pointer-events: auto !important;"
+            onclick="proceedArmorMinStr()">PROCEED ANYWAY</button>
+        <button class="die-btn" onclick="cancelArmorMinStr()" style="pointer-events: auto !important;">CANCEL</button>
         </div>
     </div>
     <script src="/settings.js"></script>
@@ -874,16 +925,16 @@
             { id: "bugbait", name: "Bugbait", range: "12/24/48", damage: "Special", ap: "—", rof: "1", shots: "1", minStr: "d4", damageType: "Ballistic", icon: "https://i.imgur.com/gwitRFd.png" }
         ];
         const defaultArmorPresets = [
-            { id: "hev-suit", name: "HEV Suit (Mark V)", armor: 4, armorType: "General", heavyArmor: false, ballisticProtection: 2, forceField: false, minStr: "d4", weight: 15, cost: 5000, icon: "https://i.imgur.com/niLzrfW.png", notes: "Black Mesa standard issue. Full-body protection." },
-            { id: "combine-light", name: "Combine Soldier Armor", armor: 3, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 2, forceField: false, minStr: "d6", weight: 12, cost: 800, icon: "https://i.imgur.com/niLzrfW.png", notes: "Standard Combine infantry issue." },
-            { id: "combine-elite", name: "Combine Elite Armor", armor: 5, armorType: "Ballistic", heavyArmor: true, ballisticProtection: 4, forceField: false, minStr: "d8", weight: 20, cost: 2000, icon: "https://i.imgur.com/niLzrfW.png", notes: "Heavy plating. Elite units only." },
-            { id: "metrocop", name: "Civil Protection Vest", armor: 2, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 1, forceField: false, minStr: "d4", weight: 5, cost: 200, icon: "https://i.imgur.com/niLzrfW.png", notes: "Light vest. Metrocop standard." },
-            { id: "rebel", name: "Rebel Flak Jacket", armor: 2, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 1, forceField: false, minStr: "d4", weight: 6, cost: 150, icon: "https://i.imgur.com/niLzrfW.png", notes: "Scavenged military surplus." },
-            { id: "hazmat", name: "Hazard Suit", armor: 1, armorType: "General", heavyArmor: false, ballisticProtection: 0, forceField: false, minStr: "d4", weight: 8, cost: 300, icon: "https://i.imgur.com/niLzrfW.png", notes: "Radiation and chemical protection." },
-            { id: "kevlar", name: "Kevlar Vest", armor: 4, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 4, forceField: false, minStr: "d6", weight: 4, cost: 200, icon: "https://i.imgur.com/niLzrfW.png", notes: "Lightweight. Worn under clothing." },
-            { id: "combat-armor", name: "Combat Armor (Full)", armor: 6, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 4, forceField: false, minStr: "d8", weight: 12, cost: 800, icon: "https://i.imgur.com/niLzrfW.png", notes: "Full suit with helmet, boots, gloves." },
-            { id: "energy-skin", name: "Energy Skin", armor: 8, armorType: "Energy", heavyArmor: false, ballisticProtection: 0, forceField: false, minStr: "d4", weight: 5, cost: 500, icon: "https://i.imgur.com/niLzrfW.png", notes: "+8 vs lasers/energy only. Shiny. -2 Stealth." },
-            { id: "ff-belt", name: "Combine Forcefield Belt", armor: 4, armorType: "General", heavyArmor: false, ballisticProtection: 0, forceField: true, minStr: "d4", weight: 4, cost: 2000, icon: "https://i.imgur.com/niLzrfW.png", notes: "Ignores AP. 24hr battery. Stacks with all armor." }
+            { id: "hev-suit", name: "HEV Suit (Mark V)", armor: 4, armorType: "General", heavyArmor: false, ballisticProtection: 2, forceField: false, minStr: "d4", weight: 15, cost: 5000, icon: "https://i.imgur.com/niLzrfW.png", notes: "Black Mesa standard issue. Full-body protection.", degradationPolicy: "threshold", degradationParam: "3" },
+            { id: "combine-light", name: "Combine Soldier Armor", armor: 3, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 2, forceField: false, minStr: "d6", weight: 12, cost: 800, icon: "https://i.imgur.com/niLzrfW.png", notes: "Standard Combine infantry issue.", degradationPolicy: "threshold", degradationParam: "2" },
+            { id: "combine-elite", name: "Combine Elite Armor", armor: 5, armorType: "Ballistic", heavyArmor: true, ballisticProtection: 4, forceField: false, minStr: "d8", weight: 20, cost: 2000, icon: "https://i.imgur.com/niLzrfW.png", notes: "Heavy plating. Elite units only.", degradationPolicy: "threshold", degradationParam: "4" },
+            { id: "metrocop", name: "Civil Protection Vest", armor: 2, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 1, forceField: false, minStr: "d4", weight: 5, cost: 200, icon: "https://i.imgur.com/niLzrfW.png", notes: "Light vest. Metrocop standard.", degradationPolicy: "perWoundRoll", degradationParam: "" },
+            { id: "rebel", name: "Rebel Flak Jacket", armor: 2, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 1, forceField: false, minStr: "d4", weight: 6, cost: 150, icon: "https://i.imgur.com/niLzrfW.png", notes: "Scavenged military surplus.", degradationPolicy: "perWoundRoll", degradationParam: "" },
+            { id: "hazmat", name: "Hazard Suit", armor: 1, armorType: "General", heavyArmor: false, ballisticProtection: 0, forceField: false, minStr: "d4", weight: 8, cost: 300, icon: "https://i.imgur.com/niLzrfW.png", notes: "Radiation and chemical protection.", degradationPolicy: "none", degradationParam: "" },
+            { id: "kevlar", name: "Kevlar Vest", armor: 4, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 4, forceField: false, minStr: "d6", weight: 4, cost: 200, icon: "https://i.imgur.com/niLzrfW.png", notes: "Lightweight. Worn under clothing.", degradationPolicy: "threshold", degradationParam: "2" },
+            { id: "combat-armor", name: "Combat Armor (Full)", armor: 6, armorType: "Ballistic", heavyArmor: false, ballisticProtection: 4, forceField: false, minStr: "d8", weight: 12, cost: 800, icon: "https://i.imgur.com/niLzrfW.png", notes: "Full suit with helmet, boots, gloves.", degradationPolicy: "threshold", degradationParam: "4" },
+            { id: "energy-skin", name: "Energy Skin", armor: 8, armorType: "Energy", heavyArmor: false, ballisticProtection: 0, forceField: false, minStr: "d4", weight: 5, cost: 500, icon: "https://i.imgur.com/niLzrfW.png", notes: "+8 vs lasers/energy only. Shiny. -2 Stealth.", degradationPolicy: "perWoundRoll", degradationParam: "" },
+            { id: "ff-belt", name: "Combine Forcefield Belt", armor: 4, armorType: "General", heavyArmor: false, ballisticProtection: 0, forceField: true, minStr: "d4", weight: 4, cost: 2000, icon: "https://i.imgur.com/niLzrfW.png", notes: "Ignores AP. 24hr battery. Stacks with all armor.", degradationPolicy: "charge", degradationParam: "24" }
         ];
         const strongProjectileIds = ["ar2-orb", "rpg", "grenade", "mine", "crossbow", "bugbait"];
         const ammoTiers = ["Full", "High", "OK", "Low", "Very Low", "Out"];
@@ -937,6 +988,11 @@
         // B8: Defender/target integration state
         let defenderModifier = 0;
         let defenderDisplay = "";
+
+        // Part 4: Called Shots
+        let calledShotId = "none";
+        let calledShotModifier = 0;
+        let calledShotOpts = {};
         const pendingDamagePrefix = 'pending_damage_bonus_';
         function getWeaponBonusKey(weaponObj, fallback = '') {
             return weaponObj?.id || weaponObj?.name || fallback || 'Unarmed';
@@ -1014,16 +1070,17 @@ function storeAttackContext(ctx, hit, results) {
         .map(r => r.isSingle ? String(r.total) : `Shot ${r.shotIndex}: ${r.total}`)
         .join(', ');
 
-    setAttackContext(ctx.storageKey, {
-        targetId: ctx.targetId || null,
-        targetName: ctx.targetName || "",
-        hit: !!hit,
-        ap: ctx.activeWeaponContext.ap ?? "0",
-        weaponName: ctx.activeWeaponContext.name || "Weapon",
-        attackSummary: summary,
-        round: globalState?.combat?.round ?? null,
-        savedAt: Date.now()
-    });
+        setAttackContext(ctx.storageKey, {
+            targetId: ctx.targetId || null,
+            targetName: ctx.targetName || "",
+            hit: !!hit,
+            ap: ctx.activeWeaponContext.ap ?? "0",
+            weaponName: ctx.activeWeaponContext.name || "Weapon",
+            attackSummary: summary,
+            round: globalState?.combat?.round ?? null,
+            savedAt: Date.now(),
+            calledShot: ctx.calledShot || null
+        });
 }
 
 async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
@@ -1115,7 +1172,8 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     }
 
     // Full armor pipeline
-    const pipeline = computeArmorPipeline(target, weaponDmgType, ap);
+    const calledShot = attack.calledShot || {};
+    const pipeline = computeArmorPipeline(target, weaponDmgType, ap, calledShot);
     const effectiveToughness = pipeline.effectiveToughness;
     const breakdown = buildDamageBreakdown(damageTotal, pipeline);
 
@@ -1128,6 +1186,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     const wasShaken = !!target.shaken;
     const oldWounds = target.wounds || 0;
     const raises = Math.floor((damageTotal - effectiveToughness) / 4);
+    let degradeNotes = [];
 
     let becameShaken = false;
     let woundsAdded = 0;
@@ -1169,6 +1228,47 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     participants[idx] = target;
     globalState.combat.participants = participants;
 
+    // Part 4: Armor degradation for player-equipped armor.
+    if (target.isPlayer && globalState.characters && globalState.characters[target.id]) {
+        let sheet = JSON.parse(JSON.stringify(globalState.characters[target.id]));
+
+        if (window.normalizeCharacterArmorInstances) {
+            window.normalizeCharacterArmorInstances(sheet);
+        }
+
+        if (window.degradeCharacterArmor) {
+            degradeNotes = window.degradeCharacterArmor(sheet, {
+                weaponDmgType,
+                woundsAdded,
+                bypassWorn: !!(calledShot && calledShot.bypassWorn),
+                forceFieldApplied: (pipeline.forceField || 0) > 0
+            });
+        }
+
+        if (degradeNotes.length) {
+            if (window.recalcCharacterDerived) {
+                window.recalcCharacterDerived(sheet);
+            }
+
+            globalState.characters[target.id] = sheet;
+
+            // Push the new defensive stats into the live combat participant.
+            target.toughness = sheet.derived.toughness;
+            target.naturalArmor = sheet.derived.naturalArmor;
+            target.wornArmor = sheet.derived.wornArmor;
+            target.armor = sheet.derived.armor;
+            target.ballisticProtection = sheet.derived.ballisticProtection;
+            target.forceField = sheet.derived.forceField;
+            target.armorType = sheet.derived.armorType;
+            target.heavyArmor = sheet.derived.heavyArmor;
+            target.pace = sheet.derived.paceEffective ?? sheet.derived.pace ?? target.pace;
+
+            if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
+                await set(ref(db, `campaignState/characters/${target.id}`), sheet);
+            }
+        }
+    }
+
     if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
         await set(ref(db, 'campaignState/combat/participants'), participants);
     } else {
@@ -1194,6 +1294,11 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     result.applied = true;
     result.message = `> <b style="color:#ff3333;">AUTO-APPLIED:</b> ${breakdown} → ${sentence}`;
     result.plainText = `AUTO-APPLIED: ${breakdown} → ${sentence}`;
+
+    if (degradeNotes.length) {
+        result.message += `<br>&nbsp;&nbsp;<b style="color:#ff9900;">ARMOR DEGRADATION:</b> ${degradeNotes.join('<br>&nbsp;&nbsp;')}`;
+        result.plainText += ` ARMOR DEGRADATION: ${degradeNotes.join(' ')}`;
+    }
 
     return result;
 }
@@ -1348,6 +1453,11 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (charData.equippedArmorSecondary === undefined) charData.equippedArmorSecondary = null;
             if (charData.equippedForceField === undefined) charData.equippedForceField = null;
             if (charData.naturalArmor === undefined) charData.naturalArmor = 0;
+
+            // Part 4: normalize equipped armor instances.
+            if (window.normalizeCharacterArmorInstances) {
+                window.normalizeCharacterArmorInstances(charData);
+            }
             if (charData.equippedArmorPenalty === undefined) charData.equippedArmorPenalty = 0;
             if (!charData.derived) charData.derived = { pace: "6", parryOverride: 0, toughnessOverride: 0 };
             if (charData.derived.parryOverride === undefined) charData.derived.parryOverride = 0;
@@ -1772,42 +1882,13 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
             }
             let calcParry = 2 + Math.floor(fightDie / 2) + Math.floor(fightMod / 2) + weaponParryBonus + parryOverride;
             charData.derived.parry = calcParry;
-            let vigorDie = charData.attributes["Vigor"] ? getDieStep(charData.attributes["Vigor"].die) : 4;
-            let toughOverride = parseInt(charData.derived.toughnessOverride) || 0;
-
-            // --- Armor calculation from equipped gear ---
-            let natArmor = parseInt(charData.naturalArmor) || 0;
-            let wornArmor = 0;
-            let ffArmor = 0;
-            let armorBP = 0;
-            let armorTypeVal = "General";
-            let heavyArmorVal = false;
-
-            if (charData.equippedArmor) {
-                wornArmor += parseInt(charData.equippedArmor.armor) || 0;
-                armorBP = parseInt(charData.equippedArmor.ballisticProtection) || 0;
-                armorTypeVal = charData.equippedArmor.armorType || "General";
-                heavyArmorVal = !!charData.equippedArmor.heavyArmor;
-            }
-            if (charData.equippedArmorSecondary) {
-                wornArmor += Math.floor((parseInt(charData.equippedArmorSecondary.armor) || 0) / 2);
-            }
-            if (charData.equippedForceField) {
-                ffArmor = parseInt(charData.equippedForceField.armor) || 0;
+            // Part 4: single source of truth for character armor/Toughness/Pace recalculation.
+            if (window.recalcCharacterDerived) {
+                window.recalcCharacterDerived(charData);
             }
 
-            let totalArmorVal = natArmor + wornArmor + ffArmor;
-            let calcToughness = 2 + (vigorDie / 2) + totalArmorVal + toughOverride;
-
-            charData.derived.toughness = calcToughness;
-            charData.derived.armor = totalArmorVal;
-            charData.derived.naturalArmor = natArmor;
-            charData.derived.wornArmor = wornArmor;
-            charData.derived.ballisticProtection = armorBP;
-            charData.derived.forceField = ffArmor;
-            charData.derived.armorType = armorTypeVal;
-            charData.derived.heavyArmor = heavyArmorVal;
-            charData.derived.armorPenalty = parseInt(charData.equippedArmorPenalty) || 0;
+            let calcToughness = charData.derived.toughness;
+            let totalArmorVal = charData.derived.armor;
             document.getElementById('der-parry-calc').innerText = calcParry;
             document.getElementById('der-parry-override').className = "admin-input";
             document.getElementById('der-parry-override').style = "width: 50px; padding: 2px; text-align: center;";
@@ -1900,6 +1981,42 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
             btn.style.display = hasPendingRoll ? 'block' : 'none';
             btn.disabled = !hasBennies;
         }
+        // ==========================================
+        // PART 4 POLISH: WEAPON EFFECTIVE TOUGHNESS HINT
+        // ==========================================
+        function weaponEffHint(w) {
+            const targetId = window.lastTargetId || null;
+            let target = null;
+
+            if (targetId && globalState.combat?.participants) {
+                target = globalState.combat.participants.find(p => p.id === targetId) || null;
+            }
+
+            const ap = window.parseApForDamage ? parseApForDamage(w.ap || "0") : { amount: 0, ignore: false };
+            const dmgType = w.damageType || "Ballistic";
+
+            if (target) {
+                const pipeline = computeArmorPipeline(target, dmgType, ap);
+                return `<div style="grid-column:1/-1; font-size:0.8em; color:#00ff00; margin-top:4px;">
+            vs ${target.name}: Eff Tgh <b>${pipeline.effectiveToughness}</b>
+        </div>`;
+            }
+
+            const dummy = {
+                toughness: 0,
+                naturalArmor: 0,
+                wornArmor: 4,
+                ballisticProtection: 0,
+                forceField: 0,
+                armorType: "General"
+            };
+
+            const pipeline = computeArmorPipeline(dummy, dmgType, ap);
+
+            return `<div style="grid-column:1/-1; font-size:0.8em; opacity:0.7; margin-top:4px;">
+        vs generic Armor 4: effective armor ${pipeline.armorAfterAP}${ap.ignore ? " (ignored)" : ""}
+    </div>`;
+        }
         function renderWeapons() {
             const container = document.getElementById('weapons-list-container');
             container.innerHTML = '';
@@ -1919,6 +2036,7 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
 <div><b>UNARMED STRIKE</b></div>
 <div>Range: <i>Melee</i></div>
 <div>Damage: <b>${unarmedDamage}</b></div>
+${weaponEffHint({ ap: "0", damageType: "Melee" })}
 </div>
 <div class="weapon-actions">
 <button class="die-btn" onclick="unarmedAttack()" ${shakenAttr}>ATTACK</button>
@@ -1985,6 +2103,7 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
 <div>Shots: <i>${w.shots}</i></div>
 <div>Min Str: <i>${w.minStr}</i></div>
 ${ammoDetailsHTML}
+${weaponEffHint(w)}
 </div>
 <div class="weapon-actions">
 <button class="die-btn" onclick="rollWeaponAttack(${index})" ${shakenAttr}>ATTACK</button>
@@ -2291,6 +2410,16 @@ ${reloadBtn}
 <td style="text-align:center;"><input type="checkbox" class="armor-hw-toggle" data-index="${index}" ${p.heavyArmor ? "checked" : ""} style="width:18px; height:18px;" title="Heavy Armor — immune to non-Heavy Weapons"></td>
 <td style="text-align:center;"><input type="checkbox" class="armor-ff-toggle" data-index="${index}" ${p.forceField ? "checked" : ""} style="width:18px; height:18px;" title="Force Field — ignores AP, stacks with all armor"></td>
 <td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="minStr">${p.minStr}</td>
+<td>
+<select class="armor-degrade-select" data-index="${index}" style="width:110px;">
+<option value="none" ${p.degradationPolicy === 'none' ? 'selected' : ''}>None</option>
+<option value="perWoundRoll" ${p.degradationPolicy === 'perWoundRoll' ? 'selected' : ''}>Per-Wound</option>
+<option value="threshold" ${p.degradationPolicy === 'threshold' ? 'selected' : ''}>Threshold</option>
+<option value="charge" ${p.degradationPolicy === 'charge' ? 'selected' : ''}>Charge</option>
+</select>
+</td>
+<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="degradationParam">${p.degradationParam || ''}</td>
+<td><button class="die-btn" onclick="editArmorDetails(${index})">EDIT</button></td>
 <td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="icon" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.icon}</td>
 <td><button class="die-btn del-btn" onclick="deleteArmorPreset(${index})">DELETE</button></td>
 </tr>`;
@@ -2317,6 +2446,12 @@ ${reloadBtn}
                     await saveGlobalArmorPresets();
                 });
             });
+            document.querySelectorAll('.armor-degrade-select').forEach(el => {
+                el.addEventListener('change', async (e) => {
+                    globalState.armorPresets[e.target.dataset.index].degradationPolicy = e.target.value;
+                    await saveGlobalArmorPresets();
+                });
+            });
             document.querySelectorAll('.armor-ff-toggle').forEach(el => {
                 el.addEventListener('change', async (e) => {
                     globalState.armorPresets[e.target.dataset.index].forceField = e.target.checked;
@@ -2324,6 +2459,35 @@ ${reloadBtn}
                 });
             });
         }
+        let editingArmorPresetIndex = null;
+
+        window.editArmorDetails = function (index) {
+            editingArmorPresetIndex = index;
+            const p = globalState.armorPresets[index];
+
+            document.getElementById('armor-details-notes').value = p.notes || "";
+            document.getElementById('armor-details-weight').value = p.weight || 0;
+            document.getElementById('armor-details-modal').style.display = 'block';
+        };
+
+        window.saveArmorDetails = async function () {
+            if (editingArmorPresetIndex === null) return;
+
+            const p = globalState.armorPresets[editingArmorPresetIndex];
+            p.notes = document.getElementById('armor-details-notes').value;
+            p.weight = parseInt(document.getElementById('armor-details-weight').value) || 0;
+
+            await saveGlobalArmorPresets();
+            renderArmorPresets();
+
+            document.getElementById('armor-details-modal').style.display = 'none';
+            editingArmorPresetIndex = null;
+        };
+
+        window.cancelArmorDetails = function () {
+            document.getElementById('armor-details-modal').style.display = 'none';
+            editingArmorPresetIndex = null;
+        };
         function addCustomArmorPreset() {
             let id = "armor_custom_" + Date.now();
             globalState.armorPresets.push({
@@ -2423,6 +2587,12 @@ ${reloadBtn}
             let wildAttackDmgBonus = pendingBonus.wildAttack ? 2 : 0;
             if (wildAttackDmgBonus) clearPendingDamageBonus(storageKey, ['wildAttack']);
             total += jokerBonus + wildAttackDmgBonus;
+
+            // Part 4: Called Shot damage bonus.
+            let preAttack = getAttackContext(storageKey);
+            let calledShot = preAttack?.calledShot || {};
+            let calledDmg = parseInt(calledShot.dmgMod) || 0;
+            total += calledDmg;
             let hasRaiseBonus = pendingBonus.raise === true;
             let bonusRolls = [];
             if (hasRaiseBonus) {
@@ -2435,7 +2605,7 @@ ${reloadBtn}
                 baseDice: parsed.dice,
                 baseModifier: parsed.modifier,
                 hasRaise: hasRaiseBonus,
-                staticBonus: jokerBonus + wildAttackDmgBonus,
+                staticBonus: jokerBonus + wildAttackDmgBonus + calledDmg,
                 total: total,
                 rolls: rolls,
                 formula: unarmedDamageFormula
@@ -2456,8 +2626,9 @@ ${reloadBtn}
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
             let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
             let waStr = wildAttackDmgBonus > 0 ? ` + ${wildAttackDmgBonus} (Wild Attack)` : "";
+            let calledStr = calledDmg > 0 ? ` + ${calledDmg} (Called Shot)` : "";
             let termLog = `> ${charData.name} dealt damage with UNARMED STRIKE<br>`;
-            termLog += `&nbsp;&nbsp;Dmg Roll [${unarmedDamageFormula}]: ${rolls.join(' + ')}${modStr}${bonusStr}${jokerStr}${waStr}<br>`;
+            termLog += `&nbsp;&nbsp;Dmg Roll [${unarmedDamageFormula}]: ${rolls.join(' + ')}${modStr}${bonusStr}${jokerStr}${waStr}${calledStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
 
             if (application.message) {
@@ -2493,6 +2664,10 @@ ${reloadBtn}
                 if (wildAttackDmgBonus > 0) {
                     embed.fields.push({ name: "Wild Attack (+2)", value: "+2", inline: true });
                     embed.description += `\n*(Includes +2 Wild Attack Bonus)*`;
+                }
+                if (calledDmg > 0) {
+                    embed.fields.push({ name: "Called Shot", value: `+${calledDmg} Damage`, inline: true });
+                    embed.description += `\n*(Includes +${calledDmg} Called Shot damage)*`;
                 }
 
                 if (application.plainText) {
@@ -2567,11 +2742,17 @@ ${reloadBtn}
             let wildAttackDmgBonus = pendingBonus.wildAttack ? 2 : 0;
             if (wildAttackDmgBonus) clearPendingDamageBonus(storageKey, ['wildAttack']);
             total += jokerBonus + wildAttackDmgBonus;
+
+            // Part 4: Called Shot damage bonus.
+            let preAttack = getAttackContext(storageKey);
+            let calledShot = preAttack?.calledShot || {};
+            let calledDmg = parseInt(calledShot.dmgMod) || 0;
+            total += calledDmg;
             lastDamageRolls[index] = {
                 baseDice: parsed.dice,
                 baseModifier: parsed.modifier,
                 hasRaise: hasRaiseBonus,
-                staticBonus: jokerBonus + wildAttackDmgBonus,
+                staticBonus: jokerBonus + wildAttackDmgBonus + calledDmg,
                 total: total,
                 rolls: rolls,
                 formula: damageStr
@@ -2587,8 +2768,9 @@ ${reloadBtn}
             let bonusStr = hasRaiseBonus ? ` + ${bonusRolls.join(' + ')} (Raise Bonus!)` : "";
             let jokerStr = jokerBonus > 0 ? ` + ${jokerBonus} (Joker's Wild)` : "";
             let waStr = wildAttackDmgBonus > 0 ? ` + ${wildAttackDmgBonus} (Wild Attack)` : "";
+            let calledStr = calledDmg > 0 ? ` + ${calledDmg} (Called Shot)` : "";
             let termLog = `> ${charData.name} dealt damage with ${weaponName.toUpperCase()}<br>`;
-            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}${trbStr}${dtStr}${bonusStr}${jokerStr}${waStr}<br>`;
+            termLog += `&nbsp;&nbsp;Dmg Roll [${damageStr}]: ${rolls.join(' + ')}${modStr}${trbStr}${dtStr}${bonusStr}${jokerStr}${waStr}${calledStr}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${total}</b> Damage.`;
 
             if (application.message) {
@@ -2630,6 +2812,10 @@ ${reloadBtn}
                 if (wildAttackDmgBonus > 0) {
                     embed.fields.push({ name: "Wild Attack (+2)", value: "+2", inline: true });
                     embed.description += `\n*(Includes +2 Wild Attack Bonus)*`;
+                }
+                if (calledDmg > 0) {
+                    embed.fields.push({ name: "Called Shot", value: `+${calledDmg} Damage`, inline: true });
+                    embed.description += `\n*(Includes +${calledDmg} Called Shot damage)*`;
                 }
                 let weapon = charData.weapons.find(w => w.name === weaponName);
                 if (weapon) {
@@ -2927,8 +3113,58 @@ window.onTargetChange = function () {
     }
 
     updateDefenderModifierAndStatus();
+
+    // Part 4: target may have a Weak Point.
+    refreshCalledShotOptions();
+    window.updateCalledShot();
+
+    // Part 4 polish: weapon-card effective Toughness hints.
+    window.lastTargetId = target ? target.id : null;
+    renderWeapons();
 };
-window.onTargetDodgeChange = async function () {
+        // ==========================================
+        // PART 4: CALLED SHOT HELPERS
+        // ==========================================
+        function refreshCalledShotOptions() {
+            const sel = document.getElementById('called-shot-select');
+            if (!sel) return;
+            if (window.populateCalledShotSelect) {
+                window.populateCalledShotSelect(sel, getSelectedTarget());
+            }
+        }
+
+        window.updateCalledShot = function () {
+            const cfg = window.getCurrentCalledShot
+                ? window.getCurrentCalledShot()
+                : { id: "none", label: "None", hitMod: 0, dmgMod: 0 };
+
+            calledShotId = cfg.id;
+            calledShotModifier = parseInt(cfg.hitMod) || 0;
+            calledShotOpts = cfg;
+
+            const status = document.getElementById('called-shot-status');
+            if (!status) return;
+
+            if (!cfg || cfg.id === "none") {
+                status.style.display = "none";
+                status.innerHTML = "";
+                return;
+            }
+
+            status.style.display = "block";
+            status.innerHTML = `Called Shot: <b>${cfg.label}</b>`;
+        };
+
+        window.getCurrentCalledShot = function () {
+            const sel = document.getElementById('called-shot-select');
+            if (!sel) return { id: "none", hitMod: 0, dmgMod: 0 };
+
+            const target = getSelectedTarget();
+            return window.getCalledShotConfig
+                ? window.getCalledShotConfig(sel.value, target)
+                : { id: "none", hitMod: 0, dmgMod: 0 };
+        };
+        window.onTargetDodgeChange = async function () {
     let target = getSelectedTarget();
     if (!target) return;
 
@@ -2976,8 +3212,19 @@ window.onTargetDodgeChange = async function () {
             let baseMod = parseInt(document.getElementById('mod-override-input').value) || 0;
             let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
             let customModifier = baseMod + mapPenalty;
+            // Part 4: Called Shots.
+            // Only attacks use called shots; normal trait rolls must not inherit a stale dropdown value.
+            const calledShot = (activeWeaponContext && window.getCurrentCalledShot)
+                ? window.getCurrentCalledShot()
+                : { id: "none", hitMod: 0, dmgMod: 0, bypassWorn: false, bypassNatural: false, toughnessOverride: null };
             // B8: include the defender modifier (Vulnerable/Dodge) in the frozen context
-            let totalModifier = traitModifier + customModifier + statusPenalty + jokerBonus + wildAttackBonus + defenderModifier;
+            let totalModifier = traitModifier
+                + customModifier
+                + statusPenalty
+                + jokerBonus
+                + wildAttackBonus
+                + defenderModifier
+                + (parseInt(calledShot.hitMod) || 0);
             let is3RB = pendingRoll && pendingRoll.is3RB;
             let isDoubleTap = pendingRoll && pendingRoll.isDoubleTap;
             let isSupp = pendingRoll && pendingRoll.isSupp;
@@ -3003,7 +3250,8 @@ window.onTargetDodgeChange = async function () {
                 is3RB, isDoubleTap, isSupp, isRanged, bystanderThreshold,
                 storageKey, activeWeaponContext, applyWildAttackVulnerable, jokerBonus,
                 targetId: selectedTarget ? selectedTarget.id : null,
-                targetName: selectedTarget ? selectedTarget.name : ""
+                targetName: selectedTarget ? selectedTarget.name : "",
+                calledShot: calledShot
             };
         }
         function performRoll(ctx) {
@@ -3209,6 +3457,13 @@ window.onTargetDodgeChange = async function () {
                 keptWhich = "ORIGINAL ROLL";
             }
             applyDamageBonusSideEffects(keptResults, ctx);
+
+            // Keep attack context accurate after reroll.
+            let attackHit = ctx.isSupp
+                ? keptResults.some(r => r.hasRaise)
+                : keptResults.some(r => r.outcome.includes("SUCCESS"));
+            storeAttackContext(ctx, attackHit, keptResults);
+
             ctx.usedReroll = true;
             lastRollContext = {
                 ...ctx,
@@ -3358,6 +3613,21 @@ window.onTargetDodgeChange = async function () {
             document.getElementById('tn-input').value = "4";
             document.getElementById('mod-override-input').value = "0";
             document.getElementById('map-select').value = "0";
+
+            // Part 4: Called Shots are only for attacks.
+            const calledShotRow = document.getElementById('called-shot-row');
+            const calledShotSelect = document.getElementById('called-shot-select');
+            if (weaponObj) {
+                calledShotRow.style.display = "flex";
+                if (calledShotSelect) calledShotSelect.value = "none";
+                refreshCalledShotOptions();
+                window.updateCalledShot();
+            } else {
+                calledShotRow.style.display = "none";
+                calledShotId = "none";
+                calledShotModifier = 0;
+                calledShotOpts = {};
+            }
             // B8: Reset defender state and populate the target list for attacks in combat
             defenderModifier = 0;
             defenderDisplay = "";
@@ -3620,6 +3890,61 @@ window.onTargetDodgeChange = async function () {
         // ==========================================
         // ARMOR EQUIP/UNEQUIP SYSTEM
         // ==========================================
+        let pendingArmorEquipCallback = null;
+
+        function armorSlotField(slot) {
+            if (slot === "primary") return "equippedArmor";
+            if (slot === "secondary") return "equippedArmorSecondary";
+            return "equippedForceField";
+        }
+
+        function checkArmorMinStr(newArmor, slot, callback) {
+            const field = armorSlotField(slot);
+
+            let temp = JSON.parse(JSON.stringify(charData));
+            temp[field] = newArmor;
+
+            if (window.normalizeCharacterArmorInstances) {
+                window.normalizeCharacterArmorInstances(temp);
+            }
+
+            const penalty = window.computeEquippedArmorPenalty
+                ? window.computeEquippedArmorPenalty(temp)
+                : 0;
+
+            if (penalty <= 0 || localStorage.getItem('ignoreArmorMinStrWarning') === 'true') {
+                callback();
+                return;
+            }
+
+            pendingArmorEquipCallback = callback;
+
+            document.getElementById('armor-min-str-modal-text').innerHTML =
+                `${newArmor.name} requires <b>${newArmor.minStr}</b>.<br>` +
+                `Equipping it will incur <b>-${penalty}</b> to Pace and Agility-linked skill rolls.`;
+
+            document.getElementById('never-show-armor-min-str').checked = false;
+            document.getElementById('armor-min-str-modal').style.display = 'block';
+        }
+
+        window.proceedArmorMinStr = function () {
+            if (document.getElementById('never-show-armor-min-str').checked) {
+                localStorage.setItem('ignoreArmorMinStrWarning', 'true');
+            }
+
+            document.getElementById('armor-min-str-modal').style.display = 'none';
+
+            if (pendingArmorEquipCallback) {
+                pendingArmorEquipCallback();
+                pendingArmorEquipCallback = null;
+            }
+        };
+
+        window.cancelArmorMinStr = function () {
+            document.getElementById('armor-min-str-modal').style.display = 'none';
+            pendingArmorEquipCallback = null;
+        };
+
         function openArmorEquipModal() {
             document.getElementById('armor-slot-select').value = 'primary';
             filterArmorPresets();
@@ -3650,6 +3975,10 @@ window.onTargetDodgeChange = async function () {
             stats += `Min Str: ${preset.minStr} | Weight: ${preset.weight || '—'} lbs`;
             if (preset.heavyArmor) stats += ` | <span style="color:#ff3333;">HEAVY ARMOR</span>`;
             if (preset.forceField) stats += ` | <span style="color:#00ccff;">FORCE FIELD (ignores AP)</span>`;
+
+            if (preset.degradationPolicy && preset.degradationPolicy !== "none") {
+                stats += `<br>Degrade: ${preset.degradationPolicy}${preset.degradationParam ? ` (${preset.degradationParam})` : ""}`;
+            }
             const notes = preset.notes ? `<br><i style="opacity:0.9;">${preset.notes}</i>` : '';
             preview.innerHTML = `
             <div style="display:flex; gap:12px; align-items:flex-start;">
@@ -3706,57 +4035,62 @@ window.onTargetDodgeChange = async function () {
             const slot = document.getElementById('armor-slot-select').value;
             const id = document.getElementById('equip-armor-select').value;
             const preset = globalState.armorPresets.find(p => p.id === id);
-            if (!preset) { cancelArmorEquip(); return; }
+
+            if (!preset) {
+                cancelArmorEquip();
+                return;
+            }
+
             let newArmor = JSON.parse(JSON.stringify(preset));
-            let strDie = getDieStep(charData.attributes.Strength.die);
-            let reqDie = getDieStep(newArmor.minStr);
-            let penalty = 0;
-            if (strDie < reqDie) {
-                const dice = [4, 6, 8, 10, 12];
-                let currIdx = dice.indexOf(strDie);
-                let reqIdx = dice.indexOf(reqDie);
-                if (reqIdx > currIdx) {
-                    penalty = reqIdx - currIdx;
-                    if (slot === 'secondary' && charData.equippedArmor) {
-                        penalty += 1;
-                    }
-                    logToTerminal(`> <span style="color:#ff9900;">[!] ARMOR MIN STR NOT MET: ${newArmor.name} requires ${newArmor.minStr}. You have d${strDie}. Penalty: -${penalty} to Pace and Agility-linked skills.</span>`);
-                }
+
+            if (window.normalizeArmorInstance) {
+                window.normalizeArmorInstance(newArmor, slot);
             }
-            if (slot === 'primary') {
-                charData.equippedArmor = newArmor;
-                charData.equippedArmorPenalty = penalty;
-            } else if (slot === 'secondary') {
-                charData.equippedArmorSecondary = newArmor;
-                if (charData.equippedArmor) {
-                    let primaryReq = getDieStep(charData.equippedArmor.minStr);
-                    let adjustedReq = primaryReq + 1;
-                    let primaryPenalty = 0;
-                    if (strDie < adjustedReq) {
-                        const dice = [4, 6, 8, 10, 12];
-                        let currIdx = dice.indexOf(strDie);
-                        let adjIdx = dice.indexOf(adjustedReq);
-                        if (adjIdx === -1) adjIdx = dice.length - 1;
-                        if (adjIdx > currIdx) primaryPenalty = adjIdx - currIdx;
-                    }
-                    charData.equippedArmorPenalty = primaryPenalty;
-                }
-            } else if (slot === 'forcefield') {
-                charData.equippedForceField = newArmor;
+
+            newArmor.slot = slot;
+            newArmor.ruined = false;
+            newArmor.penetrationCount = 0;
+
+            if (newArmor.degradationPolicy === "charge") {
+                newArmor.chargeRemaining = newArmor.chargeMax;
             }
+
+            checkArmorMinStr(newArmor, slot, () => finalizeArmorEquip(slot, newArmor));
+        }
+
+        async function finalizeArmorEquip(slot, newArmor) {
+            const field = armorSlotField(slot);
+
+            charData[field] = newArmor;
+
+            if (window.recalcCharacterDerived) {
+                window.recalcCharacterDerived(charData);
+            }
+
             renderSheet();
             renderArmor();
-            saveCharacter();
-            syncArmorToCombat();
+            await saveCharacter();
+
+            if (typeof syncArmorToCombat === "function") {
+                await syncArmorToCombat();
+            }
+
             document.getElementById('armor-equip-modal').style.display = 'none';
+
             if (globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name} equipped armor`,
-                    description: `**${newArmor.name}** → ${slot === 'primary' ? 'Primary' : slot === 'secondary' ? 'Secondary Layer' : 'Force Field'} slot\nArmor: +${newArmor.armor} | Type: ${newArmor.armorType} | BP: ${newArmor.ballisticProtection || 0}`,
+                    description: `${newArmor.name} → ${slot === 'primary' ? 'Primary' : slot === 'secondary' ? 'Secondary Layer' : 'Force Field'} slot
+Armor: +${newArmor.armor} | Type: ${newArmor.armorType} | BP: ${newArmor.ballisticProtection || 0}`,
                     color: 0x0099ff,
                     thumbnail: { url: newArmor.icon }
                 };
-                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => {});
+
+                fetch(globalState.webhook, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ embeds: [embed] })
+                }).catch(e => {});
             }
         }
         function cancelArmorEquip() {
@@ -3807,6 +4141,84 @@ window.onTargetDodgeChange = async function () {
             saveCharacter();
             syncArmorToCombat();
         }
+        // ==========================================
+        // PART 4: ARMOR STATUS / GM CONTROLS
+        // ==========================================
+        function armorStatusHtml(a) {
+            if (!a) return "";
+            const lines = window.armorInstanceStatusLines ? window.armorInstanceStatusLines(a) : [];
+            if (!lines.length) return "";
+
+            return `<div style="grid-column:1/-1; font-size:0.85em; opacity:0.95; margin-top:6px;">
+        ${lines.join("<br>")}
+    </div>`;
+        }
+
+        function armorGmButtons(slot) {
+            if (!isAdmin) return "";
+
+            return `
+        <button class="die-btn" style="font-size:0.75em;" onclick="markArmorRuined('${slot}', true)">RUIN</button>
+        <button class="die-btn" style="font-size:0.75em;" onclick="markArmorRuined('${slot}', false)">REPAIR</button>
+        <button class="die-btn" style="font-size:0.75em;" onclick="rechargeArmor('${slot}')">RECHARGE</button>
+        <button class="die-btn" style="font-size:0.75em;" onclick="adjustArmorCharge('${slot}', -1)">-1 CHARGE</button>
+    `;
+        }
+
+        async function mutateEquippedArmor(slot, mutator) {
+            const field =
+                slot === "primary" ? "equippedArmor" :
+                slot === "secondary" ? "equippedArmorSecondary" :
+                "equippedForceField";
+
+            if (!charData[field]) return;
+
+            if (window.normalizeArmorInstance) {
+                window.normalizeArmorInstance(charData[field], slot);
+            }
+
+            mutator(charData[field]);
+
+            if (window.recalcCharacterDerived) {
+                window.recalcCharacterDerived(charData);
+            }
+
+            renderSheet();
+            renderArmor();
+            await saveCharacter();
+
+            if (typeof syncArmorToCombat === "function") {
+                await syncArmorToCombat();
+            }
+        }
+
+        window.markArmorRuined = async function (slot, val) {
+            await mutateEquippedArmor(slot, (a) => {
+                a.ruined = !!val;
+                if (!val) {
+                    a.penetrationCount = 0;
+                }
+            });
+        };
+
+        window.rechargeArmor = async function (slot) {
+            await mutateEquippedArmor(slot, (a) => {
+                if (a.degradationPolicy === "charge") {
+                    a.chargeRemaining = a.chargeMax;
+                    a.ruined = false;
+                }
+            });
+        };
+
+        window.adjustArmorCharge = async function (slot, amount) {
+            await mutateEquippedArmor(slot, (a) => {
+                if (a.degradationPolicy === "charge") {
+                    let rem = (parseInt(a.chargeRemaining) || 0) + (parseInt(amount) || 0);
+                    a.chargeRemaining = Math.max(0, rem);
+                    a.ruined = (a.chargeRemaining <= 0);
+                }
+            });
+        };
         function renderArmor() {
             const container = document.getElementById('armor-list-container');
             container.innerHTML = '';
@@ -3823,8 +4235,10 @@ window.onTargetDodgeChange = async function () {
 <div>BP: <i>${a.ballisticProtection || 0}</i></div>
 <div>Min Str: <i>${a.minStr}</i></div>
 ${a.heavyArmor ? '<div style="color:#ff3333;">HEAVY ARMOR</div>' : ''}
+${armorStatusHtml(charData.equippedArmor)}
 </div>
 <div class="weapon-actions">
+${armorGmButtons('primary')}
 <button class="die-btn del-btn" onclick="unequipArmor('primary')">UNEQUIP</button>
 </div>
 </div>`;
@@ -3840,8 +4254,10 @@ ${a.heavyArmor ? '<div style="color:#ff3333;">HEAVY ARMOR</div>' : ''}
 <div>Armor: <b>+${halfVal}</b> <span style="opacity:0.5;">(base ${a.armor})</span></div>
 <div>Type: <i>${a.armorType}</i></div>
 <div>BP: <i>${a.ballisticProtection || 0}</i></div>
+${armorStatusHtml(charData.equippedArmorSecondary)}
 </div>
 <div class="weapon-actions">
+${armorGmButtons('secondary')}
 <button class="die-btn del-btn" onclick="unequipArmor('secondary')">UNEQUIP</button>
 </div>
 </div>`;
@@ -3856,8 +4272,10 @@ ${a.heavyArmor ? '<div style="color:#ff3333;">HEAVY ARMOR</div>' : ''}
 <div>Armor: <b>+${a.armor}</b> <span style="opacity:0.5;">(ignores AP)</span></div>
 <div>Type: <i>${a.armorType}</i></div>
 <div>Stacks with all armor</div>
+${armorStatusHtml(charData.equippedForceField)}
 </div>
 <div class="weapon-actions">
+${armorGmButtons('forcefield')}
 <button class="die-btn del-btn" onclick="unequipArmor('forcefield')">UNEQUIP</button>
 </div>
 </div>`;
