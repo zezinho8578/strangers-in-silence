@@ -544,7 +544,7 @@
     </div>
     <div style="margin-bottom: 5px; color: #ff3333; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
         <span>> TACTICAL TERMINAL</span>
-        <button id="clear-term-btn" class="die-btn danger" style="border:none; font-size:0.8em;" onclick="clearLog()">CLEAR LOG</button>
+        <button id="clear-term-btn" class="die-btn" style="border:none; color:#ff3333;" onclick="clearLog()">CLEAR LOG</button>
     </div>
     <div id="roll-terminal">
         <div>> TERMINAL READY. WAITING FOR INPUT...</div>
@@ -2036,6 +2036,7 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
         function clearLog() {
             document.getElementById('roll-terminal').innerHTML = '<div>> TERMINAL LOG CLEARED...</div>';
         }
+        window.clearLog = clearLog;
     </script>
 </body>
 
