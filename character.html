@@ -1889,6 +1889,7 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
 
             let calcToughness = charData.derived.toughness;
             let totalArmorVal = charData.derived.armor;
+            let toughOverride = parseInt(charData.derived.toughnessOverride) || 0;
             document.getElementById('der-parry-calc').innerText = calcParry;
             document.getElementById('der-parry-override').className = "admin-input";
             document.getElementById('der-parry-override').style = "width: 50px; padding: 2px; text-align: center;";
