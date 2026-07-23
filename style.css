@@ -214,21 +214,15 @@ body::after {
     padding: 8px;
     min-height: 40px;
 }
-.armor-preset-table {
-    width: auto;
-    max-width: 100%;
-}
-.armor-preset-table td,
-.armor-preset-table th {
-    padding: 4px 6px;
-    font-size: 0.85em;
-}
-.armor-preset-table .armor-preset-edit {
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
+/* Problem 5: the Armor Config table now inherits .preset-table styling
+   verbatim (width:100%, 6px padding, 0.8em font, left-aligned cells) so it
+   renders with the SAME box model as the Weapon Armory Config table.
+   The deleted overrides were the entire cause of the "narrow left strip"
+   look: width:auto shrink-wrapped the table, the reduced padding/font made
+   it cramped, and the forced max-width:180 ellipsis stopped the Name column
+   from growing to fill the row the way the Weapon Name column does. The
+   Icon Image Link cell keeps its own inline ellipsis; the Armor Name cell
+   is now allowed to expand. */
 .badge {
     display: inline-block;
     font-size: 0.75em;
