@@ -492,6 +492,48 @@
             </div>
             </div>
             </div>
+<div id="weakpoint-editor"
+style="display:none; border:1px dashed var(--theme-color); padding:10px; margin-bottom:15px;">
+<h4 class="section-header">WEAK POINT (VS NATURAL ARMOR)</h4>
+
+<label class="custom-checkbox">
+<input type="checkbox" id="edit-weakpoint-enabled" onchange="updateActive()">
+<span class="check-box"></span>
+<span>Enabled</span>
+</label>
+
+<div class="form-row">
+<span>Name:</span>
+<input type="text" id="edit-weakpoint-name" class="form-input" onchange="updateActive()">
+</div>
+
+<div class="form-row">
+<span>Hit Penalty:</span>
+<input type="number" id="edit-weakpoint-hit" class="form-input small" value="-4" onchange="updateActive()">
+</div>
+
+<label class="custom-checkbox">
+<input type="checkbox" id="edit-weakpoint-bypassworn" onchange="updateActive()">
+<span class="check-box"></span>
+<span>Bypass Worn Armor</span>
+</label>
+
+<label class="custom-checkbox">
+<input type="checkbox" id="edit-weakpoint-bypassnatural" onchange="updateActive()">
+<span class="check-box"></span>
+<span>Bypass Natural Armor</span>
+</label>
+
+<div class="form-row">
+<span>Toughness Override:</span>
+<input type="number" id="edit-weakpoint-toughness" class="form-input small" placeholder="blank" onchange="updateActive()">
+</div>
+
+<div class="form-row">
+<span>Notes:</span>
+<input type="text" id="edit-weakpoint-notes" class="form-input" onchange="updateActive()">
+</div>
+</div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
                 <div>
                     <h4 class="section-header">ATTRIBUTES</h4>
@@ -573,6 +615,17 @@
                 <input type="checkbox" id="target-dodge-checkbox" onchange="onTargetDodgeChange()"
                     style="width:20px; height:20px;">
             </div>
+        </div>
+        <div class="setting-row" id="called-shot-row"
+            style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Called Shot:</span>
+            <select id="called-shot-select" class="admin-input" style="width:280px;"
+                onchange="updateCalledShot()">
+                <option value="none">None</option>
+            </select>
+        </div>
+        <div id="called-shot-status"
+            style="font-size:0.85em; color:#ff9900; text-align:left; min-height:1.2em; margin: 4px 0; display:none;">
         </div>
         <div id="ranged-options-container"
             style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
@@ -680,6 +733,11 @@
         // B8: Defender/target integration state
         let defenderModifier = 0;
         let defenderDisplay = "";
+
+        // Part 4: Called Shots
+        let calledShotId = "none";
+        let calledShotModifier = 0;
+        let calledShotOpts = {};
         // Validation-warning dismiss state (Problem 2): true = hidden via X or Save
         let warningsDismissed = false;
 
@@ -821,7 +879,8 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     }
 
     // Full armor pipeline
-    const pipeline = computeArmorPipeline(target, weaponDmgType, ap);
+    const calledShot = attack.calledShot || {};
+    const pipeline = computeArmorPipeline(target, weaponDmgType, ap, calledShot);
     const effectiveToughness = pipeline.effectiveToughness;
     const breakdown = buildDamageBreakdown(damageTotal, pipeline);
 
@@ -834,6 +893,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     const wasShaken = !!target.shaken;
     const oldWounds = target.wounds || 0;
     const raises = Math.floor((damageTotal - effectiveToughness) / 4);
+    let degradeNotes = [];
 
     let becameShaken = false;
     let woundsAdded = 0;
@@ -872,6 +932,46 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         target.onHold = false;
     }
 
+    // Part 4: Armor degradation for player-equipped armor.
+    if (target.isPlayer && globalState.characters && globalState.characters[target.id]) {
+        let sheet = JSON.parse(JSON.stringify(globalState.characters[target.id]));
+
+        if (window.normalizeCharacterArmorInstances) {
+            window.normalizeCharacterArmorInstances(sheet);
+        }
+
+        if (window.degradeCharacterArmor) {
+            degradeNotes = window.degradeCharacterArmor(sheet, {
+                weaponDmgType,
+                woundsAdded,
+                bypassWorn: !!(calledShot && calledShot.bypassWorn),
+                forceFieldApplied: (pipeline.forceField || 0) > 0
+            });
+        }
+
+        if (degradeNotes.length) {
+            if (window.recalcCharacterDerived) {
+                window.recalcCharacterDerived(sheet);
+            }
+
+            globalState.characters[target.id] = sheet;
+
+            target.toughness = sheet.derived.toughness;
+            target.naturalArmor = sheet.derived.naturalArmor;
+            target.wornArmor = sheet.derived.wornArmor;
+            target.armor = sheet.derived.armor;
+            target.ballisticProtection = sheet.derived.ballisticProtection;
+            target.forceField = sheet.derived.forceField;
+            target.armorType = sheet.derived.armorType;
+            target.heavyArmor = sheet.derived.heavyArmor;
+            target.pace = sheet.derived.paceEffective ?? sheet.derived.pace ?? target.pace;
+
+            if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
+                await set(ref(db, `campaignState/characters/${target.id}`), sheet);
+            }
+        }
+    }
+
     participants[idx] = target;
     globalState.combat.participants = participants;
 
@@ -901,6 +1001,11 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     result.message = `> <b style="color:#ff3333;">AUTO-APPLIED:</b> ${breakdown} → ${sentence}`;
     result.plainText = `AUTO-APPLIED: ${breakdown} → ${sentence}`;
 
+    if (degradeNotes.length) {
+        result.message += `<br>&nbsp;&nbsp;<b style="color:#ff9900;">ARMOR DEGRADATION:</b> ${degradeNotes.join('<br>&nbsp;&nbsp;')}`;
+        result.plainText += ` ARMOR DEGRADATION: ${degradeNotes.join(' ')}`;
+    }
+
     return result;
 }
 
@@ -909,7 +1014,7 @@ function getThreatAttackKey() {
     return `${activeTemplateId || activeThreat?.name || 'threat'}_${activeWeaponContext.id || activeWeaponContext.name}`;
 }
 
-function storeThreatAttackContext(hit, results) {
+function storeThreatAttackContext(hit, results, calledShotOverride = null) {
     if (!activeWeaponContext) return;
 
     const target = getSelectedTarget();
@@ -929,7 +1034,8 @@ function storeThreatAttackContext(hit, results) {
         weaponName: activeWeaponContext.name || "Weapon",
         attackSummary: summary,
         round: globalState?.combat?.round ?? null,
-        savedAt: Date.now()
+        savedAt: Date.now(),
+        calledShot: calledShotOverride || (window.getCurrentCalledShot ? window.getCurrentCalledShot() : null)
     });
 }
         const defaultAttributes = { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" };
@@ -982,6 +1088,15 @@ function storeThreatAttackContext(hit, results) {
                 name: "New Threat", isWildCard: false, pace: 6, parry: 5, toughness: 5,
                 naturalArmor: 0, wornArmor: 0, armor: 0, scale: 0,
                 heavyArmor: false, armorType: "General", ballisticProtection: 0, forceField: 0,
+                weakPoint: {
+                    enabled: false,
+                    name: "Weak Point",
+                    hitPenalty: -4,
+                    bypassWorn: true,
+                    bypassNatural: true,
+                    toughnessOverride: null,
+                    notes: ""
+                },
                 attributes: JSON.parse(JSON.stringify(defaultAttributes)), skills: JSON.parse(JSON.stringify(defaultSkills)), abilities: "", weapons: []
             };
             activeTemplateId = id;
@@ -995,6 +1110,18 @@ function storeThreatAttackContext(hit, results) {
             if (!activeThreat.attributes) activeThreat.attributes = JSON.parse(JSON.stringify(defaultAttributes));
             if (!activeThreat.skills) activeThreat.skills = JSON.parse(JSON.stringify(defaultSkills));
             if (!activeThreat.weapons) activeThreat.weapons = [];
+
+            if (!activeThreat.weakPoint) {
+                activeThreat.weakPoint = {
+                    enabled: false,
+                    name: "Weak Point",
+                    hitPenalty: -4,
+                    bypassWorn: true,
+                    bypassNatural: true,
+                    toughnessOverride: null,
+                    notes: ""
+                };
+            }
             warningsDismissed = true;   // loaded template: keep warnings hidden until first edit
             renderEditor(); renderCodex();
         };
@@ -1015,6 +1142,23 @@ function storeThreatAttackContext(hit, results) {
             document.getElementById('edit-scale').value = activeThreat.scale || 0;
             document.getElementById('edit-heavyarmor').checked = !!activeThreat.heavyArmor;
             document.getElementById('edit-armortype').value = activeThreat.armorType || "General";
+
+            // Part 4: Weak Point editor.
+            let wp = activeThreat.weakPoint || {};
+            const showWeakPoint =
+                (parseInt(activeThreat.naturalArmor) || 0) > 0 ||
+                !!wp.enabled;
+
+            document.getElementById('weakpoint-editor').style.display = showWeakPoint ? "block" : "none";
+
+            document.getElementById('edit-weakpoint-enabled').checked = !!wp.enabled;
+            document.getElementById('edit-weakpoint-name').value = wp.name || "";
+            document.getElementById('edit-weakpoint-hit').value = (wp.hitPenalty === undefined || wp.hitPenalty === null) ? -4 : wp.hitPenalty;
+            document.getElementById('edit-weakpoint-bypassworn').checked = !!wp.bypassWorn;
+            document.getElementById('edit-weakpoint-bypassnatural').checked = !!wp.bypassNatural;
+            document.getElementById('edit-weakpoint-toughness').value =
+                (wp.toughnessOverride === undefined || wp.toughnessOverride === null) ? "" : wp.toughnessOverride;
+            document.getElementById('edit-weakpoint-notes').value = wp.notes || "";
             document.getElementById('edit-abilities').value = activeThreat.abilities || "";
             let attrHtml = '';
             for (let [k, v] of Object.entries(activeThreat.attributes)) {
@@ -1094,6 +1238,22 @@ function storeThreatAttackContext(hit, results) {
             activeThreat.scale = parseInt(document.getElementById('edit-scale').value) || 0;
             activeThreat.heavyArmor = document.getElementById('edit-heavyarmor').checked;
             activeThreat.armorType = document.getElementById('edit-armortype').value;
+
+            // Part 4: Weak Point.
+            let wpToughnessRaw = document.getElementById('edit-weakpoint-toughness').value;
+
+            activeThreat.weakPoint = {
+                enabled: document.getElementById('edit-weakpoint-enabled').checked,
+                name: document.getElementById('edit-weakpoint-name').value.trim() || "Weak Point",
+                hitPenalty: parseInt(document.getElementById('edit-weakpoint-hit').value) || -4,
+                bypassWorn: document.getElementById('edit-weakpoint-bypassworn').checked,
+                bypassNatural: document.getElementById('edit-weakpoint-bypassnatural').checked,
+                toughnessOverride:
+                    (wpToughnessRaw === "" || wpToughnessRaw === null || wpToughnessRaw === undefined)
+                        ? null
+                        : parseInt(wpToughnessRaw),
+                notes: document.getElementById('edit-weakpoint-notes').value.trim()
+            };
             activeThreat.abilities = document.getElementById('edit-abilities').value;
             // Re-arm and refresh warnings AFTER all fields (incl. scale) are synced (Problem 2)
             warningsDismissed = false;
@@ -1200,7 +1360,15 @@ function storeThreatAttackContext(hit, results) {
                 "hl2_combine_elite": { name: "Combine Elite", isWildCard: true, pace: 6, parry: 6, toughness: 9, naturalArmor: 0, wornArmor: 3, armor: 3, ballisticProtection: 4, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d8", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Shooting: "d10", Stealth: "d8" }, abilities: "Edges: Rock and Roll!", weapons: [{ id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/3rgRKGo.png" }, { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/4lFt2CC.png" }] },
                 "hl2_gunship": { name: "Combine Gunship", isWildCard: true, pace: 15, parry: 7, toughness: 17, naturalArmor: 4, wornArmor: 0, armor: 4, ballisticProtection: 0, forceField: 0, scale: 4, heavyArmor: true, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: "Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms).\nPoint Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.", weapons: [{ name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }] },
                 "hl2_strider": { name: "Strider", isWildCard: true, pace: 12, parry: 7, toughness: 28, naturalArmor: 6, wornArmor: 0, armor: 6, ballisticProtection: 0, forceField: 0, scale: 8, heavyArmor: true, armorType: "General", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: "Construct. Massive (+8 Tgh, -8 to be hit by small arms).\nImpale: Legs deal Str+d10 AP4 in melee.\nCrouch: Can lower body to enter buildings.", weapons: [{ name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: "10", rof: "1", heavyWeapon: true, damageType: "Energy", icon: defaultWeaponIcon }] },
-                "hl2_barnacle": { name: "Barnacle", isWildCard: false, pace: 0, parry: 2, toughness: 6, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: "Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3\" up per round.\nWeak Point: Tongue is Toughness 5 to sever.", weapons: [{ name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_barnacle": { name: "Barnacle", isWildCard: false, pace: 0, parry: 2, toughness: 6, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", weakPoint: {
+                    enabled: true,
+                    name: "Tongue",
+                    hitPenalty: -4,
+                    bypassWorn: true,
+                    bypassNatural: true,
+                    toughnessOverride: 5,
+                    notes: "Tongue is Toughness 5 to sever."
+                }, attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: "Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3\" up per round.\nWeak Point: Tongue is Toughness 5 to sever.", weapons: [{ name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
                 "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, naturalArmor: 1, wornArmor: 0, armor: 1, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: "Aquatic: Pace 10 in water.\nDrag: Raise on bite pulls target underwater (hold breath).", weapons: [{ name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] }
             };
             await update(ref(db, 'campaignState/threatTemplates'), hl2Threats);
@@ -1464,6 +1632,48 @@ window.onTargetChange = function () {
         logToTerminal(`> <span style="color:#00ccff;">[ REMINDER: ${target.name} has the DODGE edge. Ranged attacks suffer -2. Checkbox auto-enabled.]</span>`);
     }
 };
+// ==========================================
+// PART 4: CALLED SHOT HELPERS
+// ==========================================
+function refreshCalledShotOptions() {
+    const sel = document.getElementById('called-shot-select');
+    if (!sel) return;
+    if (window.populateCalledShotSelect) {
+        window.populateCalledShotSelect(sel, getSelectedTarget());
+    }
+}
+
+window.updateCalledShot = function () {
+    const cfg = window.getCurrentCalledShot
+        ? window.getCurrentCalledShot()
+        : { id: "none", label: "None", hitMod: 0, dmgMod: 0 };
+
+    calledShotId = cfg.id;
+    calledShotModifier = parseInt(cfg.hitMod) || 0;
+    calledShotOpts = cfg;
+
+    const status = document.getElementById('called-shot-status');
+    if (!status) return;
+
+    if (!cfg || cfg.id === "none") {
+        status.style.display = "none";
+        status.innerHTML = "";
+        return;
+    }
+
+    status.style.display = "block";
+    status.innerHTML = `Called Shot: <b>${cfg.label}</b>`;
+};
+
+window.getCurrentCalledShot = function () {
+    const sel = document.getElementById('called-shot-select');
+    if (!sel) return { id: "none", hitMod: 0, dmgMod: 0 };
+
+    const target = getSelectedTarget();
+    return window.getCalledShotConfig
+        ? window.getCalledShotConfig(sel.value, target)
+        : { id: "none", hitMod: 0, dmgMod: 0 };
+};
 window.onTargetDodgeChange = async function () {
     let target = getSelectedTarget();
     if (!target) return;
@@ -1479,6 +1689,10 @@ window.onTargetDodgeChange = async function () {
     }
 
     updateDefenderModifierAndStatus();
+
+    // Part 4: target may have a Weak Point.
+    refreshCalledShotOptions();
+    window.updateCalledShot();
 };
         // ==========================================
         // WEAPON ATTACKS & MODALS
@@ -1493,6 +1707,14 @@ window.onTargetDodgeChange = async function () {
             document.getElementById('tn-input').value = "4";
             document.getElementById('mod-override-input').value = "0";
             document.getElementById('map-select').value = "0";
+
+            // Part 4: Called Shots.
+            const calledShotRow = document.getElementById('called-shot-row');
+            const calledShotSelect = document.getElementById('called-shot-select');
+            calledShotRow.style.display = "flex";
+            if (calledShotSelect) calledShotSelect.value = "none";
+            refreshCalledShotOptions();
+            window.updateCalledShot();
             // B8: Reset defender state and populate the target list when combat is live
             defenderModifier = 0;
             defenderDisplay = "";
@@ -1732,7 +1954,17 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
     let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
     let customMod = parseInt(document.getElementById('mod-override-input').value) || 0;
     let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
-    let totalModifier = intrinsicMod + unskilledMod + customMod + mapPenalty + defenderModifier;
+    // Part 4: Called Shots.
+    const calledShot = window.getCurrentCalledShot
+        ? window.getCurrentCalledShot()
+        : { id: "none", hitMod: 0, dmgMod: 0 };
+
+    let totalModifier = intrinsicMod
+        + unskilledMod
+        + customMod
+        + mapPenalty
+        + defenderModifier
+        + (parseInt(calledShot.hitMod) || 0);
     
     let isWildAttack = !isMeleeWeapon(activeWeaponContext) ? false : document.getElementById('wild-attack-checkbox').checked;
     if (isWildAttack) {
@@ -1749,7 +1981,8 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
         results: outcome.results,
         isCritFail: outcome.isCritFail,
         score: scoreVolley(outcome.results, outcome.isCritFail),
-        usedReroll: false
+        usedReroll: false,
+        calledShot: calledShot
     };
 
     let hit = outcome.results.some(r => r.outcome.includes("SUCCESS"));
@@ -1759,7 +1992,7 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
     }
 
     let attackHit = isSuppressive ? outcome.results.some(r => r.hasRaise) : hit;
-    storeThreatAttackContext(attackHit, outcome.results);
+    storeThreatAttackContext(attackHit, outcome.results, calledShot);
     renderAttackEmbed(skillName, sides, totalModifier, targetNumber, outcome.results, outcome.isCritFail, is3RB, isSuppressive, wepRoF);
 };
 
@@ -1807,7 +2040,7 @@ window.rerollLastRoll = async function () {
     let attackHit = lastRollContext.isSuppressive
         ? keptResults.some(r => r.hasRaise)
         : keptResults.some(r => r.outcome.includes("SUCCESS"));
-    storeThreatAttackContext(attackHit, keptResults);
+    storeThreatAttackContext(attackHit, keptResults, lastRollContext.calledShot);
 
     renderAttackEmbed(lastRollContext.skillName, lastRollContext.sides, lastRollContext.totalModifier, lastRollContext.targetNumber, keptResults, keptIsCritFail, lastRollContext.is3RB, lastRollContext.isSuppressive, lastRollContext.wepRoF, {
         which: keptWhich,
@@ -1937,10 +2170,18 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                 bonusStr = ` + ${rRoll.history.join('+')} [Raise]`;
             }
             let attackKey = `${activeTemplateId || activeThreat.name}_${wep.id || wep.name}`;
+
+            // Part 4: Called Shot damage bonus.
+            let preAttack = getAttackContext(attackKey);
+            let calledShot = preAttack?.calledShot || {};
+            let calledDmg = parseInt(calledShot.dmgMod) || 0;
+            total += calledDmg;
+            let calledStr = calledDmg > 0 ? ` + ${calledDmg} (Called Shot)` : "";
+
             let application = await applyDamageToTracker(attackKey, wep, total);
 
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
-            let termLog = `> ${activeThreat.name} dealt damage with ${wep.name.toUpperCase()}<br>&nbsp;&nbsp;Dmg Roll [${wep.damage}]: ${rolls.join(' + ')}${flatMod !== 0 ? (flatMod > 0 ? '+' + flatMod : flatMod) : ''}${trbStr}${bonusStr}<br>&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
+            let termLog = `> ${activeThreat.name} dealt damage with ${wep.name.toUpperCase()}<br>&nbsp;&nbsp;Dmg Roll [${wep.damage}]: ${rolls.join(' + ')}${flatMod !== 0 ? (flatMod > 0 ? '+' + flatMod : flatMod) : ''}${trbStr}${bonusStr}${calledStr}<br>&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
 
             if (application.message) {
                 termLog += `<br>&nbsp;&nbsp;${application.message}`;
@@ -1961,6 +2202,11 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                 if (has3RBBonus) {
                     embed.fields.push({ name: "Three-Round Burst", value: "+1 Damage", inline: true });
                     embed.description += `\n*(Includes +1 Damage from 3-Round Burst)*`;
+                }
+                if (calledDmg > 0) {
+                    embed.fields.push({ name: "Called Shot", value: `+${calledDmg} Damage`, inline: true });
+                    embed.description += `
+*(Includes +${calledDmg} Called Shot damage)*`;
                 }
                 let imgUrl = wep.image || wep.icon || defaultWeaponIcon;
                 embed.thumbnail = { url: imgUrl };
@@ -2003,6 +2249,7 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                     scale: parseInt(activeThreat.scale) || 0, pace: activeThreat.pace || 6,
                     heavyArmor: !!activeThreat.heavyArmor,
                     armorType: activeThreat.armorType || "General",
+                    weakPoint: JSON.parse(JSON.stringify(activeThreat.weakPoint || null)),
                     bennies: 0, // NPCs use shared GM pool
                     groupId: batchGroupId, // B14
                     groupName: baseName,   // B14
