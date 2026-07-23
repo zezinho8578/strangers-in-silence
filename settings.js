@@ -233,29 +233,49 @@ function normalizeArmorData(target) {
 }
 
 // --- Main armor pipeline: single source of truth for all armor math ---
-function computeArmorPipeline(target, weaponDmgType, ap) {
+function computeArmorPipeline(target, weaponDmgType, ap, opts = {}) {
     const t = normalizeArmorData(JSON.parse(JSON.stringify(target)));
     const naturalArmor = parseInt(t.naturalArmor) || 0;
     const wornArmor = parseInt(t.wornArmor) || 0;
     const bp = parseInt(t.ballisticProtection) || 0;
     const ff = parseInt(t.forceField) || 0;
-    const toughness = parseInt(t.toughness) || 0;
+    const toughness = (toughnessOverride !== null)
+    ? toughnessOverride
+    : (parseInt(t.toughness) || 0);
     const armorType = t.armorType || "General";
     const heavyArmor = !!t.heavyArmor;
 
-    // Step 1: Determine which armor layers apply based on damage type
-    // Natural armor is always General (applies to everything)
-    const naturalApplies = true;
+    // Part 4: Called Shots / Weak Points
+    const bypassWorn = !!opts.bypassWorn;
+    const bypassNatural = !!opts.bypassNatural;
 
-    // Worn armor applies based on its armorType vs the weapon's damageType
-    let wornApplies = true;
+    const toughnessOverrideRaw =
+        (opts.toughnessOverride === undefined || opts.toughnessOverride === null || opts.toughnessOverride === "")
+            ? null
+            : parseInt(opts.toughnessOverride);
+
+    const toughnessOverride =
+        (toughnessOverrideRaw !== null && !isNaN(toughnessOverrideRaw))
+            ? toughnessOverrideRaw
+            : null;
+
+    const calledShotId = opts.id || opts.calledShot || null;
+    const calledShotLabel = opts.label || "";
+    const calledShotDmg = parseInt(opts.dmgMod) || 0;
+
+    // Step 1: Determine which armor layers apply based on damage type
+    // Natural armor is whole-body unless a called shot / weak point explicitly bypasses it.
+    const naturalApplies = !bypassNatural;
+
+    // Worn armor applies based on called-shot bypass and armorType vs damageType.
+    let wornApplies = !bypassWorn;
     if (armorType === "Ballistic" && weaponDmgType !== "Ballistic") wornApplies = false;
     if (armorType === "Energy" && weaponDmgType !== "Energy") wornApplies = false;
 
     // Step 2: Ballistic Protection reduces AP (only vs Ballistic attacks, only if armor applies)
     let effectiveAP = ap.ignore ? 0 : ap.amount;
     let bpApplied = 0;
-    if (!ap.ignore && weaponDmgType === "Ballistic" && bp > 0 && (naturalApplies || wornApplies)) {
+    if (!ap.ignore && weaponDmgType === "Ballistic" && bp > 0 && wornApplies) {
         bpApplied = Math.min(bp, ap.amount);
         effectiveAP = Math.max(0, ap.amount - bp);
     }
@@ -279,13 +299,23 @@ function computeArmorPipeline(target, weaponDmgType, ap) {
         bpApplied, effectiveAP,
         applicableNatural, applicableWorn, totalApplicableArmor,
         armorAfterAP, totalArmor, effectiveToughness,
-        apIgnore: ap.ignore, apLabel: ap.label, apAmount: ap.amount
+        apIgnore: ap.ignore, apLabel: ap.label, apAmount: ap.amount,
+        bypassWorn,
+        bypassNatural,
+        toughnessOverride,
+        calledShot: calledShotId,
+        calledShotLabel,
+        calledShotDmg
     };
 }
 
 // --- Human-readable breakdown string ---
 function buildDamageBreakdown(damageTotal, p) {
-    let s = `${damageTotal} damage vs Tgh ${p.toughness}`;
+let damageLabel = damageTotal;
+if (p.calledShotDmg > 0) damageLabel += ` (incl. +${p.calledShotDmg} called shot)`;
+
+let s = `${damageLabel} damage vs Tgh ${p.toughness}`;
+if (p.calledShotLabel) s += ` [${p.calledShotLabel}]`;
 
     if (p.apIgnore) {
         // Ignore Armor: bypasses natural+worn, but force field still stands
@@ -318,6 +348,13 @@ function buildDamageBreakdown(damageTotal, p) {
         s += ` + FF ${p.forceField} (ignores AP)`;
     }
 
+    if (p.bypassWorn && p.wornArmor > 0 && p.applicableWorn === 0) {
+        s += ` [worn armor bypassed]`;
+    }
+    if (p.bypassNatural && p.naturalArmor > 0 && p.applicableNatural === 0) {
+        s += ` [natural armor bypassed]`;
+    }
+
     s += ` = ${p.effectiveToughness}`;
     return s;
 }
@@ -327,6 +364,453 @@ function computeEffectiveToughness(toughness, armor, ap) {
     const effectiveArmor = ap.ignore ? 0 : Math.max(0, armor - Math.max(0, ap.amount));
     return toughness + effectiveArmor;
 }
+
+// ==========================================
+// PART 4: CALLED SHOTS / WEAK POINTS / ARMOR DEGRADATION
+// ==========================================
+
+const CALLED_SHOTS = {
+    none: {
+        id: "none",
+        label: "None",
+        hitMod: 0,
+        dmgMod: 0,
+        bypassWorn: false,
+        bypassNatural: false,
+        toughnessOverride: null
+    },
+    head: {
+        id: "head",
+        label: "Head/Vitals (−4 hit, +4 dmg)",
+        hitMod: -4,
+        dmgMod: 4,
+        bypassWorn: false,
+        bypassNatural: false,
+        toughnessOverride: null
+    },
+    limb: {
+        id: "limb",
+        label: "Limb (−2 hit)",
+        hitMod: -2,
+        dmgMod: 0,
+        bypassWorn: false,
+        bypassNatural: false,
+        toughnessOverride: null
+    },
+    hand: {
+        id: "hand",
+        label: "Hand (−4 hit, disarm)",
+        hitMod: -4,
+        dmgMod: 0,
+        bypassWorn: false,
+        bypassNatural: false,
+        toughnessOverride: null
+    },
+    gap: {
+        id: "gap",
+        label: "Unarmored gap (−4 hit, bypass worn)",
+        hitMod: -4,
+        dmgMod: 0,
+        bypassWorn: true,
+        bypassNatural: false,
+        toughnessOverride: null
+    }
+};
+
+function getCalledShotConfig(value, target) {
+    if (value === "weakpoint" && target && target.weakPoint && target.weakPoint.enabled) {
+        const wp = target.weakPoint;
+        let hit = parseInt(wp.hitPenalty);
+        if (isNaN(hit)) hit = -4;
+        if (hit > 0) hit = -hit;
+
+        return {
+            id: "weakpoint",
+            label: `Weak Point: ${wp.name || "Weak Point"}`,
+            hitMod: hit,
+            dmgMod: 0,
+            bypassWorn: !!wp.bypassWorn,
+            bypassNatural: !!wp.bypassNatural,
+            toughnessOverride:
+                (wp.toughnessOverride === undefined || wp.toughnessOverride === null || wp.toughnessOverride === "")
+                    ? null
+                    : parseInt(wp.toughnessOverride),
+            notes: wp.notes || ""
+        };
+    }
+
+    const base = CALLED_SHOTS[value] || CALLED_SHOTS.none;
+    return JSON.parse(JSON.stringify(base));
+}
+
+function populateCalledShotSelect(selectEl, target) {
+    if (!selectEl) return;
+
+    const oldValue = selectEl.value || "none";
+
+    selectEl.innerHTML = `
+        <option value="none">None</option>
+        <option value="head">Head/Vitals (−4 hit, +4 dmg)</option>
+        <option value="limb">Limb (−2 hit)</option>
+        <option value="hand">Hand (−4 hit, disarm)</option>
+        <option value="gap">Unarmored gap (−4 hit, bypass worn)</option>
+    `;
+
+    if (target && target.weakPoint && target.weakPoint.enabled) {
+        const wp = target.weakPoint;
+        let hit = parseInt(wp.hitPenalty);
+        if (isNaN(hit)) hit = -4;
+        if (hit > 0) hit = -hit;
+
+        let label = `Weak Point: ${wp.name || "Weak Point"} (${hit} hit`;
+        if (wp.bypassWorn) label += ", bypass worn";
+        if (wp.bypassNatural) label += ", bypass natural";
+        if (wp.toughnessOverride !== undefined && wp.toughnessOverride !== null && wp.toughnessOverride !== "") {
+            label += `, Tgh ${wp.toughnessOverride}`;
+        }
+        label += ")";
+
+        const opt = document.createElement("option");
+        opt.value = "weakpoint";
+        opt.textContent = label;
+        selectEl.appendChild(opt);
+    }
+
+    let newValue = oldValue;
+    if (newValue === "weakpoint" && !(target && target.weakPoint && target.weakPoint.enabled)) {
+        newValue = "none";
+    }
+
+    selectEl.value = newValue;
+}
+
+function getDieStep(dieStr) {
+    if (!dieStr) return 4;
+    const match = String(dieStr).match(/d?(\d+)/i);
+    if (!match) return 4;
+    const val = parseInt(match[1], 10);
+    if (isNaN(val)) return 4;
+    if (val <= 4) return 4;
+    if (val >= 12) return 12;
+    return val;
+}
+
+function dieStepIndex(dieStr) {
+    const dice = [4, 6, 8, 10, 12];
+    const val = getDieStep(dieStr);
+    let idx = dice.indexOf(val);
+    if (idx !== -1) return idx;
+
+    if (val <= 4) return 0;
+    if (val >= 12) return 4;
+
+    let lower = 0;
+    for (let i = 0; i < dice.length; i++) {
+        if (dice[i] <= val) lower = i;
+    }
+    return lower;
+}
+
+function dieStepPenalty(strDie, minStr, extraSteps = 0) {
+    const dice = [4, 6, 8, 10, 12];
+    const strIdx = dieStepIndex(strDie);
+    let reqIdx = dieStepIndex(minStr) + (parseInt(extraSteps) || 0);
+    if (reqIdx < 0) reqIdx = 0;
+    if (reqIdx > dice.length - 1) reqIdx = dice.length - 1;
+    return Math.max(0, reqIdx - strIdx);
+}
+
+function normalizeArmorInstance(a, slot) {
+    if (!a) return a;
+
+    if (a.slot === undefined) a.slot = slot || null;
+    if (a.degradationPolicy === undefined) a.degradationPolicy = a.degradation || "none";
+    if (a.degradationParam === undefined) a.degradationParam = a.degradationParam || "";
+
+    if (a.ruined === undefined) a.ruined = false;
+    if (a.penetrationCount === undefined) a.penetrationCount = 0;
+
+    const paramNum = parseInt(a.degradationParam) || 0;
+
+    if (a.chargeMax === undefined) a.chargeMax = paramNum;
+    if (a.chargeRemaining === undefined || a.chargeRemaining === null) {
+        a.chargeRemaining = a.chargeMax;
+    }
+
+    return a;
+}
+
+function normalizeCharacterArmorInstances(data) {
+    if (!data) return data;
+
+    if (data.equippedArmor) normalizeArmorInstance(data.equippedArmor, "primary");
+    if (data.equippedArmorSecondary) normalizeArmorInstance(data.equippedArmorSecondary, "secondary");
+    if (data.equippedForceField) normalizeArmorInstance(data.equippedForceField, "forcefield");
+
+    return data;
+}
+
+function isArmorInstanceActive(a) {
+    if (!a || a.ruined) return false;
+
+    if (a.degradationPolicy === "charge") {
+        let rem = a.chargeRemaining;
+        if (rem === undefined || rem === null) {
+            rem = (a.chargeMax !== undefined && a.chargeMax !== null)
+                ? a.chargeMax
+                : (parseInt(a.degradationParam) || 0);
+        }
+        return (parseInt(rem) || 0) > 0;
+    }
+
+    return true;
+}
+
+function armorInstanceApplies(a, weaponDmgType) {
+    if (!isArmorInstanceActive(a)) return false;
+
+    const t = a.armorType || "General";
+    if (t === "General") return true;
+    return t === weaponDmgType;
+}
+
+function armorInstanceStatusLines(a) {
+    if (!a) return [];
+
+    normalizeArmorInstance(a, a.slot);
+
+    const policyLabels = {
+        none: "None",
+        perWoundRoll: "Per-Wound Roll",
+        threshold: "Threshold",
+        charge: "Charge"
+    };
+
+    const lines = [];
+    const policy = a.degradationPolicy || "none";
+
+    lines.push(`DEGRADE: ${policyLabels[policy] || policy}`);
+
+    if (policy === "threshold") {
+        const threshold = parseInt(a.degradationParam) || 1;
+        lines.push(`DURABILITY: ${a.penetrationCount || 0}/${threshold}`);
+    }
+
+    if (policy === "charge") {
+        const max = (a.chargeMax !== undefined && a.chargeMax !== null)
+            ? a.chargeMax
+            : (parseInt(a.degradationParam) || 0);
+        const rem = (a.chargeRemaining !== undefined && a.chargeRemaining !== null)
+            ? a.chargeRemaining
+            : max;
+        lines.push(`CHARGE: ${rem}/${max}h`);
+    }
+
+    if (a.ruined) {
+        if (policy === "charge" && ((parseInt(a.chargeRemaining) || 0) <= 0)) {
+            lines.push(`STATUS: OFFLINE`);
+        } else {
+            lines.push(`STATUS: RUINED`);
+        }
+    } else {
+        lines.push(`STATUS: OK`);
+    }
+
+    return lines;
+}
+
+function computeEquippedArmorPenalty(data) {
+    if (!data) return 0;
+
+    normalizeCharacterArmorInstances(data);
+
+    const strDie = data.attributes?.Strength?.die || "d4";
+    const primary = data.equippedArmor;
+    const secondary = data.equippedArmorSecondary;
+
+    if (primary && isArmorInstanceActive(primary)) {
+        const extra = (secondary && isArmorInstanceActive(secondary)) ? 1 : 0;
+        return dieStepPenalty(strDie, primary.minStr, extra);
+    }
+
+    if (secondary && isArmorInstanceActive(secondary)) {
+        return dieStepPenalty(strDie, secondary.minStr, 0);
+    }
+
+    return 0;
+}
+
+function recalcCharacterDerived(data) {
+    if (!data) return data;
+    if (!data.derived) data.derived = {};
+
+    normalizeCharacterArmorInstances(data);
+
+    const nat = parseInt(data.naturalArmor) || 0;
+
+    const primary = data.equippedArmor;
+    const secondary = data.equippedArmorSecondary;
+    const force = data.equippedForceField;
+
+    let worn = 0;
+    let ff = 0;
+    let bp = 0;
+    let armorType = "General";
+    let heavy = false;
+
+    if (primary && isArmorInstanceActive(primary)) {
+        worn += parseInt(primary.armor) || 0;
+        bp = parseInt(primary.ballisticProtection) || 0;
+        armorType = primary.armorType || "General";
+        heavy = !!primary.heavyArmor;
+    }
+
+    if (secondary && isArmorInstanceActive(secondary)) {
+        worn += Math.floor((parseInt(secondary.armor) || 0) / 2);
+
+        // Known modeling limitation:
+        // participant stores one armorType/BP. If primary is inactive, fall back to secondary.
+        if (!(primary && isArmorInstanceActive(primary))) {
+            bp = parseInt(secondary.ballisticProtection) || 0;
+            armorType = secondary.armorType || "General";
+            heavy = !!secondary.heavyArmor;
+        }
+    }
+
+    if (force && isArmorInstanceActive(force)) {
+        ff = parseInt(force.armor) || 0;
+    }
+
+    const totalArmor = nat + worn + ff;
+
+    const vigorDie = getDieStep(data.attributes?.Vigor?.die || "d4");
+    const toughOverride = parseInt(data.derived.toughnessOverride) || 0;
+
+    data.derived.naturalArmor = nat;
+    data.derived.wornArmor = worn;
+    data.derived.forceField = ff;
+    data.derived.ballisticProtection = bp;
+    data.derived.armorType = armorType;
+    data.derived.heavyArmor = heavy;
+    data.derived.armor = totalArmor;
+
+    data.derived.toughness = 2 + (vigorDie / 2) + totalArmor + toughOverride;
+
+    const basePace = parseInt(data.derived.pace) || 6;
+    const penalty = computeEquippedArmorPenalty(data);
+
+    data.derived.armorPenalty = penalty;
+    data.derived.paceEffective = Math.max(1, basePace - penalty);
+
+    return data;
+}
+
+function degradeCharacterArmor(data, info) {
+    const logs = [];
+    if (!data) return logs;
+
+    normalizeCharacterArmorInstances(data);
+
+    const weaponDmgType = info.weaponDmgType || "Ballistic";
+    const woundsAdded = parseInt(info.woundsAdded) || 0;
+    const bypassWorn = !!info.bypassWorn;
+    const forceFieldApplied = !!info.forceFieldApplied;
+
+    const layers = [
+        { slot: "primary", inst: data.equippedArmor },
+        { slot: "secondary", inst: data.equippedArmorSecondary },
+        { slot: "forcefield", inst: data.equippedForceField }
+    ];
+
+    layers.forEach(({ slot, inst }) => {
+        if (!inst || inst.ruined) return;
+
+        const policy = inst.degradationPolicy || "none";
+        if (policy === "none") return;
+
+        // Force fields: battery/charge model.
+        if (slot === "forcefield") {
+            if (policy === "charge" && forceFieldApplied) {
+                const before = parseInt(inst.chargeRemaining) || 0;
+                inst.chargeRemaining = Math.max(0, before - 1);
+
+                logs.push(`${inst.name} force field consumed 1 hour of charge (${inst.chargeRemaining}h left).`);
+
+                if ((parseInt(inst.chargeRemaining) || 0) <= 0) {
+                    inst.ruined = true;
+                    logs.push(`${inst.name} force field is OFFLINE.`);
+                }
+            }
+            return;
+        }
+
+        // Worn layers:
+        // If the attack explicitly bypasses worn armor, it does not impact that layer.
+        if (bypassWorn) return;
+
+        // If the layer does not apply to this damage type, it was not meaningfully stressed.
+        if (!armorInstanceApplies(inst, weaponDmgType)) return;
+
+        // Only penetrating wounds degrade worn armor.
+        if (woundsAdded <= 0) return;
+
+        if (policy === "perWoundRoll") {
+            const rolls = [];
+            let ruined = false;
+
+            for (let i = 0; i < woundsAdded; i++) {
+                const r = 1 + Math.floor(Math.random() * 6);
+                rolls.push(r);
+                if (r % 2 === 1) ruined = true;
+            }
+
+            logs.push(`${inst.name} degradation rolls: [${rolls.join(", ")}] → ${ruined ? "RUINED" : "intact"}.`);
+
+            if (ruined) {
+                inst.ruined = true;
+            }
+        } else if (policy === "threshold") {
+            const threshold = parseInt(inst.degradationParam) || 1;
+            inst.penetrationCount = (parseInt(inst.penetrationCount) || 0) + woundsAdded;
+
+            logs.push(`${inst.name} absorbed ${woundsAdded} penetrating wound(s) (${inst.penetrationCount}/${threshold}).`);
+
+            if (inst.penetrationCount >= threshold) {
+                inst.ruined = true;
+                logs.push(`${inst.name} is RUINED.`);
+            }
+        } else if (policy === "charge") {
+            // Rare case: a worn powered armor layer with charge.
+            const before = parseInt(inst.chargeRemaining) || 0;
+            inst.chargeRemaining = Math.max(0, before - 1);
+
+            logs.push(`${inst.name} consumed 1 hour of charge (${inst.chargeRemaining}h left).`);
+
+            if ((parseInt(inst.chargeRemaining) || 0) <= 0) {
+                inst.ruined = true;
+                logs.push(`${inst.name} is OFFLINE.`);
+            }
+        }
+    });
+
+    return logs;
+}
+
+// Expose Part 4 helpers globally for page modules.
+window.CALLED_SHOTS = CALLED_SHOTS;
+window.getCalledShotConfig = getCalledShotConfig;
+window.populateCalledShotSelect = populateCalledShotSelect;
+window.getDieStep = getDieStep;
+window.dieStepIndex = dieStepIndex;
+window.dieStepPenalty = dieStepPenalty;
+window.normalizeArmorInstance = normalizeArmorInstance;
+window.normalizeCharacterArmorInstances = normalizeCharacterArmorInstances;
+window.isArmorInstanceActive = isArmorInstanceActive;
+window.armorInstanceApplies = armorInstanceApplies;
+window.armorInstanceStatusLines = armorInstanceStatusLines;
+window.computeEquippedArmorPenalty = computeEquippedArmorPenalty;
+window.recalcCharacterDerived = recalcCharacterDerived;
+window.degradeCharacterArmor = degradeCharacterArmor;
 
 // --- Validation warnings for threat editor ---
 function validateThreatTemplate(t) {
