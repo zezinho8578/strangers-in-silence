@@ -612,21 +612,7 @@ style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bot
             <h3 style="margin-top: 25px;">ACTIVE ON BOARD</h3>
             <div id="active-tracker-list" style="font-size: 0.9em; max-height: 200px; overflow-y: auto;"></div>
             <h3 style="margin-top: 25px;">CALLED SHOT CONFIG</h3>
-            <p style="font-size: 0.8em; opacity: 0.7; margin-bottom: 10px;">
-                Define which called-shot locations this threat type can use (head, limb, hand, gap, weak point) and
-                attach on-hit effects. Uncheck locations that don't make sense for the anatomy (e.g. no Hands on a
-                Barnacle). These options appear in the T.E.M. Called Shot dropdown when attacking.</p>
             <div id="cs-config-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;"></div>
-            <div style="border-top:1px dashed var(--theme-color); padding-top:10px; margin-top:5px;">
-                <div style="font-size:0.8em; opacity:0.8; margin-bottom:6px; text-align:left;">
-                    On-Hit Effect (applied when this called shot hits &amp; damages):
-                </div>
-                <div id="cs-onhit-effects" style="display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-start;"></div>
-            </div>
-            <div style="font-size:0.75em; opacity:0.6; margin-top:8px; text-align:left;">
-                <b>Custom:</b> Hit Penalty (−), Damage Bonus (+), and Toughness Override apply to the damage math;
-                Shaken / Stunned / Distracted / Vulnerable apply to the target on a damaging hit.
-            </div>
         </div>
     </div>
     <div style="margin-bottom: 5px; color: #ff3333; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
@@ -1220,59 +1206,31 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
         // ==========================================
         // CALLED SHOT CONFIG (per-template anatomy)
         // ==========================================
-        // Default anatomy: all standard locations enabled; weak point is only
-        // available if the threat has an enabled weak point.
-        const CS_CONFIG_DEFAULTS = {
-            head:      { enabled: true,  hitPenalty: -4, dmgMod: 4,  toughnessOverride: null, onHit: [] },
-            limb:      { enabled: true,  hitPenalty: -2, dmgMod: 0,  toughnessOverride: null, onHit: [] },
-            hand:      { enabled: true,  hitPenalty: -4, dmgMod: 0,  toughnessOverride: null, onHit: ["disarm"] },
-            gap:       { enabled: true,  hitPenalty: -4, dmgMod: 0,  toughnessOverride: null, onHit: [] },
-            weakpoint: { enabled: true,  hitPenalty: -4, dmgMod: 0,  toughnessOverride: null, onHit: [] }
-        };
-        const CS_ONHIT_OPTIONS = ["shaken", "stunned", "distracted", "vulnerable", "disarm"];
-        function normalizeCsConfig(cfg) {
-            const base = JSON.parse(JSON.stringify(CS_CONFIG_DEFAULTS));
-            if (!cfg || typeof cfg !== "object") return base;
-            for (const k of Object.keys(base)) {
-                if (!cfg[k] || typeof cfg[k] !== "object") continue;
-                if (cfg[k].enabled !== undefined) base[k].enabled = !!cfg[k].enabled;
-                if (cfg[k].hitPenalty !== undefined && cfg[k].hitPenalty !== null && cfg[k].hitPenalty !== "")
-                    base[k].hitPenalty = parseInt(cfg[k].hitPenalty);
-                if (cfg[k].hitPenalty === undefined || cfg[k].hitPenalty === null) base[k].hitPenalty = CS_CONFIG_DEFAULTS[k].hitPenalty;
-                if (cfg[k].dmgMod !== undefined && cfg[k].dmgMod !== null && cfg[k].dmgMod !== "")
-                    base[k].dmgMod = parseInt(cfg[k].dmgMod);
-                if (cfg[k].dmgMod === undefined || cfg[k].dmgMod === null) base[k].dmgMod = CS_CONFIG_DEFAULTS[k].dmgMod;
-                if (cfg[k].toughnessOverride !== undefined && cfg[k].toughnessOverride !== null && cfg[k].toughnessOverride !== "")
-                    base[k].toughnessOverride = parseInt(cfg[k].toughnessOverride);
-                if (Array.isArray(cfg[k].onHit)) {
-                    base[k].onHit = cfg[k].onHit.filter(x => CS_ONHIT_OPTIONS.includes(x));
-                }
-            }
-            return base;
-        }
+        // CS_CONFIG_DEFAULTS, CS_ONHIT_OPTIONS, normalizeCsConfig() are defined
+        // in the shared settings.js and used by BOTH the GM T.E.M. (here) and
+        // the player T.E.M. (character.html). This config is a property of the
+        // TARGET: when any attacker targets a participant, its calledShotConfig
+        // filters the Called Shot dropdown and supplies the custom values /
+        // on-hit effects. Weak Point (vs Natural Armor) is a separate system
+        // that always takes precedence and is NOT part of this anatomy config.
         function renderCsConfigPanel() {
             const list = document.getElementById('cs-config-list');
             if (!list) return;
             if (!activeThreat) { list.innerHTML = ''; return; }
             const cfg = activeThreat.calledShotConfig = normalizeCsConfig(activeThreat.calledShotConfig);
-            const wpEnabled = !!(activeThreat.weakPoint && activeThreat.weakPoint.enabled);
             let html = '';
             const labels = {
-                head: "Head / Vitals", limb: "Limb", hand: "Hand", gap: "Unarmored Gap", weakpoint: "Weak Point"
+                head: "Head / Vitals", limb: "Limb", hand: "Hand", gap: "Unarmored Gap"
             };
-            for (const key of ["head", "limb", "hand", "gap", "weakpoint"]) {
+            for (const key of ["head", "limb", "hand", "gap"]) {
                 const c = cfg[key];
-                const disabled = (key === "weakpoint" && !wpEnabled);
-                const checkedAttr = c.enabled && !disabled ? "checked" : "";
-                const disabledAttr = disabled ? "disabled title='Enable a Weak Point on this threat first'" : "";
                 html += `
 <div style="border:1px solid var(--theme-color); padding:6px; font-size:0.8em; text-align:left;">
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
 <label style="display:flex; align-items:center; gap:6px;">
-<input type="checkbox" data-cs="${key}" data-field="enabled" ${checkedAttr} ${disabledAttr} onchange="syncCsConfigFromInputs()">
+<input type="checkbox" data-cs="${key}" data-field="enabled" ${c.enabled ? "checked" : ""} onchange="syncCsConfigFromInputs()">
 <span><b>${labels[key]}</b></span>
 </label>
-<span style="opacity:0.6; font-size:0.85em;">${disabled ? "(weak point disabled)" : ""}</span>
 </div>
 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
 <span>Hit:</span><input type="number" data-cs="${key}" data-field="hitPenalty" value="${c.hitPenalty}" style="width:50px;" class="admin-input" onchange="syncCsConfigFromInputs()">
@@ -1296,7 +1254,7 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
                 const field = el.dataset.field;
                 if (!cfg[key]) return;
                 if (field === "enabled") {
-                    if (!el.disabled) cfg[key].enabled = el.checked;
+                    cfg[key].enabled = el.checked;
                 } else if (field === "hitPenalty") {
                     cfg[key].hitPenalty = parseInt(el.value);
                     if (isNaN(cfg[key].hitPenalty)) cfg[key].hitPenalty = CS_CONFIG_DEFAULTS[key].hitPenalty;
@@ -1321,44 +1279,6 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
             // Persist immediately so the config survives reloads / is shared.
             saveTemplateToDB(true);
         };
-        // Returns the enabled config (merged with CALLED_SHOTS defaults) for a
-        // given location id, respecting the per-template anatomy toggles.
-        function getActiveCsConfig(locationId) {
-            if (!activeThreat) return null;
-            const cfg = normalizeCsConfig(activeThreat.calledShotConfig);
-            if (locationId === "weakpoint") {
-                // Weak point is gated on the threat having an enabled weak point.
-                if (!(activeThreat.weakPoint && activeThreat.weakPoint.enabled)) return null;
-                if (!cfg.weakpoint.enabled) return null;
-                const wp = activeThreat.weakPoint;
-                return {
-                    id: "weakpoint",
-                    label: `Weak Point: ${wp.name || "Weak Point"}`,
-                    hitMod: cfg.weakpoint.hitPenalty,
-                    dmgMod: cfg.weakpoint.dmgMod,
-                    bypassWorn: !!wp.bypassWorn,
-                    bypassNatural: !!wp.bypassNatural,
-                    toughnessOverride: (cfg.weakpoint.toughnessOverride !== null && cfg.weakpoint.toughnessOverride !== "")
-                        ? cfg.weakpoint.toughnessOverride
-                        : ((wp.toughnessOverride !== undefined && wp.toughnessOverride !== null && wp.toughnessOverride !== "")
-                            ? parseInt(wp.toughnessOverride) : null),
-                    onHit: cfg.weakpoint.onHit || []
-                };
-            }
-            const entry = cfg[locationId];
-            if (!entry || !entry.enabled) return null;
-            const base = (window.CALLED_SHOTS && CALLED_SHOTS[locationId]) || { id: locationId, label: locationId };
-            return {
-                id: locationId,
-                label: base.label || locationId,
-                hitMod: entry.hitPenalty,
-                dmgMod: entry.dmgMod,
-                bypassWorn: !!base.bypassWorn,
-                bypassNatural: !!base.bypassNatural,
-                toughnessOverride: entry.toughnessOverride,
-                onHit: entry.onHit || []
-            };
-        }
         function renderEditor() {
             if (!activeThreat) return;
             document.getElementById('editor-panel').style.display = 'block';
@@ -1878,64 +1798,16 @@ window.onTargetChange = function () {
 // ==========================================
 // PART 4: CALLED SHOT HELPERS
 // ==========================================
+// The Called Shot dropdown & config resolution are shared with the player
+// T.E.M. via settings.js (populateCalledShotSelect / getCalledShotConfig).
+// The dropdown is driven by the TARGET's calledShotConfig + weakPoint; Weak
+// Point (vs Natural Armor) always takes precedence over the anatomy config.
 function refreshCalledShotOptions() {
     const sel = document.getElementById('called-shot-select');
     if (!sel) return;
-    const oldValue = sel.value || "none";
-
-    // Build the option list from the ATTACKING threat's per-template anatomy
-    // config, plus the selected TARGET's weak point (if it has one enabled).
-    sel.innerHTML = `<option value="none">None</option>`;
-    if (activeThreat) {
-        const cfg = normalizeCsConfig(activeThreat.calledShotConfig);
-        const order = ["head", "limb", "hand", "gap", "weakpoint"];
-        for (const k of order) {
-            if (k === "weakpoint") {
-                // attacker's own weak point location is only usable if the
-                // attacker has an enabled weak point (rare — usually the
-                // target's weak point is what matters, handled below).
-                if (!(activeThreat.weakPoint && activeThreat.weakPoint.enabled)) continue;
-                if (!cfg.weakpoint.enabled) continue;
-            }
-            const entry = cfg[k];
-            if (!entry || !entry.enabled) continue;
-            const c = getActiveCsConfig(k);
-            if (!c) continue;
-            let lbl = c.label;
-            if (c.dmgMod) lbl += ` (+${c.dmgMod} dmg)`;
-            lbl += ` (${c.hitMod} hit)`;
-            const opt = document.createElement('option');
-            opt.value = k;
-            opt.textContent = lbl;
-            sel.appendChild(opt);
-        }
+    if (window.populateCalledShotSelect) {
+        window.populateCalledShotSelect(sel, getSelectedTarget());
     }
-
-    // Target's weak point (attacking an enemy that has an enabled weak point).
-    const target = getSelectedTarget();
-    if (target && target.weakPoint && target.weakPoint.enabled) {
-        const wp = target.weakPoint;
-        let hit = parseInt(wp.hitPenalty);
-        if (isNaN(hit)) hit = -4;
-        if (hit > 0) hit = -hit;
-        let label = `Weak Point (target): ${wp.name || "Weak Point"} (${hit} hit`;
-        if (wp.bypassWorn) label += ", bypass worn";
-        if (wp.bypassNatural) label += ", bypass natural";
-        if (wp.toughnessOverride !== undefined && wp.toughnessOverride !== null && wp.toughnessOverride !== "") {
-            label += `, Tgh ${wp.toughnessOverride}`;
-        }
-        label += ")";
-        const opt = document.createElement('option');
-        opt.value = "target-weakpoint";
-        opt.textContent = label;
-        sel.appendChild(opt);
-    }
-
-    // Preserve selection if still valid; otherwise reset to None.
-    let newValue = oldValue;
-    const validValues = Array.from(sel.options).map(o => o.value);
-    if (!validValues.includes(newValue)) newValue = "none";
-    sel.value = newValue;
 }
 
 window.updateCalledShot = function () {
@@ -1963,36 +1835,10 @@ window.updateCalledShot = function () {
 window.getCurrentCalledShot = function () {
     const sel = document.getElementById('called-shot-select');
     if (!sel) return { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
-
-    const val = sel.value;
-    if (val === "none" || !val) return { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
-
-    // Target's weak point option.
-    if (val === "target-weakpoint") {
-        const target = getSelectedTarget();
-        if (!target || !target.weakPoint || !target.weakPoint.enabled) {
-            return { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
-        }
-        const wp = target.weakPoint;
-        let hit = parseInt(wp.hitPenalty);
-        if (isNaN(hit)) hit = -4;
-        if (hit > 0) hit = -hit;
-        return {
-            id: "target-weakpoint",
-            label: `Weak Point (target): ${wp.name || "Weak Point"}`,
-            hitMod: hit,
-            dmgMod: 0,
-            bypassWorn: !!wp.bypassWorn,
-            bypassNatural: !!wp.bypassNatural,
-            toughnessOverride: (wp.toughnessOverride !== undefined && wp.toughnessOverride !== null && wp.toughnessOverride !== "")
-                ? parseInt(wp.toughnessOverride) : null,
-            onHit: []
-        };
-    }
-
-    // Attacker's own per-template location.
-    const c = getActiveCsConfig(val);
-    return c || { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
+    const target = getSelectedTarget();
+    return window.getCalledShotConfig
+        ? window.getCalledShotConfig(sel.value, target)
+        : { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
 };
 window.onTargetDodgeChange = async function () {
     let target = getSelectedTarget();
@@ -2690,6 +2536,7 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                     heavyArmor: !!activeThreat.heavyArmor,
                     armorType: activeThreat.armorType || "General",
                     weakPoint: JSON.parse(JSON.stringify(activeThreat.weakPoint || null)),
+                    calledShotConfig: normalizeCsConfig(activeThreat.calledShotConfig),
                     bennies: 0, // NPCs use shared GM pool
                     groupId: batchGroupId, // B14
                     groupName: baseName,   // B14
