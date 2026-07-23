@@ -627,19 +627,19 @@
             <h3>OVERWATCH ARMOR CONFIG (MASTER PRESETS)</h3>
             <p style="font-size: 0.85em; opacity: 0.85; margin-bottom: 10px;">GM Mode: Changes made below update the armor presets database globally in real-time.</p>
             <div style="overflow-x: auto;">
-                <table class="preset-table">
+                <table class="preset-table armor-preset-table">
                     <thead>
                         <tr>
-                            <th>Icon</th>
+                            <th style="width:40px;">Icon</th>
                             <th>Name</th>
-                            <th>Armor</th>
-                            <th>Type</th>
-                            <th>BP</th>
-                            <th>HW?</th>
-                            <th>FF?</th>
-                            <th>Min Str</th>
-                            <th>Icon Link</th>
-                            <th>Action</th>
+                            <th style="width:40px;">Arm</th>
+                            <th style="width:70px;">Type</th>
+                            <th style="width:30px;">BP</th>
+                            <th style="width:30px;">HW</th>
+                            <th style="width:30px;">FF</th>
+                            <th style="width:45px;">MinStr</th>
+                            <th style="width:80px;">Icon URL</th>
+                            <th style="width:50px;">Act</th>
                         </tr>
                     </thead>
                     <tbody id="armor-presets-body"></tbody>
@@ -1774,8 +1774,40 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
             charData.derived.parry = calcParry;
             let vigorDie = charData.attributes["Vigor"] ? getDieStep(charData.attributes["Vigor"].die) : 4;
             let toughOverride = parseInt(charData.derived.toughnessOverride) || 0;
-            let calcToughness = 2 + (vigorDie / 2) + toughOverride;
+
+            // --- Armor calculation from equipped gear ---
+            let natArmor = parseInt(charData.naturalArmor) || 0;
+            let wornArmor = 0;
+            let ffArmor = 0;
+            let armorBP = 0;
+            let armorTypeVal = "General";
+            let heavyArmorVal = false;
+
+            if (charData.equippedArmor) {
+                wornArmor += parseInt(charData.equippedArmor.armor) || 0;
+                armorBP = parseInt(charData.equippedArmor.ballisticProtection) || 0;
+                armorTypeVal = charData.equippedArmor.armorType || "General";
+                heavyArmorVal = !!charData.equippedArmor.heavyArmor;
+            }
+            if (charData.equippedArmorSecondary) {
+                wornArmor += Math.floor((parseInt(charData.equippedArmorSecondary.armor) || 0) / 2);
+            }
+            if (charData.equippedForceField) {
+                ffArmor = parseInt(charData.equippedForceField.armor) || 0;
+            }
+
+            let totalArmorVal = natArmor + wornArmor + ffArmor;
+            let calcToughness = 2 + (vigorDie / 2) + totalArmorVal + toughOverride;
+
             charData.derived.toughness = calcToughness;
+            charData.derived.armor = totalArmorVal;
+            charData.derived.naturalArmor = natArmor;
+            charData.derived.wornArmor = wornArmor;
+            charData.derived.ballisticProtection = armorBP;
+            charData.derived.forceField = ffArmor;
+            charData.derived.armorType = armorTypeVal;
+            charData.derived.heavyArmor = heavyArmorVal;
+            charData.derived.armorPenalty = parseInt(charData.equippedArmorPenalty) || 0;
             document.getElementById('der-parry-calc').innerText = calcParry;
             document.getElementById('der-parry-override').className = "admin-input";
             document.getElementById('der-parry-override').style = "width: 50px; padding: 2px; text-align: center;";
@@ -1790,7 +1822,10 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
             if (!document.getElementById('reset-toughness-btn')) {
                 document.getElementById('der-toughness-override').insertAdjacentHTML('afterend', ` <button id="reset-toughness-btn" class="die-btn" style="padding: 2px 6px;" onclick="resetDerived('toughness')" title="Reset Override">↺</button>`);
             }
-            document.getElementById('der-pace').innerText = charData.derived.pace;
+            let basePace = parseInt(charData.derived.pace) || 6;
+            let armorPen = parseInt(charData.derived.armorPenalty) || 0;
+            let effectivePace = Math.max(1, basePace - armorPen);
+            document.getElementById('der-pace').innerText = effectivePace + (armorPen > 0 ? ` (base ${basePace}, −${armorPen} armor)` : '');
             document.getElementById('notes-edges').value = charData.edges;
             document.getElementById('notes-gear').value = charData.gear;
             attachEditListeners();
@@ -2238,7 +2273,7 @@ ${reloadBtn}
             globalState.armorPresets.forEach((p, index) => {
                 tbody.innerHTML += `
 <tr>
-<td style="text-align:center;"><img style="width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 1px var(--theme-color));" src="${p.icon}"></td>
+                        <td style="text-align:center;"><img style="width: 28px; height: 28px; object-fit: contain; filter: drop-shadow(0 0 1px var(--theme-color));" src="${p.icon}"></td>
 <td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="name">${p.name}</td>
 <td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="armor" style="width:40px; text-align:center;">${p.armor}</td>
 <td>
@@ -3337,6 +3372,17 @@ window.onTargetDodgeChange = async function () {
                 document.getElementById('mod-override-input').value = currentMod + pendingMinStrPenalty;
                 logToTerminal(`> [!] STRENGTH REQUIREMENT NOT MET: Auto-applied ${pendingMinStrPenalty} penalty to attack roll.`);
             }
+            // Armor Min Str penalty for Agility and Agility-linked skills
+            let armorPenalty = parseInt(charData.derived?.armorPenalty) || 0;
+            if (armorPenalty > 0) {
+                const agiLinkedSkills = ['Athletics', 'Boating', 'Driving', 'Fighting', 'Piloting', 'Shooting', 'Stealth', 'Thievery'];
+                let isAgiLinked = (cat === 'attributes' && name === 'Agility') || (cat === 'skills' && agiLinkedSkills.includes(name));
+                if (isAgiLinked) {
+                    let currentMod = parseInt(document.getElementById('mod-override-input').value) || 0;
+                    document.getElementById('mod-override-input').value = currentMod - armorPenalty;
+                    logToTerminal(`> [!] ARMOR PENALTY: −${armorPenalty} applied to ${name} (Min Str not met).`);
+                }
+            }
             const rangedOpts = document.getElementById('ranged-options-container');
             const rofOpts = document.getElementById('rof-options-container');
             const scopeRow = document.getElementById('scope-row');
@@ -3643,9 +3689,9 @@ window.onTargetDodgeChange = async function () {
             } else if (slot === 'forcefield') {
                 charData.equippedForceField = newArmor;
             }
-            saveCharacter();
             renderSheet();
             renderArmor();
+            saveCharacter();
             document.getElementById('armor-equip-modal').style.display = 'none';
             if (globalState && globalState.webhook) {
                 const embed = {
@@ -3685,9 +3731,9 @@ window.onTargetDodgeChange = async function () {
                 removed = charData.equippedForceField;
                 charData.equippedForceField = null;
             }
-            saveCharacter();
             renderSheet();
             renderArmor();
+            saveCharacter();
             if (removed && globalState && globalState.webhook) {
                 const embed = {
                     title: `${charData.name} unequipped armor`,
@@ -3699,9 +3745,9 @@ window.onTargetDodgeChange = async function () {
         }
         function updateNaturalArmor(val) {
             charData.naturalArmor = parseInt(val) || 0;
-            saveCharacter();
             renderSheet();
             renderArmor();
+            saveCharacter();
         }
         function renderArmor() {
             const container = document.getElementById('armor-list-container');
