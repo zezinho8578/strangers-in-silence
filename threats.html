@@ -480,12 +480,6 @@
                 </label>
             </div>
             <div class="form-row">
-                <span>Armor Preset:</span>
-                <select id="armor-preset-select" class="form-input" style="width:180px;" onchange="applyArmorPreset()">
-                    <option value="">-- Select Preset --</option>
-                </select>
-            </div>
-            <div class="form-row">
                 <span>Armor Type:</span>
                 <select id="edit-armortype" class="form-input" style="width:140px;" onchange="updateActive()">
                     <option value="General">General</option>
@@ -939,7 +933,6 @@ function storeThreatAttackContext(hit, results) {
                 if (!globalState.presets) globalState.presets = [];
                 renderCodex();
                 populateWeaponDropdown();
-                populateArmorDropdown();
                 renderDeployed();
                 if (activeTemplateId && globalState.threatTemplates[activeTemplateId] && !activeThreat) {
                     loadTemplate(activeTemplateId);
@@ -962,30 +955,6 @@ function storeThreatAttackContext(hit, results) {
             select.innerHTML = '<option value="">-- Select Master Preset --</option>';
             globalState.presets.forEach(p => { select.innerHTML += `<option value="${p.id}">${p.name}</option>`; });
         }
-        function populateArmorDropdown() {
-            const select = document.getElementById('armor-preset-select');
-            if (!select) return;
-            select.innerHTML = '<option value="">-- Select Preset --</option>';
-            (globalState.armorPresets || []).forEach(p => {
-                select.innerHTML += `<option value="${p.id}">${p.name} (Armor: ${p.armor})</option>`;
-            });
-        }
-        window.applyArmorPreset = function () {
-            const id = document.getElementById('armor-preset-select').value;
-            if (!id) return;
-            const preset = (globalState.armorPresets || []).find(p => p.id === id);
-            if (!preset) return;
-            if (!activeThreat) return;
-            document.getElementById('edit-naturalarmor').value = 0;
-            document.getElementById('edit-wornarmor').value = parseInt(preset.armor) || 0;
-            document.getElementById('edit-ballisticprotection').value = preset.ballisticProtection || 0;
-            document.getElementById('edit-forcefield').value = preset.forceField ? (parseInt(preset.armor) || 0) : 0;
-            document.getElementById('edit-heavyarmor').checked = !!preset.heavyArmor;
-            document.getElementById('edit-armortype').value = preset.armorType || "General";
-            document.getElementById('armor-preset-select').value = '';
-            updateActive();
-            logToTerminal(`> Applied armor preset: ${preset.name} (Armor: ${preset.armor}, Type: ${preset.armorType})`);
-        };
         function renderDeployed() {
             const list = document.getElementById('active-tracker-list');
             list.innerHTML = '';
