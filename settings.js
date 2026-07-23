@@ -239,9 +239,6 @@ function computeArmorPipeline(target, weaponDmgType, ap, opts = {}) {
     const wornArmor = parseInt(t.wornArmor) || 0;
     const bp = parseInt(t.ballisticProtection) || 0;
     const ff = parseInt(t.forceField) || 0;
-    const toughness = (toughnessOverride !== null)
-    ? toughnessOverride
-    : (parseInt(t.toughness) || 0);
     const armorType = t.armorType || "General";
     const heavyArmor = !!t.heavyArmor;
 
@@ -258,6 +255,15 @@ function computeArmorPipeline(target, weaponDmgType, ap, opts = {}) {
         (toughnessOverrideRaw !== null && !isNaN(toughnessOverrideRaw))
             ? toughnessOverrideRaw
             : null;
+
+    // NOTE: toughness must be read AFTER toughnessOverride is declared above.
+    // Previously it sat above the const declaration and fell in the temporal
+    // dead zone, throwing ReferenceError and breaking every damage calc that
+    // relied on this pipeline (called-shot/weak-point damage application,
+    // the effective-toughness preview, and tracker.html's manual damage tool).
+    const toughness = (toughnessOverride !== null)
+        ? toughnessOverride
+        : (parseInt(t.toughness) || 0);
 
     const calledShotId = opts.id || opts.calledShot || null;
     const calledShotLabel = opts.label || "";
