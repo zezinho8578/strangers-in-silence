@@ -634,7 +634,6 @@ style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bot
             <select id="action-mode-select" class="admin-input" style="width:200px;" onchange="onActionModeChange()">
                 <option value="normal">Normal Action / Attack</option>
                 <option value="test">Perform Test (Distract/Vulnerable)</option>
-                <option value="support">Perform Support (+1/+2 Ally)</option>
             </select>
         </div>
         <div class="setting-row" id="test-options-row" style="display:none; background:rgba(255,153,0,0.1); padding:8px; border:1px solid var(--theme-color);">
@@ -1815,7 +1814,7 @@ function updateDefenderModifierAndStatus() {
         async function handleTestOrSupportOutcome(ctx, results, target) {
             let mode = document.getElementById('action-mode-select')?.value || 'normal';
             if (mode === 'normal' || !target) return;
-            
+
             if (!globalState.combat || !globalState.combat.participants) return;
 
             let hit = results.some(r => r.outcome.includes("SUCCESS"));
@@ -1844,11 +1843,6 @@ function updateDefenderModifierAndStatus() {
                     if (hasRaise) logMsg += ` <b style="color:#ffff00;">(RAISE: Also SHAKEN!)</b>`;
                     logToTerminal(logMsg);
                 }
-            } else if (mode === 'support' && hit) {
-                let bonus = hasRaise ? 2 : 1;
-                let storageKey = `support_${target.id}`;
-                sessionStorage.setItem(storageKey, bonus.toString());
-                logToTerminal(`> <b style="color:#00ccff;">SUPPORT SUCCESS:</b> ${target.name} receives <b>+${bonus}</b> to their next Trait roll!`);
             }
         }
 
@@ -1863,12 +1857,12 @@ function updateDefenderModifierAndStatus() {
 
             let results = [];
             let currentCalledShot = window.getCurrentCalledShot ? window.getCurrentCalledShot() : null;
-
             for (let targetId of selectedTargetIds) {
+                let targetP = globalState.combat.participants.find(p => p.id === targetId);
                 let attackKey = `mass_blast_${targetId}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
                 setAttackContext(attackKey, {
                     targetId: targetId,
-                    targetName: globalState.combat.participants.find(p => p.id === targetId)?.name || "Target",
+                    targetName: targetP ? targetP.name : "Target",
                     attackerName: activeThreat.name || "Attacker",
                     hit: true,
                     ap: weaponObj.ap || "0",
@@ -1878,6 +1872,7 @@ function updateDefenderModifierAndStatus() {
                     calledShot: currentCalledShot
                 });
                 let res = await applyDamageToTracker(attackKey, weaponObj, damageTotal);
+                res.targetName = targetP ? targetP.name : "Target";
                 results.push(res);
             }
             return results;
@@ -1948,6 +1943,8 @@ window.onTargetChange = function () {
         defenderModifier = 0;
         defenderDisplay = "";
         document.getElementById('target-status').innerHTML = "";
+        let previewEl = document.getElementById('effective-toughness-preview');
+        if (previewEl) previewEl.style.display = "none";
         refreshCalledShotOptions();
         window.updateCalledShot();
         return;
@@ -2341,8 +2338,6 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
         : { id: "none", hitMod: 0, dmgMod: 0 };
 
             let jokerBonus = document.getElementById('threat-joker-checkbox')?.checked ? 2 : 0;
-    let supportKey = `support_${activeThreat?.name}`;
-    let supportBonus = parseInt(sessionStorage.getItem(supportKey)) || 0;
 
     let totalModifier = intrinsicMod
         + unskilledMod
@@ -2350,10 +2345,7 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
         + mapPenalty
         + defenderModifier
         + jokerBonus
-        + supportBonus
         + (parseInt(calledShot.hitMod) || 0);
-    
-    if (supportBonus) sessionStorage.removeItem(supportKey);
     
     let isWildAttack = !isMeleeWeapon(activeWeaponContext) ? false : document.getElementById('wild-attack-checkbox').checked;
     if (isWildAttack) {
@@ -2591,13 +2583,38 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
             let calledStr = calledDmg > 0 ? ` + ${calledDmg} (Called Shot)` : "";
 
             let multiSelect = document.getElementById('multi-target-select');
+            let isMass = document.getElementById('multi-target-row').style.display !== 'none'
+                         && multiSelect && multiSelect.selectedOptions.length > 0;
             let application;
-            if (document.getElementById('multi-target-row').style.display !== 'none' && multiSelect && multiSelect.selectedOptions.length > 0) {
+            if (isMass) {
                 let massResults = await applyMassDamageToTracker(wep, total);
+                let termLines = massResults.map(r =>
+                    `&nbsp;&nbsp;<b>${r.targetName}:</b> ${r.plainText || 'No effect.'}`
+                );
                 application = {
-                    message: massResults.map(r => r.message).filter(Boolean).join('<br>&nbsp;&nbsp;'),
-                    plainText: massResults.map(r => r.plainText).filter(Boolean).join('\n')
+                    message: termLines.join('<br>'),
+                    plainText: massResults.map(r => `${r.targetName}: ${r.plainText || 'No effect.'}`).join('\n')
                 };
+                if (globalState && globalState.webhook) {
+                    let fields = massResults.map(r => ({
+                        name: r.targetName,
+                        value: r.plainText || 'No effect.',
+                        inline: false
+                    }));
+                    const embed = {
+                        title: `${activeThreat.name} — Area Damage: ${wep.name}`,
+                        description: `**Damage: ${total}** applied to ${massResults.length} target(s)`,
+                        color: 0xff3333,
+                        fields: fields
+                    };
+                    let imgUrl = wep.image || wep.icon || "";
+                    if (imgUrl && !imgUrl.includes("Orange_lambda.svg")) embed.thumbnail = { url: imgUrl };
+                    fetch(globalState.webhook, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ embeds: [embed] })
+                    }).catch(e => {});
+                }
             } else {
                 application = await applyDamageToTracker(attackKey, wep, total);
             }
@@ -2635,7 +2652,7 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
             }
 
             logToTerminal(termLog);
-            if (globalState && globalState.webhook) {
+            if (globalState && globalState.webhook && !isMass) {
                 const embed = {
                     title: `${activeThreat.name} rolled damage with ${wep.name}`,
                     description: `**Damage Total: ${total}**`, color: 0xff3333,

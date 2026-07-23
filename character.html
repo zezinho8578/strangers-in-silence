@@ -762,7 +762,6 @@
             <select id="action-mode-select" class="admin-input" style="width:200px; pointer-events: auto !important;" onchange="onActionModeChange()">
                 <option value="normal">Normal Action / Attack</option>
                 <option value="test">Perform Test (Distract/Vulnerable)</option>
-                <option value="support">Perform Support (+1/+2 Ally)</option>
             </select>
         </div>
         <div class="setting-row" id="test-options-row" style="display:none; background:rgba(255,153,0,0.1); padding:8px; border:1px solid var(--theme-color);">
@@ -3842,7 +3841,44 @@ ${reloadBtn}
             // Reveal the damage reroll button now that a damage roll is pending
             updateDamageRerollButton(index);
 
-            let application = await applyDamageToTracker(storageKey, weaponObj, total);
+            let multiSelect = document.getElementById('multi-target-select');
+            let isMass = document.getElementById('multi-target-row').style.display !== 'none'
+                         && multiSelect && multiSelect.selectedOptions.length > 0;
+            let application;
+            if (isMass) {
+                let massResults = await applyMassDamageToTracker(weaponObj, total);
+                let termLines = massResults.map(r =>
+                    `&nbsp;&nbsp;<b>${r.targetName}:</b> ${r.plainText || 'No effect.'}`
+                );
+                application = {
+                    message: termLines.join('<br>'),
+                    plainText: massResults.map(r => `${r.targetName}: ${r.plainText || 'No effect.'}`).join('\n')
+                };
+                if (globalState && globalState.webhook) {
+                    let fields = massResults.map(r => ({
+                        name: r.targetName,
+                        value: r.plainText || 'No effect.',
+                        inline: false
+                    }));
+                    const embed = {
+                        title: `${charData.name} — Area Damage: ${weaponObj.name}`,
+                        description: `**Damage: ${total}** applied to ${massResults.length} target(s)`,
+                        color: 0xff3333,
+                        fields: fields,
+                        thumbnail: { url: weaponObj.icon || "" }
+                    };
+                    try {
+                        await fetch(globalState.webhook, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ embeds: [embed] })
+                        });
+                    } catch (e) {}
+                }
+            } else {
+                let singleKey = getWeaponBonusKey(weaponObj, activeWeaponIndex);
+                application = await applyDamageToTracker(singleKey, weaponObj, total);
+            }
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
@@ -3865,7 +3901,7 @@ ${reloadBtn}
                 termLog += `<br>&nbsp;&nbsp;[ INCLUDES: ${bonuses.join(' & ')} ]`;
             }
             logToTerminal(termLog);
-            if (globalState && globalState.webhook) {
+            if (globalState && globalState.webhook && !isMass) {
                 const embed = {
                     title: `${charData.name} rolled damage with ${weaponName}`,
                     description: `**Damage Total: ${total}**`,
@@ -4177,11 +4213,6 @@ function updateDefenderModifierAndStatus() {
                     if (hasRaise) logMsg += ` <b style="color:#ffff00;">(RAISE: Also SHAKEN!)</b>`;
                     logToTerminal(logMsg);
                 }
-            } else if (mode === 'support' && hit) {
-                let bonus = hasRaise ? 2 : 1;
-                let storageKey = `support_${target.id}`;
-                sessionStorage.setItem(storageKey, bonus.toString());
-                logToTerminal(`> <b style="color:#00ccff;">SUPPORT SUCCESS:</b> ${target.name} receives <b>+${bonus}</b> to their next Trait roll!`);
             }
         }
 
@@ -4195,19 +4226,23 @@ function updateDefenderModifierAndStatus() {
             }
 
             let results = [];
+            let currentCalledShot = window.getCurrentCalledShot ? window.getCurrentCalledShot() : null;
             for (let targetId of selectedTargetIds) {
-                let attackKey = `mass_blast_${targetId}_${Date.now()}`;
+                let targetP = globalState.combat.participants.find(p => p.id === targetId);
+                let attackKey = `mass_blast_${targetId}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
                 setAttackContext(attackKey, {
                     targetId: targetId,
-                    targetName: globalState.combat.participants.find(p => p.id === targetId)?.name || "Target",
+                    targetName: targetP ? targetP.name : "Target",
                     attackerName: charData.name || "Attacker",
                     hit: true,
                     ap: weaponObj.ap || "0",
                     weaponName: weaponObj.name,
                     round: globalState.combat?.round || 1,
-                    savedAt: Date.now()
+                    savedAt: Date.now(),
+                    calledShot: currentCalledShot
                 });
                 let res = await applyDamageToTracker(attackKey, weaponObj, damageTotal);
+                res.targetName = targetP ? targetP.name : "Target";
                 results.push(res);
             }
             return results;
@@ -4290,6 +4325,8 @@ window.onTargetChange = function () {
         defenderModifier = 0;
         defenderDisplay = "";
         document.getElementById('target-status').innerHTML = "";
+        let previewEl = document.getElementById('effective-toughness-preview');
+        if (previewEl) previewEl.style.display = "none";
         return;
     }
 
@@ -4416,19 +4453,13 @@ window.onTargetChange = function () {
                 ? window.getCurrentCalledShot()
                 : { id: "none", hitMod: 0, dmgMod: 0, bypassWorn: false, bypassNatural: false, toughnessOverride: null };
             // B8: include the defender modifier (Vulnerable/Dodge) in the frozen context
-            let supportKey = `support_${activeCharId}`;
-            let supportBonus = parseInt(sessionStorage.getItem(supportKey)) || 0;
-
             let totalModifier = traitModifier
                 + customModifier
                 + statusPenalty
                 + jokerBonus
                 + wildAttackBonus
                 + defenderModifier
-                + supportBonus
                 + (parseInt(calledShot.hitMod) || 0);
-
-            if (supportBonus) sessionStorage.removeItem(supportKey);
             let is3RB = _is3RB || false;
             let isDoubleTap = _isDoubleTap || false;
             let isSupp = _isSupp || false;
