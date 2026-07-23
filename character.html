@@ -1266,6 +1266,31 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         target.onHold = false;
     }
 
+    // Part 4: Called Shot on-hit effects (shaken / stunned / distracted /
+    // vulnerable / disarm) from the target's anatomy config. Applied on any
+    // damaging hit (damageTotal >= effectiveToughness). Shared with the GM
+    // threat tracker so both players and GMs get the same behaviour.
+    let onHitNotes = [];
+    if (calledShot && Array.isArray(calledShot.onHit) && calledShot.onHit.length) {
+        for (const effect of calledShot.onHit) {
+            if (effect === "shaken") {
+                if (!target.shaken) { target.shaken = true; onHitNotes.push("Shaken"); }
+            } else if (effect === "stunned") {
+                if (!target.stunned) { target.stunned = true; onHitNotes.push("Stunned"); }
+            } else if (effect === "distracted") {
+                target.distracted = true;
+                target.distractedTTL = target.distractedTTL || 1;
+                onHitNotes.push("Distracted");
+            } else if (effect === "vulnerable") {
+                target.vulnerable = true;
+                target.vulnerableTTL = target.vulnerableTTL || 1;
+                onHitNotes.push("Vulnerable");
+            } else if (effect === "disarm") {
+                onHitNotes.push("Disarm (GM: resolve item drop)");
+            }
+        }
+    }
+
     participants[idx] = target;
     globalState.combat.participants = participants;
 
@@ -1339,6 +1364,11 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     if (degradeNotes.length) {
         result.message += `<br>&nbsp;&nbsp;<b style="color:#ff9900;">ARMOR DEGRADATION:</b> ${degradeNotes.join('<br>&nbsp;&nbsp;')}`;
         result.plainText += ` ARMOR DEGRADATION: ${degradeNotes.join(' ')}`;
+    }
+
+    if (onHitNotes.length) {
+        result.message += `<br>&nbsp;&nbsp;<b style="color:#ff66cc;">CALLED SHOT EFFECTS:</b> ${onHitNotes.join(', ')}`;
+        result.plainText += ` CALLED SHOT EFFECTS: ${onHitNotes.join(', ')}`;
     }
 
     return result;
