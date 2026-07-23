@@ -308,3 +308,32 @@ body::after {
 @container (min-width: 720px) {
     .stats-row.editor-grid { grid-template-columns: max-content auto max-content auto max-content auto; } /* 3 pairs */
 }
+
+/* =========================================
+PART 4: CALLED SHOTS / WEAK POINTS / ARMOR DEGRADATION
+========================================= */
+
+#called-shot-status {
+    border-left: 2px solid #ff9900;
+    padding-left: 8px;
+}
+
+#weakpoint-editor {
+    background: rgba(255, 153, 0, 0.05);
+}
+
+#armor-details-modal textarea,
+#armor-details-modal input {
+    background: var(--bg-color);
+    color: var(--theme-color);
+    border: 1px solid var(--theme-color);
+    font-family: inherit;
+}
+
+#armor-min-str-modal {
+    border-color: #ff3333 !important;
+}
+
+#armor-min-str-modal h3 {
+    color: #ff3333;
+}
