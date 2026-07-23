@@ -1144,12 +1144,12 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
             document.getElementById('edit-armortype').value = activeThreat.armorType || "General";
 
             // Part 4: Weak Point editor.
+            // Always show the editor so GMs can configure/enable a weak point on
+            // ANY threat — the "Enabled" checkbox below acts as the toggle.
+            // (Previously this was gated on naturalArmor > 0, so threats without
+            // natural armor had no way to enable a weak point.)
             let wp = activeThreat.weakPoint || {};
-            const showWeakPoint =
-                (parseInt(activeThreat.naturalArmor) || 0) > 0 ||
-                !!wp.enabled;
-
-            document.getElementById('weakpoint-editor').style.display = showWeakPoint ? "block" : "none";
+            document.getElementById('weakpoint-editor').style.display = "block";
 
             document.getElementById('edit-weakpoint-enabled').checked = !!wp.enabled;
             document.getElementById('edit-weakpoint-name').value = wp.name || "";
@@ -1993,7 +1993,7 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
 
     let attackHit = isSuppressive ? outcome.results.some(r => r.hasRaise) : hit;
     storeThreatAttackContext(attackHit, outcome.results, calledShot);
-    renderAttackEmbed(skillName, sides, totalModifier, targetNumber, outcome.results, outcome.isCritFail, is3RB, isSuppressive, wepRoF);
+    renderAttackEmbed(skillName, sides, totalModifier, targetNumber, outcome.results, outcome.isCritFail, is3RB, isSuppressive, wepRoF, null, calledShot);
 };
 
 window.rerollLastRoll = async function () {
@@ -2046,10 +2046,10 @@ window.rerollLastRoll = async function () {
         which: keptWhich,
         oldSummary: summarizeVolley(lastRollContext.results, lastRollContext.isCritFail),
         newSummary: summarizeVolley(newOutcome.results, newOutcome.isCritFail)
-    });
+    }, lastRollContext.calledShot);
 };
 
-async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, wepRoF, rerollInfo = null) {
+async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, wepRoF, rerollInfo = null, calledShot = null) {
     let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
     let modStrDisplay = totalModifier !== 0 ? ` (${totalModifier > 0 ? '+' : ''}${totalModifier})` : "";
     let title = `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
@@ -2065,6 +2065,9 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
     
     termLog += `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
     if (defenderDisplay) termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">${defenderDisplay}</span><br>`;
+    if (calledShot && calledShot.id && calledShot.id !== "none") {
+        termLog += `&nbsp;&nbsp;<span style="color:#ff9900;">🎯 Called Shot: ${calledShot.label || calledShot.id}</span><br>`;
+    }
 
     results.forEach(r => {
         if (r.isSingle) {
@@ -2096,6 +2099,9 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
             desc += `⟳ **REROLL (1 Benny spent)**\nOriginal: ${rerollInfo.oldSummary}\nNew: ${rerollInfo.newSummary}\n**Keeping ${rerollInfo.which}**\n\n`;
         }
         if (defenderDisplay) desc += `🎯 **${defenderDisplay}**\n`;
+        if (calledShot && calledShot.id && calledShot.id !== "none") {
+            desc += `🎯 **Called Shot: ${calledShot.label || calledShot.id}**\n`;
+        }
         
         results.forEach(r => {
             if (r.isSingle) desc += `**Result: ${r.total}**\n${r.outcome}\n`;
@@ -2108,6 +2114,9 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
             if (results[0].wildHistory) embed.fields.push({ name: "Wild (d6)", value: `${results[0].wildHistory.join(' + ')}`, inline: true });
         }
         if (totalModifier !== 0) embed.fields.push({ name: "Modifier", value: `${totalModifier > 0 ? '+' : ''}${totalModifier}`, inline: true });
+        if (calledShot && calledShot.id && calledShot.id !== "none") {
+            embed.fields.push({ name: "Called Shot", value: calledShot.label || calledShot.id, inline: true });
+        }
         
         let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || defaultWeaponIcon;
         embed.thumbnail = { url: imgUrl };
@@ -2203,10 +2212,17 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                     embed.fields.push({ name: "Three-Round Burst", value: "+1 Damage", inline: true });
                     embed.description += `\n*(Includes +1 Damage from 3-Round Burst)*`;
                 }
-                if (calledDmg > 0) {
-                    embed.fields.push({ name: "Called Shot", value: `+${calledDmg} Damage`, inline: true });
-                    embed.description += `
+                if (preAttack && preAttack.targetName) {
+                    embed.fields.push({ name: "Target", value: preAttack.targetName, inline: true });
+                }
+                if (calledShot && calledShot.id && calledShot.id !== "none") {
+                    let csVal = calledShot.label || calledShot.id;
+                    if (calledDmg > 0) csVal += ` (+${calledDmg} Dmg)`;
+                    embed.fields.push({ name: "Called Shot", value: csVal, inline: true });
+                    if (calledDmg > 0) {
+                        embed.description += `
 *(Includes +${calledDmg} Called Shot damage)*`;
+                    }
                 }
                 let imgUrl = wep.image || wep.icon || defaultWeaponIcon;
                 embed.thumbnail = { url: imgUrl };
