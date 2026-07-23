@@ -625,21 +625,21 @@
         <!-- Armor Presets Database Configuration Panel (Admin Only) -->
         <div id="armor-presets-panel" class="section" style="margin-top: 25px; display: none;">
             <h3>OVERWATCH ARMOR CONFIG (MASTER PRESETS)</h3>
-            <p style="font-size: 0.85em; opacity: 0.85; margin-bottom: 10px;">GM Mode: Changes made below update the armor presets database globally in real-time.</p>
+            <p style="font-size: 0.85em; opacity: 0.85; margin-bottom: 10px;">GM Mode: Changes made below update the armor presets database globally in real-time. Click values directly inside the database table below to live-edit armor profiles.</p>
             <div style="overflow-x: auto;">
                 <table class="preset-table armor-preset-table">
                     <thead>
                         <tr>
-                            <th style="width:40px;">Icon</th>
-                            <th>Name</th>
-                            <th style="width:40px;">Arm</th>
-                            <th style="width:70px;">Type</th>
-                            <th style="width:30px;">BP</th>
-                            <th style="width:30px;">HW</th>
-                            <th style="width:30px;">FF</th>
-                            <th style="width:45px;">MinStr</th>
-                            <th style="width:80px;">Icon URL</th>
-                            <th style="width:50px;">Act</th>
+                            <th>Icon Preview</th>
+                            <th>Armor Name</th>
+                            <th>Arm</th>
+                            <th>Type</th>
+                            <th>BP</th>
+                            <th>HW?</th>
+                            <th>FF?</th>
+                            <th>Min Str</th>
+                            <th>Icon Image Link</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="armor-presets-body"></tbody>
@@ -808,7 +808,7 @@
         </div>
         <div class="setting-row">
             <span>Armor:</span>
-            <select id="equip-armor-select" class="admin-input" style="width: 240px;"></select>
+            <select id="equip-armor-select" class="admin-input" style="width: 240px;" onchange="updateArmorPreview()"></select>
         </div>
         <div id="armor-preview" style="font-size: 0.85em; opacity: 0.8; margin: 10px 0; text-align: left;"></div>
         <div class="tn-buttons">
@@ -1812,7 +1812,10 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
             document.getElementById('der-parry-override').className = "admin-input";
             document.getElementById('der-parry-override').style = "width: 50px; padding: 2px; text-align: center;";
             document.getElementById('der-parry-override').value = parryOverride;
-            document.getElementById('der-toughness-calc').innerText = calcToughness;
+            // Problem 3: show the SWADE armor bracket, e.g. "10 (4)". totalArmorVal is the
+            // armor figure AP must overcome. Write-only span -> cannot affect sync/saves.
+            document.getElementById('der-toughness-calc').innerText =
+                totalArmorVal > 0 ? `${calcToughness} (${totalArmorVal})` : `${calcToughness}`;
             document.getElementById('der-toughness-override').className = "admin-input";
             document.getElementById('der-toughness-override').style = "width: 50px; padding: 2px; text-align: center;";
             document.getElementById('der-toughness-override').value = toughOverride;
@@ -2274,9 +2277,9 @@ ${reloadBtn}
             globalState.armorPresets.forEach((p, index) => {
                 tbody.innerHTML += `
 <tr>
-                        <td style="text-align:center;"><img style="width: 28px; height: 28px; object-fit: contain; filter: drop-shadow(0 0 1px var(--theme-color));" src="${p.icon}"></td>
+                        <td style="text-align:center;"><img style="width: 50px; height: 25px; object-fit: contain; filter: drop-shadow(0 0 1px var(--theme-color));" src="${p.icon}"></td>
 <td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="name">${p.name}</td>
-<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="armor" style="width:40px; text-align:center;">${p.armor}</td>
+<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="armor">${p.armor}</td>
 <td>
 <select class="ammo-tier-select armor-type-select" data-index="${index}" style="width:90px;">
 <option value="General" ${p.armorType === 'General' ? 'selected' : ''}>General</option>
@@ -2284,11 +2287,11 @@ ${reloadBtn}
 <option value="Energy" ${p.armorType === 'Energy' ? 'selected' : ''}>Energy</option>
 </select>
 </td>
-<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="ballisticProtection" style="width:30px; text-align:center;">${p.ballisticProtection || 0}</td>
-<td style="text-align:center;"><input type="checkbox" class="armor-hw-toggle" data-index="${index}" ${p.heavyArmor ? "checked" : ""} style="width:18px; height:18px;"></td>
-<td style="text-align:center;"><input type="checkbox" class="armor-ff-toggle" data-index="${index}" ${p.forceField ? "checked" : ""} style="width:18px; height:18px;"></td>
-<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="minStr" style="width:40px; text-align:center;">${p.minStr}</td>
-<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="icon" style="max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.icon}</td>
+<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="ballisticProtection">${p.ballisticProtection || 0}</td>
+<td style="text-align:center;"><input type="checkbox" class="armor-hw-toggle" data-index="${index}" ${p.heavyArmor ? "checked" : ""} style="width:18px; height:18px;" title="Heavy Armor — immune to non-Heavy Weapons"></td>
+<td style="text-align:center;"><input type="checkbox" class="armor-ff-toggle" data-index="${index}" ${p.forceField ? "checked" : ""} style="width:18px; height:18px;" title="Force Field — ignores AP, stacks with all armor"></td>
+<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="minStr">${p.minStr}</td>
+<td class="armor-preset-edit" contenteditable="true" data-index="${index}" data-field="icon" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.icon}</td>
 <td><button class="die-btn del-btn" onclick="deleteArmorPreset(${index})">DELETE</button></td>
 </tr>`;
             });
@@ -3640,13 +3643,25 @@ window.onTargetDodgeChange = async function () {
             const preset = globalState.armorPresets.find(p => p.id === id);
             const preview = document.getElementById('armor-preview');
             if (!preset) { preview.innerHTML = ''; return; }
-            let html = `<b>${preset.name}</b><br>`;
-            html += `Armor: +${preset.armor} | Type: ${preset.armorType} | BP: ${preset.ballisticProtection || 0}<br>`;
-            html += `Min Str: ${preset.minStr} | Weight: ${preset.weight || '—'} lbs`;
-            if (preset.heavyArmor) html += ` | <span style="color:#ff3333;">HEAVY ARMOR</span>`;
-            if (preset.forceField) html += ` | <span style="color:#00ccff;">FORCE FIELD (ignores AP)</span>`;
-            if (preset.notes) html += `<br><i>${preset.notes}</i>`;
-            preview.innerHTML = html;
+            // Problem 4: per-preset data (notes + stats) AND the preset's own icon,
+            // laid out as a neat icon-left / text-right card.
+            const icon = preset.icon || 'https://i.imgur.com/niLzrfW.png';
+            let stats = `Armor: +${preset.armor} | Type: ${preset.armorType} | BP: ${preset.ballisticProtection || 0}<br>`;
+            stats += `Min Str: ${preset.minStr} | Weight: ${preset.weight || '—'} lbs`;
+            if (preset.heavyArmor) stats += ` | <span style="color:#ff3333;">HEAVY ARMOR</span>`;
+            if (preset.forceField) stats += ` | <span style="color:#00ccff;">FORCE FIELD (ignores AP)</span>`;
+            const notes = preset.notes ? `<br><i style="opacity:0.9;">${preset.notes}</i>` : '';
+            preview.innerHTML = `
+            <div style="display:flex; gap:12px; align-items:flex-start;">
+            <img src="${icon}" alt="${preset.name}"
+            style="width:64px; height:64px; object-fit:contain; flex:0 0 auto;
+            border:1px solid var(--theme-color); padding:4px; background:rgba(0,0,0,0.4);
+            filter: drop-shadow(0 0 1px var(--theme-color));">
+            <div style="flex:1 1 auto; min-width:0;">
+            <b>${preset.name}</b><br>
+            ${stats}${notes}
+            </div>
+            </div>`;
         }
         async function syncArmorToCombat() {
             if (typeof isFirebaseConfigured === 'undefined' || !isFirebaseConfigured) return;
@@ -3912,6 +3927,7 @@ ${charData.equippedArmorPenalty > 0 ? `<br><span style="color:#ff9900;">Min Str 
         window.unequipArmor = unequipArmor;
         window.updateNaturalArmor = updateNaturalArmor;
         window.filterArmorPresets = filterArmorPresets;
+        window.updateArmorPreview = updateArmorPreview;   // Problem 4: inline onchange needs it on window (module scope)
         window.rollWeaponAttack = rollWeaponAttack;
         window.rollWeaponDamage = rollWeaponDamage;
         window.unarmedAttack = unarmedAttack;
