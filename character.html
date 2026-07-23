@@ -443,6 +443,30 @@
             pointer-events: auto !important;
         }
 
+        /* Player T.E.M. — scrollable with sticky title & action buttons, so it
+           never grows taller than the viewport and Confirm/Cancel stay visible
+           (mirrors the GM T.E.M. in threats.html). */
+        #tn-modal {
+            max-width: 92vw;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        #tn-modal > h3 {
+            position: sticky;
+            top: -25px;
+            background: var(--bg-color);
+            padding-top: 25px;
+            z-index: 2;
+        }
+        #tn-modal .tn-buttons {
+            position: sticky;
+            bottom: -25px;
+            background: var(--bg-color);
+            padding: 15px 0 25px;
+            margin-top: 20px;
+            z-index: 2;
+        }
+
         #tn-modal h3,
         #weapon-add-modal h3 {
             margin-top: 0;
