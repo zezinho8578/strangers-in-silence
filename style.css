@@ -273,24 +273,28 @@ body::after {
     }
 }
 
-/* Threat editor: tidy, uniform stat grid */
+/* Threat editor: tidy, uniform stat grid.
+   Each .form-row uses display:contents so its <span> label and its control
+   become direct grid items. The grid declares explicit label/control column
+   pairs; each label column is sized to max-content (the widest label in that
+   column), so every control column starts at a fixed offset -> perfect
+   vertical alignment that is font-agnostic (max-content measures real text,
+   unlike the old min-width:96px floor which let long labels overflow and
+   push their inputs out of line). Container queries on #editor-panel swap
+   between 1 / 2 / 3 column-pairs so pairs never split and the grid never
+   overflows on narrow screens. */
+#editor-panel { container-type: inline-size; }
+
 .stats-row.editor-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    grid-template-columns: max-content auto;                 /* fallback / narrow: 1 pair per row */
     gap: 8px 12px;
     align-items: center;
 }
 .stats-row.editor-grid .form-row {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 6px;
-    width: auto;
-    flex: none;
-    margin: 0;
+    display: contents;                                       /* dissolve the row box */
 }
 .stats-row.editor-grid .form-row > span:first-child {
-    min-width: 96px;
     white-space: nowrap;
 }
 .stats-row.editor-grid #edit-armortype { width: 100px !important; }
@@ -300,5 +304,13 @@ body::after {
     border: 1px solid var(--theme-color);
     padding: 1px 6px;
     text-align: center;
+    opacity: 0.7;                                            /* restore faded look lost by display:contents */
 }
 .stats-row.editor-grid #editor-warnings { grid-column: 1 / -1; }
+
+@container (min-width: 460px) {
+    .stats-row.editor-grid { grid-template-columns: max-content auto max-content auto; }            /* 2 pairs */
+}
+@container (min-width: 720px) {
+    .stats-row.editor-grid { grid-template-columns: max-content auto max-content auto max-content auto; } /* 3 pairs */
+}
