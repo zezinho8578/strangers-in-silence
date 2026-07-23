@@ -381,6 +381,9 @@
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
             width: max-content;
             min-width: 350px;
+            max-width: 92vw;
+            max-height: 90vh;
+            overflow-y: auto;
             pointer-events: auto !important;
         }
 
@@ -388,12 +391,22 @@
             margin-top: 0;
             border-bottom: 1px solid var(--theme-color);
             padding-bottom: 10px;
+            position: sticky;
+            top: -25px;
+            background: var(--bg-color);
+            padding-top: 25px;
+            z-index: 2;
         }
         .tn-buttons {
             display: flex;
             justify-content: center;
             gap: 15px;
             margin-top: 15px;
+            position: sticky;
+            bottom: -25px;
+            background: var(--bg-color);
+            padding: 15px 0 25px;
+            z-index: 2;
         }
 
         .reroll-btn {
@@ -403,6 +416,16 @@
             color: #ffff00;
         }
         .reroll-btn:hover {
+            background: #ffff00;
+            color: var(--bg-color);
+        }
+        .dmg-reroll-btn {
+            margin-top: 4px;
+            font-size: 0.75em;
+            border-color: #ffff00;
+            color: #ffff00;
+        }
+        .dmg-reroll-btn:hover {
             background: #ffff00;
             color: var(--bg-color);
         }
@@ -493,8 +516,13 @@
             </div>
             </div>
 <div id="weakpoint-editor"
-style="display:none; border:1px dashed var(--theme-color); padding:10px; margin-bottom:15px;">
-<h4 class="section-header">WEAK POINT (VS NATURAL ARMOR)</h4>
+style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bottom:15px;">
+<h4 class="section-header" id="weakpoint-toggle"
+    style="cursor:pointer; user-select:none; padding:8px 10px; margin:0; display:flex; justify-content:space-between; align-items:center;">
+<span>WEAK POINT (VS NATURAL ARMOR)</span>
+<span id="weakpoint-collapse-arrow" style="font-size:0.8em; opacity:0.7;">[ − ]</span>
+</h4>
+<div id="weakpoint-body" style="padding:10px;">
 
 <label class="custom-checkbox">
 <input type="checkbox" id="edit-weakpoint-enabled" onchange="updateActive()">
@@ -532,6 +560,7 @@ style="display:none; border:1px dashed var(--theme-color); padding:10px; margin-
 <div class="form-row">
 <span>Notes:</span>
 <input type="text" id="edit-weakpoint-notes" class="form-input" onchange="updateActive()">
+</div>
 </div>
 </div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
@@ -582,6 +611,22 @@ style="display:none; border:1px dashed var(--theme-color); padding:10px; margin-
                 onclick="deployToTracker()">EXECUTE DEPLOYMENT</button>
             <h3 style="margin-top: 25px;">ACTIVE ON BOARD</h3>
             <div id="active-tracker-list" style="font-size: 0.9em; max-height: 200px; overflow-y: auto;"></div>
+            <h3 style="margin-top: 25px;">CALLED SHOT CONFIG</h3>
+            <p style="font-size: 0.8em; opacity: 0.7; margin-bottom: 10px;">
+                Define which called-shot locations this threat type can use (head, limb, hand, gap, weak point) and
+                attach on-hit effects. Uncheck locations that don't make sense for the anatomy (e.g. no Hands on a
+                Barnacle). These options appear in the T.E.M. Called Shot dropdown when attacking.</p>
+            <div id="cs-config-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;"></div>
+            <div style="border-top:1px dashed var(--theme-color); padding-top:10px; margin-top:5px;">
+                <div style="font-size:0.8em; opacity:0.8; margin-bottom:6px; text-align:left;">
+                    On-Hit Effect (applied when this called shot hits &amp; damages):
+                </div>
+                <div id="cs-onhit-effects" style="display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-start;"></div>
+            </div>
+            <div style="font-size:0.75em; opacity:0.6; margin-top:8px; text-align:left;">
+                <b>Custom:</b> Hit Penalty (−), Damage Bonus (+), and Toughness Override apply to the damage math;
+                Shaken / Stunned / Distracted / Vulnerable apply to the target on a damaging hit.
+            </div>
         </div>
     </div>
     <div style="margin-bottom: 5px; color: #ff3333; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
@@ -730,6 +775,8 @@ style="display:none; border:1px dashed var(--theme-color); padding:10px; margin-
         let pendingRoll = null;
         let activeWeaponContext = null;
         let lastRollContext = null;
+        // GM damage reroll context (one pending damage reroll per weapon).
+        let lastDamageContext = null;
         // B8: Defender/target integration state
         let defenderModifier = 0;
         let defenderDisplay = "";
@@ -932,6 +979,30 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         target.onHold = false;
     }
 
+    // Part 4: Called Shot on-hit effects (shaken / stunned / distracted /
+    // vulnerable / disarm). Applied on any damaging hit (damageTotal >=
+    // effectiveToughness). Stunned is not cleared by a new Shaken.
+    let onHitNotes = [];
+    if (calledShot && Array.isArray(calledShot.onHit) && calledShot.onHit.length) {
+        for (const effect of calledShot.onHit) {
+            if (effect === "shaken") {
+                if (!target.shaken) { target.shaken = true; onHitNotes.push("Shaken"); }
+            } else if (effect === "stunned") {
+                if (!target.stunned) { target.stunned = true; onHitNotes.push("Stunned"); }
+            } else if (effect === "distracted") {
+                target.distracted = true;
+                target.distractedTTL = target.distractedTTL || 1;
+                onHitNotes.push("Distracted");
+            } else if (effect === "vulnerable") {
+                target.vulnerable = true;
+                target.vulnerableTTL = target.vulnerableTTL || 1;
+                onHitNotes.push("Vulnerable");
+            } else if (effect === "disarm") {
+                onHitNotes.push("Disarm (GM: resolve item drop)");
+            }
+        }
+    }
+
     // Part 4: Armor degradation for player-equipped armor.
     if (target.isPlayer && globalState.characters && globalState.characters[target.id]) {
         let sheet = JSON.parse(JSON.stringify(globalState.characters[target.id]));
@@ -1006,6 +1077,11 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         result.plainText += ` ARMOR DEGRADATION: ${degradeNotes.join(' ')}`;
     }
 
+    if (onHitNotes.length) {
+        result.message += `<br>&nbsp;&nbsp;<b style="color:#ff66cc;">CALLED SHOT EFFECTS:</b> ${onHitNotes.join(', ')}`;
+        result.plainText += ` CALLED SHOT EFFECTS: ${onHitNotes.join(', ')}`;
+    }
+
     return result;
 }
 
@@ -1055,6 +1131,20 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
                 }
             }
         });
+        // Collapsible WEAK POINT editor — toggle header click collapses body.
+        (function () {
+            const toggle = document.getElementById('weakpoint-toggle');
+            const body = document.getElementById('weakpoint-body');
+            const arrow = document.getElementById('weakpoint-collapse-arrow');
+            if (!toggle || !body) return;
+            toggle.addEventListener('click', function (e) {
+                // Don't toggle if clicking directly on a form control inside the header.
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+                const collapsed = body.style.display === 'none';
+                body.style.display = collapsed ? 'block' : 'none';
+                if (arrow) arrow.textContent = collapsed ? '[ − ]' : '[ + ]';
+            });
+        })();
         function renderCodex() {
             const list = document.getElementById('codex-list');
             list.innerHTML = '';
@@ -1097,6 +1187,7 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
                     toughnessOverride: null,
                     notes: ""
                 },
+                calledShotConfig: normalizeCsConfig(null),
                 attributes: JSON.parse(JSON.stringify(defaultAttributes)), skills: JSON.parse(JSON.stringify(defaultSkills)), abilities: "", weapons: []
             };
             activeTemplateId = id;
@@ -1122,9 +1213,152 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
                     notes: ""
                 };
             }
+            activeThreat.calledShotConfig = normalizeCsConfig(activeThreat.calledShotConfig);
             warningsDismissed = true;   // loaded template: keep warnings hidden until first edit
             renderEditor(); renderCodex();
         };
+        // ==========================================
+        // CALLED SHOT CONFIG (per-template anatomy)
+        // ==========================================
+        // Default anatomy: all standard locations enabled; weak point is only
+        // available if the threat has an enabled weak point.
+        const CS_CONFIG_DEFAULTS = {
+            head:      { enabled: true,  hitPenalty: -4, dmgMod: 4,  toughnessOverride: null, onHit: [] },
+            limb:      { enabled: true,  hitPenalty: -2, dmgMod: 0,  toughnessOverride: null, onHit: [] },
+            hand:      { enabled: true,  hitPenalty: -4, dmgMod: 0,  toughnessOverride: null, onHit: ["disarm"] },
+            gap:       { enabled: true,  hitPenalty: -4, dmgMod: 0,  toughnessOverride: null, onHit: [] },
+            weakpoint: { enabled: true,  hitPenalty: -4, dmgMod: 0,  toughnessOverride: null, onHit: [] }
+        };
+        const CS_ONHIT_OPTIONS = ["shaken", "stunned", "distracted", "vulnerable", "disarm"];
+        function normalizeCsConfig(cfg) {
+            const base = JSON.parse(JSON.stringify(CS_CONFIG_DEFAULTS));
+            if (!cfg || typeof cfg !== "object") return base;
+            for (const k of Object.keys(base)) {
+                if (!cfg[k] || typeof cfg[k] !== "object") continue;
+                if (cfg[k].enabled !== undefined) base[k].enabled = !!cfg[k].enabled;
+                if (cfg[k].hitPenalty !== undefined && cfg[k].hitPenalty !== null && cfg[k].hitPenalty !== "")
+                    base[k].hitPenalty = parseInt(cfg[k].hitPenalty);
+                if (cfg[k].hitPenalty === undefined || cfg[k].hitPenalty === null) base[k].hitPenalty = CS_CONFIG_DEFAULTS[k].hitPenalty;
+                if (cfg[k].dmgMod !== undefined && cfg[k].dmgMod !== null && cfg[k].dmgMod !== "")
+                    base[k].dmgMod = parseInt(cfg[k].dmgMod);
+                if (cfg[k].dmgMod === undefined || cfg[k].dmgMod === null) base[k].dmgMod = CS_CONFIG_DEFAULTS[k].dmgMod;
+                if (cfg[k].toughnessOverride !== undefined && cfg[k].toughnessOverride !== null && cfg[k].toughnessOverride !== "")
+                    base[k].toughnessOverride = parseInt(cfg[k].toughnessOverride);
+                if (Array.isArray(cfg[k].onHit)) {
+                    base[k].onHit = cfg[k].onHit.filter(x => CS_ONHIT_OPTIONS.includes(x));
+                }
+            }
+            return base;
+        }
+        function renderCsConfigPanel() {
+            const list = document.getElementById('cs-config-list');
+            if (!list) return;
+            if (!activeThreat) { list.innerHTML = ''; return; }
+            const cfg = activeThreat.calledShotConfig = normalizeCsConfig(activeThreat.calledShotConfig);
+            const wpEnabled = !!(activeThreat.weakPoint && activeThreat.weakPoint.enabled);
+            let html = '';
+            const labels = {
+                head: "Head / Vitals", limb: "Limb", hand: "Hand", gap: "Unarmored Gap", weakpoint: "Weak Point"
+            };
+            for (const key of ["head", "limb", "hand", "gap", "weakpoint"]) {
+                const c = cfg[key];
+                const disabled = (key === "weakpoint" && !wpEnabled);
+                const checkedAttr = c.enabled && !disabled ? "checked" : "";
+                const disabledAttr = disabled ? "disabled title='Enable a Weak Point on this threat first'" : "";
+                html += `
+<div style="border:1px solid var(--theme-color); padding:6px; font-size:0.8em; text-align:left;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+<label style="display:flex; align-items:center; gap:6px;">
+<input type="checkbox" data-cs="${key}" data-field="enabled" ${checkedAttr} ${disabledAttr} onchange="syncCsConfigFromInputs()">
+<span><b>${labels[key]}</b></span>
+</label>
+<span style="opacity:0.6; font-size:0.85em;">${disabled ? "(weak point disabled)" : ""}</span>
+</div>
+<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+<span>Hit:</span><input type="number" data-cs="${key}" data-field="hitPenalty" value="${c.hitPenalty}" style="width:50px;" class="admin-input" onchange="syncCsConfigFromInputs()">
+<span>Dmg:</span><input type="number" data-cs="${key}" data-field="dmgMod" value="${c.dmgMod}" style="width:50px;" class="admin-input" onchange="syncCsConfigFromInputs()">
+<span>Tgh:</span><input type="number" data-cs="${key}" data-field="toughnessOverride" value="${c.toughnessOverride === null ? "" : c.toughnessOverride}" placeholder="blank" style="width:55px;" class="admin-input" onchange="syncCsConfigFromInputs()">
+</div>
+<div style="display:flex; gap:5px; flex-wrap:wrap; align-items:center; margin-top:4px;">
+<span style="opacity:0.7;">On-Hit:</span>
+${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; gap:3px; font-size:0.85em;"><input type="checkbox" data-cs="${key}" data-field="onHit" data-opt="${opt}" ${c.onHit.includes(opt) ? "checked" : ""} onchange="syncCsConfigFromInputs()"> ${opt}</label>`).join('')}
+</div>
+</div>`;
+            }
+            list.innerHTML = html;
+        }
+        window.syncCsConfigFromInputs = function () {
+            if (!activeThreat) return;
+            activeThreat.calledShotConfig = normalizeCsConfig(activeThreat.calledShotConfig);
+            const cfg = activeThreat.calledShotConfig;
+            document.querySelectorAll('[data-cs]').forEach(el => {
+                const key = el.dataset.cs;
+                const field = el.dataset.field;
+                if (!cfg[key]) return;
+                if (field === "enabled") {
+                    if (!el.disabled) cfg[key].enabled = el.checked;
+                } else if (field === "hitPenalty") {
+                    cfg[key].hitPenalty = parseInt(el.value);
+                    if (isNaN(cfg[key].hitPenalty)) cfg[key].hitPenalty = CS_CONFIG_DEFAULTS[key].hitPenalty;
+                } else if (field === "dmgMod") {
+                    cfg[key].dmgMod = parseInt(el.value) || 0;
+                } else if (field === "toughnessOverride") {
+                    cfg[key].toughnessOverride = (el.value === "" || el.value === null) ? null : parseInt(el.value);
+                    if (isNaN(cfg[key].toughnessOverride)) cfg[key].toughnessOverride = null;
+                } else if (field === "onHit") {
+                    const opt = el.dataset.opt;
+                    if (!el.checked) {
+                        cfg[key].onHit = cfg[key].onHit.filter(x => x !== opt);
+                    } else if (!cfg[key].onHit.includes(opt)) {
+                        cfg[key].onHit.push(opt);
+                    }
+                }
+            });
+            // keep hit penalty negative
+            for (const k of Object.keys(cfg)) {
+                if (cfg[k].hitPenalty > 0) cfg[k].hitPenalty = -cfg[k].hitPenalty;
+            }
+            // Persist immediately so the config survives reloads / is shared.
+            saveTemplateToDB(true);
+        };
+        // Returns the enabled config (merged with CALLED_SHOTS defaults) for a
+        // given location id, respecting the per-template anatomy toggles.
+        function getActiveCsConfig(locationId) {
+            if (!activeThreat) return null;
+            const cfg = normalizeCsConfig(activeThreat.calledShotConfig);
+            if (locationId === "weakpoint") {
+                // Weak point is gated on the threat having an enabled weak point.
+                if (!(activeThreat.weakPoint && activeThreat.weakPoint.enabled)) return null;
+                if (!cfg.weakpoint.enabled) return null;
+                const wp = activeThreat.weakPoint;
+                return {
+                    id: "weakpoint",
+                    label: `Weak Point: ${wp.name || "Weak Point"}`,
+                    hitMod: cfg.weakpoint.hitPenalty,
+                    dmgMod: cfg.weakpoint.dmgMod,
+                    bypassWorn: !!wp.bypassWorn,
+                    bypassNatural: !!wp.bypassNatural,
+                    toughnessOverride: (cfg.weakpoint.toughnessOverride !== null && cfg.weakpoint.toughnessOverride !== "")
+                        ? cfg.weakpoint.toughnessOverride
+                        : ((wp.toughnessOverride !== undefined && wp.toughnessOverride !== null && wp.toughnessOverride !== "")
+                            ? parseInt(wp.toughnessOverride) : null),
+                    onHit: cfg.weakpoint.onHit || []
+                };
+            }
+            const entry = cfg[locationId];
+            if (!entry || !entry.enabled) return null;
+            const base = (window.CALLED_SHOTS && CALLED_SHOTS[locationId]) || { id: locationId, label: locationId };
+            return {
+                id: locationId,
+                label: base.label || locationId,
+                hitMod: entry.hitPenalty,
+                dmgMod: entry.dmgMod,
+                bypassWorn: !!base.bypassWorn,
+                bypassNatural: !!base.bypassNatural,
+                toughnessOverride: entry.toughnessOverride,
+                onHit: entry.onHit || []
+            };
+        }
         function renderEditor() {
             if (!activeThreat) return;
             document.getElementById('editor-panel').style.display = 'block';
@@ -1212,11 +1446,13 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
 <button class="die-btn" onclick="prepareAttack(${index})">ATTACK</button>
 <button class="die-btn" onclick="rollDamage(${index})">DAMAGE</button>
 <button class="die-btn" style="border-color:#00ff00; color:#00ff00;" onclick="rollDamage(${index}, true)">+1d6 RAISE</button>
+<button class="die-btn dmg-reroll-btn" id="dmg-reroll-${index}" style="display:none;" onclick="rerollThreatDamage(${index})">REROLL DMG (1 BENNY)</button>
 </div>
 </div>`;
             });
             document.getElementById('weapon-list').innerHTML = wepHtml;
             attachEditorListeners();
+            renderCsConfigPanel();
             refreshWarnings();   // hidden on load/create (dismissed=true), live during edits
         }
         window.updateActive = function () {
@@ -1607,6 +1843,8 @@ window.onTargetChange = function () {
         defenderModifier = 0;
         defenderDisplay = "";
         document.getElementById('target-status').innerHTML = "";
+        refreshCalledShotOptions();
+        window.updateCalledShot();
         return;
     }
     
@@ -1623,6 +1861,11 @@ window.onTargetChange = function () {
     
     updateDefenderModifierAndStatus();
 
+    // Refresh the Called Shot dropdown so the target's weak point (if enabled)
+    // becomes selectable when attacking that enemy.
+    refreshCalledShotOptions();
+    window.updateCalledShot();
+
     // --- TROMBLEY DODGE REMINDER ---
     if (target.id === 'trombley-hicks' || target.name.toLowerCase().includes('trombley')) {
         if (!melee && !dodgeCheckbox.checked) {
@@ -1638,9 +1881,61 @@ window.onTargetChange = function () {
 function refreshCalledShotOptions() {
     const sel = document.getElementById('called-shot-select');
     if (!sel) return;
-    if (window.populateCalledShotSelect) {
-        window.populateCalledShotSelect(sel, getSelectedTarget());
+    const oldValue = sel.value || "none";
+
+    // Build the option list from the ATTACKING threat's per-template anatomy
+    // config, plus the selected TARGET's weak point (if it has one enabled).
+    sel.innerHTML = `<option value="none">None</option>`;
+    if (activeThreat) {
+        const cfg = normalizeCsConfig(activeThreat.calledShotConfig);
+        const order = ["head", "limb", "hand", "gap", "weakpoint"];
+        for (const k of order) {
+            if (k === "weakpoint") {
+                // attacker's own weak point location is only usable if the
+                // attacker has an enabled weak point (rare — usually the
+                // target's weak point is what matters, handled below).
+                if (!(activeThreat.weakPoint && activeThreat.weakPoint.enabled)) continue;
+                if (!cfg.weakpoint.enabled) continue;
+            }
+            const entry = cfg[k];
+            if (!entry || !entry.enabled) continue;
+            const c = getActiveCsConfig(k);
+            if (!c) continue;
+            let lbl = c.label;
+            if (c.dmgMod) lbl += ` (+${c.dmgMod} dmg)`;
+            lbl += ` (${c.hitMod} hit)`;
+            const opt = document.createElement('option');
+            opt.value = k;
+            opt.textContent = lbl;
+            sel.appendChild(opt);
+        }
     }
+
+    // Target's weak point (attacking an enemy that has an enabled weak point).
+    const target = getSelectedTarget();
+    if (target && target.weakPoint && target.weakPoint.enabled) {
+        const wp = target.weakPoint;
+        let hit = parseInt(wp.hitPenalty);
+        if (isNaN(hit)) hit = -4;
+        if (hit > 0) hit = -hit;
+        let label = `Weak Point (target): ${wp.name || "Weak Point"} (${hit} hit`;
+        if (wp.bypassWorn) label += ", bypass worn";
+        if (wp.bypassNatural) label += ", bypass natural";
+        if (wp.toughnessOverride !== undefined && wp.toughnessOverride !== null && wp.toughnessOverride !== "") {
+            label += `, Tgh ${wp.toughnessOverride}`;
+        }
+        label += ")";
+        const opt = document.createElement('option');
+        opt.value = "target-weakpoint";
+        opt.textContent = label;
+        sel.appendChild(opt);
+    }
+
+    // Preserve selection if still valid; otherwise reset to None.
+    let newValue = oldValue;
+    const validValues = Array.from(sel.options).map(o => o.value);
+    if (!validValues.includes(newValue)) newValue = "none";
+    sel.value = newValue;
 }
 
 window.updateCalledShot = function () {
@@ -1667,12 +1962,37 @@ window.updateCalledShot = function () {
 
 window.getCurrentCalledShot = function () {
     const sel = document.getElementById('called-shot-select');
-    if (!sel) return { id: "none", hitMod: 0, dmgMod: 0 };
+    if (!sel) return { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
 
-    const target = getSelectedTarget();
-    return window.getCalledShotConfig
-        ? window.getCalledShotConfig(sel.value, target)
-        : { id: "none", hitMod: 0, dmgMod: 0 };
+    const val = sel.value;
+    if (val === "none" || !val) return { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
+
+    // Target's weak point option.
+    if (val === "target-weakpoint") {
+        const target = getSelectedTarget();
+        if (!target || !target.weakPoint || !target.weakPoint.enabled) {
+            return { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
+        }
+        const wp = target.weakPoint;
+        let hit = parseInt(wp.hitPenalty);
+        if (isNaN(hit)) hit = -4;
+        if (hit > 0) hit = -hit;
+        return {
+            id: "target-weakpoint",
+            label: `Weak Point (target): ${wp.name || "Weak Point"}`,
+            hitMod: hit,
+            dmgMod: 0,
+            bypassWorn: !!wp.bypassWorn,
+            bypassNatural: !!wp.bypassNatural,
+            toughnessOverride: (wp.toughnessOverride !== undefined && wp.toughnessOverride !== null && wp.toughnessOverride !== "")
+                ? parseInt(wp.toughnessOverride) : null,
+            onHit: []
+        };
+    }
+
+    // Attacker's own per-template location.
+    const c = getActiveCsConfig(val);
+    return c || { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
 };
 window.onTargetDodgeChange = async function () {
     let target = getSelectedTarget();
@@ -2137,6 +2457,7 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                 dmgStr = custom.toLowerCase().replace(/\s/g, '');
             }
             let total = 0; let rolls = []; let flatMod = 0;
+            let baseDice = []; // [{sides, sign}] for reroll
             const tokenRegex = /[+-]?\s*(?:\d*d\d+|str|\d+)/gi;
             let parts = dmgStr.match(tokenRegex) || [];
             let bonusKey = `threat_pending_damage_bonus_${activeTemplateId || activeThreat.name}_${wep.id || wep.name}`;
@@ -2157,6 +2478,7 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                     let r = rollExploding(sides);
                     total += r.total * sign;
                     flatMod += strMod * sign;
+                    baseDice.push({ sides, sign });
                     rolls.push(`Str(d${sides}${strMod ? (strMod > 0 ? '+' : '') + strMod : ''}):[${r.history.join('+')}]`);
                 } else if (part.includes('d')) {
                     let [c, s] = part.split('d');
@@ -2164,6 +2486,7 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                     for (let i = 0; i < count; i++) {
                         let r = rollExploding(sides);
                         total += r.total * sign; rolls.push(`${sign < 0 ? '-' : ''}d${sides}:[${r.history.join('+')}]`);
+                        baseDice.push({ sides, sign });
                     }
                 } else if (!isNaN(parseInt(part))) flatMod += parseInt(part) * sign;
             });
@@ -2189,11 +2512,36 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
 
             let application = await applyDamageToTracker(attackKey, wep, total);
 
+            // Store context for a Benny damage reroll (one reroll per damage roll).
+            lastDamageContext = {
+                wepIndex,
+                wep: JSON.parse(JSON.stringify(wep)),
+                baseDice,
+                baseModifier: flatMod,
+                hasRaise: addRaise,
+                staticBonus: calledDmg,
+                total: total,
+                rolls: rolls.slice(),
+                formula: dmgStr,
+                has3RBBonus,
+                calledShot: JSON.parse(JSON.stringify(calledShot)),
+                preAttack: preAttack ? JSON.parse(JSON.stringify(preAttack)) : null,
+                attackKey,
+                usedReroll: false
+            };
+            updateDamageRerollButton(wepIndex);
+
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
             let termLog = `> ${activeThreat.name} dealt damage with ${wep.name.toUpperCase()}<br>&nbsp;&nbsp;Dmg Roll [${wep.damage}]: ${rolls.join(' + ')}${flatMod !== 0 ? (flatMod > 0 ? '+' + flatMod : flatMod) : ''}${trbStr}${bonusStr}${calledStr}<br>&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
 
             if (application.message) {
                 termLog += `<br>&nbsp;&nbsp;${application.message}`;
+            }
+
+            // Damage reroll button (terminal) — shown when GM Benny pool > 0.
+            let gmPool = globalState.combat?.gmPool || 0;
+            if (gmPool > 0) {
+                termLog += `<br>&nbsp;&nbsp;<button class="die-btn dmg-reroll-btn" onclick="rerollThreatDamage(${wepIndex})">⟳ REROLL DMG (1 BENNY — GM POOL: ${gmPool})</button>`;
             }
 
             logToTerminal(termLog);
@@ -2232,6 +2580,82 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                     embed.description += `\n${application.plainText}`;
                 }
 
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+            }
+        };
+        // Damage reroll button visibility (card-level) — only shown when a
+        // damage roll is pending for this weapon AND the GM Benny pool > 0.
+        function updateDamageRerollButton(wepIndex) {
+            const btn = document.getElementById(`dmg-reroll-${wepIndex}`);
+            if (!btn) return;
+            const gmPool = globalState.combat?.gmPool || 0;
+            const hasPending = !!(lastDamageContext && lastDamageContext.wepIndex === wepIndex && !lastDamageContext.usedReroll);
+            btn.style.display = (hasPending && gmPool > 0) ? 'block' : 'none';
+            btn.disabled = gmPool <= 0;
+        }
+        window.rerollThreatDamage = async function (wepIndex) {
+            const last = lastDamageContext;
+            if (!last || last.wepIndex !== wepIndex) {
+                logToTerminal("> [!] No damage roll to reroll for this weapon. Roll damage first.");
+                return;
+            }
+            if (last.usedReroll) {
+                logToTerminal("> [!] This damage roll has already been rerolled (one Benny per roll).");
+                return;
+            }
+            let gmPool = globalState.combat?.gmPool || 0;
+            if (gmPool <= 0) {
+                logToTerminal("> [!] CANNOT REROLL DAMAGE: GM Benny Pool is empty.");
+                return;
+            }
+            // Deduct Benny
+            globalState.combat.gmPool = gmPool - 1;
+            await set(ref(db, 'campaignState/combat/gmPool'), globalState.combat.gmPool);
+
+            // Re-roll the base dice + raise die, keep the better total.
+            let newTotal = 0;
+            let newRolls = [];
+            last.baseDice.forEach(d => {
+                let r = rollExploding(d.sides);
+                newTotal += (r.total * d.sign);
+                if (d.sign > 0) newRolls.push(...r.history);
+                else r.history.forEach(roll => newRolls.push(`-${roll}`));
+            });
+            newTotal += last.baseModifier;
+            if (last.hasRaise) {
+                let bRoll = rollExploding(6);
+                newTotal += bRoll.total;
+                newRolls.push(`Raise:${bRoll.history.join('+')}`);
+            }
+            newTotal += last.staticBonus;
+
+            last.usedReroll = true;
+            updateDamageRerollButton(wepIndex);
+
+            let keptTotal, keptRolls, which;
+            if (newTotal >= last.total) {
+                keptTotal = newTotal; keptRolls = newRolls; which = "NEW ROLL";
+            } else {
+                keptTotal = last.total; keptRolls = last.rolls; which = "ORIGINAL ROLL";
+            }
+
+            const wep = last.wep;
+            const calledShot = last.calledShot || {};
+            const calledDmg = parseInt(calledShot.dmgMod) || 0;
+            let termLog = `> ${activeThreat.name} spent a Benny to REROLL DAMAGE with ${wep.name.toUpperCase()}<br>`;
+            termLog += `&nbsp;&nbsp;Original [${last.formula}]: <b>${last.total}</b> | New: <b>${newTotal}</b><br>`;
+            termLog += `&nbsp;&nbsp;-> Keeping <b style="color:#00ff00;">${which}: ${keptTotal} Damage</b>.`;
+            logToTerminal(termLog);
+
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${activeThreat.name} rerolled damage with ${wep.name}`,
+                    description: `Spent a Benny (GM Pool) to reroll damage.\nOriginal: **${last.total}** | New: **${newTotal}**\n**Keeping ${which}: ${keptTotal} Damage**`,
+                    color: 0xff3333,
+                    fields: [{ name: "Kept Dice History", value: keptRolls.join(' + '), inline: true }]
+                };
+                let imgUrl = wep.image || wep.icon || defaultWeaponIcon;
+                if (imgUrl) embed.thumbnail = { url: imgUrl };
                 fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
             }
         };
