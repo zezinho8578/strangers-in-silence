@@ -387,7 +387,7 @@ const CALLED_SHOTS = {
     },
     head: {
         id: "head",
-        label: "Head/Vitals (−4 hit, +4 dmg)",
+        label: "Head/Vitals",
         hitMod: -4,
         dmgMod: 4,
         bypassWorn: false,
@@ -396,7 +396,7 @@ const CALLED_SHOTS = {
     },
     limb: {
         id: "limb",
-        label: "Limb (−2 hit)",
+        label: "Limb",
         hitMod: -2,
         dmgMod: 0,
         bypassWorn: false,
@@ -405,7 +405,7 @@ const CALLED_SHOTS = {
     },
     hand: {
         id: "hand",
-        label: "Hand (−4 hit, disarm)",
+        label: "Hand",
         hitMod: -4,
         dmgMod: 0,
         bypassWorn: false,
@@ -414,7 +414,7 @@ const CALLED_SHOTS = {
     },
     gap: {
         id: "gap",
-        label: "Unarmored gap (−4 hit, bypass worn)",
+        label: "Unarmored gap",
         hitMod: -4,
         dmgMod: 0,
         bypassWorn: true,
@@ -519,10 +519,14 @@ function populateCalledShotSelect(selectEl, target) {
     const cfg = normalizeCsConfig(target ? target.calledShotConfig : null);
 
     selectEl.innerHTML = `<option value="none">None</option>`;
+    // "Unarmored gap" only matters when the target actually has worn armor
+    // (AP) to bypass — hide it for targets with 0 worn armor.
+    const wornArmor = target ? (parseInt(target.wornArmor) || 0) : 0;
     const order = ["head", "limb", "hand", "gap"];
     for (const k of order) {
         const entry = cfg[k];
         if (!entry || !entry.enabled) continue;
+        if (k === "gap" && wornArmor <= 0) continue;
         const c = getCalledShotConfig(k, target);
         let lbl = c.label;
         if (c.dmgMod) lbl += ` (+${c.dmgMod} dmg)`;
