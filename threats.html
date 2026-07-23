@@ -485,7 +485,12 @@
                     <option value="Energy">Energy Only</option>
                 </select>
             </div>
-            <div id="editor-warnings" style="display:none; border:1px dashed #ff9900; padding:8px; margin-bottom:10px; font-size:0.8em; color:#ff9900;"></div>
+            <div id="editor-warnings" style="display:none; border:1px dashed #ff9900; padding:8px; margin-bottom:10px; font-size:0.8em; color:#ff9900;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+            <div id="editor-warnings-text" style="flex:1 1 auto; line-height:1.4;"></div>
+            <button type="button" class="die-btn danger" onclick="dismissWarnings()" title="Dismiss warnings" style="padding:0 7px; line-height:1; flex:0 0 auto; font-size:1.2em;">&times;</button>
+            </div>
+            </div>
             </div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
                 <div>
@@ -672,6 +677,8 @@
         // B8: Defender/target integration state
         let defenderModifier = 0;
         let defenderDisplay = "";
+        // Validation-warning dismiss state (Problem 2): true = hidden via X or Save
+        let warningsDismissed = false;
 
 // ==========================================
 // AUTO-APPLY DAMAGE: ATTACK CONTEXT + TRACKER WRITE
@@ -975,6 +982,7 @@ function storeThreatAttackContext(hit, results) {
                 attributes: JSON.parse(JSON.stringify(defaultAttributes)), skills: JSON.parse(JSON.stringify(defaultSkills)), abilities: "", weapons: []
             };
             activeTemplateId = id;
+            warningsDismissed = true;   // fresh template: keep warnings hidden until first edit
             renderEditor(); renderCodex();
         };
         window.loadTemplate = function (id) {
@@ -984,6 +992,7 @@ function storeThreatAttackContext(hit, results) {
             if (!activeThreat.attributes) activeThreat.attributes = JSON.parse(JSON.stringify(defaultAttributes));
             if (!activeThreat.skills) activeThreat.skills = JSON.parse(JSON.stringify(defaultSkills));
             if (!activeThreat.weapons) activeThreat.weapons = [];
+            warningsDismissed = true;   // loaded template: keep warnings hidden until first edit
             renderEditor(); renderCodex();
         };
         function renderEditor() {
@@ -1061,6 +1070,7 @@ function storeThreatAttackContext(hit, results) {
             });
             document.getElementById('weapon-list').innerHTML = wepHtml;
             attachEditorListeners();
+            refreshWarnings();   // hidden on load/create (dismissed=true), live during edits
         }
         window.updateActive = function () {
             if (!activeThreat) return;
@@ -1076,20 +1086,34 @@ function storeThreatAttackContext(hit, results) {
             activeThreat.armor = activeThreat.naturalArmor + activeThreat.wornArmor + activeThreat.forceField;
             let totalArmorDisplay = activeThreat.armor;
             document.getElementById('edit-totalarmor').innerText = totalArmorDisplay;
-            // Validation warnings
-            let warnings = validateThreatTemplate(activeThreat);
-            let warnEl = document.getElementById('editor-warnings');
-            if (warnings.length > 0) {
-                warnEl.style.display = "block";
-                warnEl.innerHTML = warnings.join("<br>");
-            } else {
-                warnEl.style.display = "none";
-                warnEl.innerHTML = "";
-            }
+            // (Validation warnings are computed at the END of updateActive — see below —
+            //  so they reflect the just-synced scale/armor values. Problem 2.)
             activeThreat.scale = parseInt(document.getElementById('edit-scale').value) || 0;
             activeThreat.heavyArmor = document.getElementById('edit-heavyarmor').checked;
             activeThreat.armorType = document.getElementById('edit-armortype').value;
             activeThreat.abilities = document.getElementById('edit-abilities').value;
+            // Re-arm and refresh warnings AFTER all fields (incl. scale) are synced (Problem 2)
+            warningsDismissed = false;
+            refreshWarnings();
+        };
+        // ---- Validation warning helpers (Problem 2) ----
+        function refreshWarnings() {
+            const warnEl = document.getElementById('editor-warnings');
+            const textEl = document.getElementById('editor-warnings-text');
+            if (!warnEl) return;
+            if (!activeThreat || !textEl) { warnEl.style.display = 'none'; return; }
+            const warnings = validateThreatTemplate(activeThreat);
+            if (warnings.length > 0 && !warningsDismissed) {
+                textEl.innerHTML = warnings.join("<br>");
+                warnEl.style.display = "block";
+            } else {
+                warnEl.style.display = "none";
+            }
+        }
+        window.dismissWarnings = function () {
+            warningsDismissed = true;
+            const warnEl = document.getElementById('editor-warnings');
+            if (warnEl) warnEl.style.display = "none";
         };
         window.onScaleChange = function(el) {
             if (!activeThreat) return;
@@ -1111,8 +1135,8 @@ function storeThreatAttackContext(hit, results) {
             saveTemplateToDB(true);
         };
         function attachEditorListeners() {
-            document.querySelectorAll('.attr-input').forEach(el => { el.addEventListener('change', (e) => { activeThreat.attributes[e.target.dataset.key] = e.target.value; }); });
-            document.querySelectorAll('.skill-input').forEach(el => { el.addEventListener('change', (e) => { activeThreat.skills[e.target.dataset.key] = e.target.value; }); });
+            document.querySelectorAll('.attr-input').forEach(el => { el.addEventListener('change', (e) => { activeThreat.attributes[e.target.dataset.key] = e.target.value; updateActive(); }); });
+            document.querySelectorAll('.skill-input').forEach(el => { el.addEventListener('change', (e) => { activeThreat.skills[e.target.dataset.key] = e.target.value; updateActive(); }); });
         }
         window.addSkill = function () {
             let name = document.getElementById('new-skill-name').value.trim();
@@ -1135,6 +1159,14 @@ function storeThreatAttackContext(hit, results) {
         window.removeWeapon = function (index) { activeThreat.weapons.splice(index, 1); renderEditor(); };
         window.saveTemplateToDB = async function (silent = false) {
             updateActive();
+            // An explicit Save ([ SAVE TEMPLATE TO CODEX ]) acknowledges the current state,
+            // so suppress the warning until the next edit. Silent auto-saves (weapon field
+            // edits) must NOT suppress it.
+            if (!silent) {
+                warningsDismissed = true;
+                const warnEl = document.getElementById('editor-warnings');
+                if (warnEl) warnEl.style.display = "none";
+            }
             await set(ref(db, `campaignState/threatTemplates/${activeTemplateId}`), activeThreat);
             if (!silent) logToTerminal(`> TEMPLATE SAVED: ${activeThreat.name}`);
         };
