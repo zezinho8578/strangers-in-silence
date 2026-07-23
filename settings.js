@@ -897,6 +897,230 @@ window.computeEquippedArmorPenalty = computeEquippedArmorPenalty;
 window.recalcCharacterDerived = recalcCharacterDerived;
 window.degradeCharacterArmor = degradeCharacterArmor;
 
+// ==========================================
+// SHARED TACTICAL ENGAGEMENT MONITOR (TEM)
+// A single source of truth for the common situational combat modifiers,
+// rendered identically on the player character sheet and the GM tracker.
+// Each page passes a unique `prefix` so the input IDs don't collide.
+// ==========================================
+
+// SWADE Injury Table (Core Rulebook, 2d6). Rolled when a character is Incapacitated
+// (or via the GM "ROLL INJURY" button). Guts and Head entries have a sub-roll.
+const SWADE_INJURY_TABLE = [
+    { roll: 2,  location: "Cosmetic", effect: "A purely cosmetic injury." },
+    { roll: 3,  location: "Arm",      effect: "The victim can no longer use his left or right arm (rolled randomly if not targeted)." },
+    { roll: 4,  location: "Arm",      effect: "The victim can no longer use his left or right arm (rolled randomly if not targeted)." },
+    { roll: 5,  location: "Guts",     effect: "Your hero catches one in the core.", subRoll: true },
+    { roll: 6,  location: "Guts",     effect: "Your hero catches one in the core.", subRoll: true },
+    { roll: 7,  location: "Guts",     effect: "Your hero catches one in the core.", subRoll: true },
+    { roll: 8,  location: "Guts",     effect: "Your hero catches one in the core.", subRoll: true },
+    { roll: 9,  location: "Guts",     effect: "Your hero catches one in the core.", subRoll: true },
+    { roll: 10, location: "Leg",      effect: "Gain the Slow Hindrance (Minor), or Major if already Slow or injured in either leg." },
+    { roll: 11, location: "Leg",      effect: "Gain the Slow Hindrance (Minor), or Major if already Slow or injured in either leg." },
+    { roll: 12, location: "Head",     effect: "A grievous injury to the head.", subRoll: true }
+];
+
+// Guts sub-roll (1d6): 1-2 Broken (Agility), 3-4 Battered (Vigor), 5-6 Busted (Strength).
+const GUTS_SUB_TABLE = [
+    { range: [1, 2], label: "Broken",  effect: "Agility reduced a die type (minimum d4)." },
+    { range: [3, 4], label: "Battered", effect: "Vigor reduced a die type (minimum d4)." },
+    { range: [5, 6], label: "Busted",  effect: "Strength reduced a die type (minimum d4)." }
+];
+
+// Head sub-roll (1d6): 1-3 Hideous Scar (Ugly Major), 4-5 Blinded (One Eye), 6 Brain Damage (Smarts).
+const HEAD_SUB_TABLE = [
+    { range: [1, 3], label: "Hideous Scar", effect: "Your hero now has the Ugly (Major) Hindrance." },
+    { range: [4, 5], label: "Blinded",      effect: "An eye is damaged. Gain the One Eye Hindrance (or Blind if he only had one good eye)." },
+    { range: [6, 6], label: "Brain Damage", effect: "Massive trauma to the head. Smarts reduced one die type (min d4)." }
+];
+
+
+// Build the HTML for the shared situational modifier panel.
+// `prefix` is e.g. "tn" (player TN modal) or "calc" (GM calculator).
+function buildTEMModifiersHTML(prefix) {
+    const p = prefix;
+    return `
+    <div id="${p}-tem-section" class="tem-shared-section" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+        <div style="font-size:0.9em; margin-bottom:8px; opacity:0.9;">SITUATIONAL MODIFIERS:</div>
+        <div class="setting-row" style="margin-bottom:8px;">
+            <span>Cover (target):</span>
+            <select id="${p}-sit-cover" class="admin-input" style="width:170px; pointer-events: auto !important;" onchange="window.__temChanged('${p}')">
+                <option value="0">None</option>
+                <option value="-2">Light Cover (-2)</option>
+                <option value="-4">Medium Cover (-4)</option>
+                <option value="-6">Heavy Cover (-6)</option>
+                <option value="-8">Full Cover (-8)</option>
+            </select>
+        </div>
+        <div class="setting-row" style="margin-bottom:8px;">
+            <span>Gang Up:</span>
+            <div style="display:flex; align-items:center; gap:6px; margin-left:auto;">
+                <input type="number" id="${p}-sit-gangup" class="admin-input" value="0" min="0" max="4"
+                    style="width:60px; text-align:right; pointer-events: auto !important;" onchange="window.__temChanged('${p}')"
+                    title="+1 per adjacent ally">
+            </div>
+        </div>
+        <div class="setting-row" style="margin-bottom:8px;">
+            <span>The Drop:</span>
+            <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                <input type="checkbox" id="${p}-sit-drop" onchange="window.__temChanged('${p}')" style="width:20px; height:20px; pointer-events: auto !important;"> The Drop (+4 hit, +4 dmg)
+            </label>
+        </div>
+        <div class="setting-row" style="margin-bottom:8px;">
+            <span>Illumination:</span>
+            <select id="${p}-sit-illum" class="admin-input" style="width:170px; pointer-events: auto !important;" onchange="window.__temChanged('${p}')">
+                <option value="0">Bright (no penalty)</option>
+                <option value="-2">Dim Light (-2)</option>
+                <option value="-4">Dark (-4)</option>
+                <option value="-6">Pitch Black (-6)</option>
+            </select>
+        </div>
+        <div class="setting-row" style="margin-bottom:8px;">
+            <span>Target Defending:</span>
+            <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                <input type="checkbox" id="${p}-sit-defend" onchange="window.__temChanged('${p}')" style="width:20px; height:20px; pointer-events: auto !important;"> Target Defending (+4 Parry, melee only)
+            </label>
+        </div>
+        <div class="setting-row" style="margin-bottom:8px;">
+            <span>Running this turn:</span>
+            <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                <input type="checkbox" id="${p}-sit-running" onchange="window.__temChanged('${p}')" style="width:20px; height:20px; pointer-events: auto !important;">
+                <span id="${p}-running-penalty-label">-2 to this roll</span>
+            </label>
+        </div>
+    </div>`;
+}
+
+// Read the shared TEM values from the DOM. Returns { total, summary, values }.
+// `isMelee` controls whether the Defend modifier applies (melee only).
+// `steadyHands` makes the running penalty -1 instead of -2.
+function getTEMModifierValues(prefix, opts) {
+    opts = opts || {};
+    const isMelee = !!opts.isMelee;
+    const steadyHands = !!opts.steadyHands;
+    let total = 0;
+    const summary = [];
+    const values = {};
+    const get = (id) => document.getElementById(prefix + '-' + id);
+
+    let coverEl = get('sit-cover');
+    if (coverEl) {
+        values.cover = parseInt(coverEl.value) || 0;
+        if (values.cover !== 0) {
+            total += values.cover;
+            const txt = coverEl.options[coverEl.selectedIndex].text;
+            summary.push(txt);
+        }
+    }
+    let gangEl = get('sit-gangup');
+    if (gangEl) {
+        let g = Math.min(4, Math.max(0, parseInt(gangEl.value) || 0));
+        values.gangUp = g;
+        if (g > 0) { total += g; summary.push(`Gang Up +${g}`); }
+    }
+    let dropEl = get('sit-drop');
+    if (dropEl) {
+        values.drop = dropEl.checked;
+        if (dropEl.checked) { total += 4; summary.push('The Drop +4'); }
+    }
+    let illumEl = get('sit-illum');
+    if (illumEl) {
+        values.illum = parseInt(illumEl.value) || 0;
+        if (values.illum !== 0) {
+            total += values.illum;
+            const txt = illumEl.options[illumEl.selectedIndex].text;
+            summary.push(txt);
+        }
+    }
+    let defendEl = get('sit-defend');
+    if (defendEl) {
+        values.defend = defendEl.checked;
+        // Defend = TARGET defending, +4 Parry, MELEE ONLY. NOT added to the roll total
+        // here — the caller applies it (player: -4 to roll; GM calc: +4 to Parry) to
+        // avoid double-counting.
+        if (defendEl.checked && isMelee) { summary.push('Target Defending (+4 Parry, melee)'); }
+    }
+    let runEl = get('sit-running');
+    if (runEl) {
+        values.running = runEl.checked;
+        if (runEl.checked) {
+            const pen = steadyHands ? -1 : -2;
+            total += pen;
+            summary.push(`Running ${pen}`);
+        }
+    }
+    return { total, summary, values };
+}
+
+// Reset all shared TEM controls to their defaults.
+function resetTEMModifiers(prefix) {
+    const set = (id, val) => { const el = document.getElementById(prefix + '-' + id); if (el) { if (el.type === 'checkbox') el.checked = val; else el.value = val; } };
+    set('sit-cover', '0');
+    set('sit-gangup', '0');
+    set('sit-drop', false);
+    set('sit-illum', '0');
+    set('sit-defend', false);
+    set('sit-running', false);
+}
+
+// Build a compact "Active Modifiers" line for Discord embeds from a summary array
+// plus any extra page-specific modifiers (range, rof, map, wild attack, called shot, etc.)
+function temSummaryToField(extras) {
+    const lines = [];
+    if (extras && Array.isArray(extras)) {
+        for (const e of extras) { if (e) lines.push(e); }
+    }
+    return lines.length ? lines.join('\n') : 'None (all defaults)';
+}
+
+// Format a millisecond countdown as MM:SS for Discord.
+function formatCountdown(ms) {
+    if (ms <= 0) return '00:00';
+    let totalSec = Math.floor(ms / 1000);
+    let m = Math.floor(totalSec / 60);
+    let s = totalSec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// Default no-op so onchange handlers don't break before a page wires them up.
+window.__temChanged = window.__temChanged || function () { };
+
+// Roll on the SWADE Injury Table (2d6). Guts (5-9) and Head (12) entries have a
+// 1d6 sub-roll. Returns { roll, location, effect, sub, subRoll }.
+function rollInjuryTable() {
+    const r = (Math.floor(Math.random() * 6) + 1) + (Math.floor(Math.random() * 6) + 1);
+    let entry = SWADE_INJURY_TABLE.find(e => e.roll === r);
+    if (!entry) {
+        // 3 and 4 share the Arm entry; 10 and 11 share Leg. Find by range.
+        entry = SWADE_INJURY_TABLE.find(e => e.roll === r) || SWADE_INJURY_TABLE[0];
+    }
+    let result = { roll: r, location: entry.location, effect: entry.effect, sub: null, subRoll: null };
+    if (entry.subRoll) {
+        const sub = Math.floor(Math.random() * 6) + 1;
+        let table = (entry.location === 'Guts') ? GUTS_SUB_TABLE : HEAD_SUB_TABLE;
+        let match = table.find(e => sub >= e.range[0] && sub <= e.range[1]);
+        if (match) {
+            result.subRoll = sub;
+            result.sub = match.label;
+            result.effect = match.effect;
+            result.location = `${entry.location} (${match.label})`;
+        }
+    }
+    return result;
+}
+window.rollInjuryTable = rollInjuryTable;
+window.SWADE_INJURY_TABLE = SWADE_INJURY_TABLE;
+window.GUTS_SUB_TABLE = GUTS_SUB_TABLE;
+window.HEAD_SUB_TABLE = HEAD_SUB_TABLE;
+
+window.buildTEMModifiersHTML = buildTEMModifiersHTML;
+window.getTEMModifierValues = getTEMModifierValues;
+window.resetTEMModifiers = resetTEMModifiers;
+window.temSummaryToField = temSummaryToField;
+window.formatCountdown = formatCountdown;
+
+
+
 // --- Validation warnings for threat editor ---
 function validateThreatTemplate(t) {
     const warnings = [];

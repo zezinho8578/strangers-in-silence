@@ -561,6 +561,12 @@
                     <h3 style="color:#ff3333;">TACTICAL STATUS</h3>
                     <div id="hud-stats" style="font-weight:bold; color:#ff9900;"></div>
                 </div>
+                <!-- Feature 2: Wild Attack Vulnerable Reminder Banner -->
+                <div class="section" id="wild-attack-banner"
+                    style="display:none; margin-bottom: 20px; border-color: #ffff00; background: rgba(255,255,0,0.1); text-align: center;">
+                    <div style="color:#ffff00; font-weight:bold;">[ VULNERABLE UNTIL END OF NEXT TURN (WILD ATTACK) ]</div>
+                    <div style="font-size:0.85em; opacity:0.8;">Attacks against you gain +2 to hit.</div>
+                </div>
                 <div class="section" id="shaken-banner"
                     style="display:none; margin-bottom: 20px; border-color: #ff3333; background: rgba(255,51,51,0.08); text-align: center;">
                     <div style="color:#ff3333; font-weight:bold; margin-bottom:10px;">[ SHAKEN — FREE ACTIONS ONLY ]
@@ -578,6 +584,14 @@
                     </div>
                     <button class="die-btn" style="border-color:#ff0055; color:#ff0055;"
                         onclick="rollStunRecovery()">ROLL VIGOR RECOVERY (FREE ACTION)</button>
+                </div>
+                <!-- Bleeding Out banner (under TACTICAL STATUS). Prompted each turn;
+                     the round cannot proceed until the player rolls or an ally stabilizes. -->
+                <div class="section" id="bleeding-banner"
+                    style="display:none; margin-bottom: 20px; border-color:#ff3333; background: rgba(255,51,51,0.12); text-align: center;">
+                    <div style="color:#ff3333; font-weight:bold; margin-bottom:10px;">[ BLEEDING OUT — VIGOR ROLL REQUIRED THIS TURN OR YOU DIE ]</div>
+                    <button class="die-btn" style="border-color:#ff3333; color:#ff3333;"
+                        onclick="rollBleedingOut()">ROLL VIGOR (TN 4)</button>
                 </div>
                 <div class="section" style="margin-bottom: 20px;">
                     <h3>ATTRIBUTES</h3>
@@ -598,8 +612,15 @@
             <div>
                 <div class="section" style="margin-bottom: 20px;">
                     <h3>DERIVED STATS</h3>
-                    <div class="stat-row"><span>Pace:</span> <span class="editable" id="der-pace"
-                            contenteditable="true"></span></div>
+                    <div class="stat-row">
+                        <span>Pace:</span>
+                        <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                            <span class="editable" id="der-pace" contenteditable="true"></span>
+                            <!-- B10: Running — rolls the running die (d6, or d10 with Fleet-Footed) -->
+                            <button class="die-btn" id="run-btn" style="padding:2px 8px; font-size:0.85em;"
+                                onclick="rollRunning()" title="Free action: roll running die, add to Pace, −2 to other actions">RUN</button>
+                        </div>
+                    </div>
                     <div class="stat-row">
                         <span>Parry:</span>
                         <div style="display:flex; align-items:center; gap:5px;">
@@ -622,6 +643,10 @@
                                 onclick="resetDerived('toughness')" title="Reset Override">↺</button>
                         </div>
                     </div>
+                </div>
+                <!-- B7: DIAGNOSTICS — persistent wounds/fatigue + Golden Hour healing -->
+                <div class="section" id="diagnostics-panel" style="margin-bottom: 20px; border-color:#ff3333; background: rgba(255,51,51,0.04);">
+                    <span style="opacity:0.7;">Loading diagnostics...</span>
                 </div>
                 <div class="section" style="margin-bottom: 20px;">
                     <h3>HINDRANCES & EDGES</h3>
@@ -732,6 +757,22 @@
             <input type="number" id="tn-input" value="4" class="admin-input"
                 style="width:80px; text-align:center; pointer-events: auto !important;">
         </div>
+        <!-- Action Type selector for Test/Support (SWADE p.106, 108) -->
+        <div class="setting-row" id="action-mode-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Action Type:</span>
+            <select id="action-mode-select" class="admin-input" style="width:200px; pointer-events: auto !important;" onchange="onActionModeChange()">
+                <option value="normal">Normal Action / Attack</option>
+                <option value="test">Perform Test (Distract/Vulnerable)</option>
+                <option value="support">Perform Support (+1/+2 Ally)</option>
+            </select>
+        </div>
+        <div class="setting-row" id="test-options-row" style="display:none; background:rgba(255,153,0,0.1); padding:8px; border:1px solid var(--theme-color);">
+            <span>Test Primary Effect:</span>
+            <select id="test-effect-select" class="admin-input" style="width:180px; pointer-events: auto !important;">
+                <option value="distracted">Distracted (-2 Trait Rolls)</option>
+                <option value="vulnerable">Vulnerable (+2 to be Hit)</option>
+            </select>
+        </div>
         <!-- B8: Target selection (auto Parry for melee, defender modifiers) -->
         <div id="target-select-container"
             style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px; margin-top: 10px;">
@@ -741,6 +782,10 @@
                     onchange="onTargetChange()">
                     <option value="">-- No Target (TN 4) --</option>
                 </select>
+            </div>
+            <div class="setting-row" id="multi-target-row" style="display:none; flex-direction:column; align-items:flex-start; gap:5px;">
+                <span style="font-size:0.85em; color:#00ccff;">Hold Ctrl/Cmd to select multiple targets for Area Effect (Blast/Cone):</span>
+                <select id="multi-target-select" class="admin-input" multiple style="width:100%; height:80px; font-size:0.85em; pointer-events: auto !important;"></select>
             </div>
             <div id="target-status"
                 style="font-size:0.85em; opacity:0.9; text-align:left; min-height:1.2em; margin: 4px 0;"></div>
@@ -851,6 +896,9 @@
                 <input type="checkbox" id="wild-attack-checkbox"> Wild Attack (+2 Hit/Dmg, Vulnerable)
             </label>
         </div>
+        <!-- Shared TEM situational modifiers (rendered from settings.js so the player
+             sheet and the GM tracker use the exact same modifier set). -->
+        <div id="tn-tem-container"></div>
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Modifier Adjust:</span>
             <input type="number" id="mod-override-input" value="0" class="admin-input"
@@ -950,6 +998,29 @@
         <button class="die-btn" onclick="cancelArmorMinStr()" style="pointer-events: auto !important;">CANCEL</button>
         </div>
     </div>
+    <!-- Incapacitation overlay — blacks out the screen and forces a SOAK or ROLL choice. -->
+    <div id="incapacitation-overlay"
+        style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:9999999; display:none; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px;">
+        <div style="border:2px solid #ff3333; background:var(--bg-color); padding:30px; max-width:560px; box-shadow:0 0 30px rgba(255,0,0,0.8);">
+            <h2 style="color:#ff3333; margin-top:0; text-shadow:0 0 10px #ff3333;">INCAPACITATED</h2>
+            <p style="font-size:1.05em; margin:15px 0;"><b id="incap-char-name"></b> has been Incapacitated. Choose how to respond:</p>
+            <div style="font-size:0.9em; opacity:0.85; margin-bottom:20px; text-align:left; line-height:1.5;">
+                <b>SOAK (1 Benny):</b> Vigor roll — success/raise removes a wound and may end Incapacitation.<br>
+                <b>ROLL:</b> Vigor vs TN 4 — determines your fate:<br>
+                &nbsp;&nbsp;• <b style="color:#ff3333;">Critical Failure</b> = <b>DEATH</b><br>
+                &nbsp;&nbsp;• <b style="color:#ff9900;">Failure</b> = Permanent Injury + <b>Bleeding Out</b><br>
+                &nbsp;&nbsp;• <b style="color:#00ff00;">Success</b> = Injury (until healed)<br>
+                &nbsp;&nbsp;• <b style="color:#00ccff;">Raise</b> = Injury (24 hours)
+            </div>
+            <div class="tn-buttons" style="display:flex; gap:15px; justify-content:center;">
+                <button class="die-btn" id="incap-soak-btn" style="border-color:#ffff00; color:#ffff00; pointer-events:auto;"
+                    onclick="incapSoak()">SOAK (1 BENNY)</button>
+                <button class="die-btn" style="border-color:#ff3333; color:#ff3333; pointer-events:auto;"
+                    onclick="incapRoll()">ROLL VIGOR</button>
+            </div>
+        </div>
+    </div>
+    <script src="/embeds.js"></script>
     <script src="/settings.js"></script>
     <!-- Firebase Realtime WebSockets Integration -->
     <script type="module">
@@ -967,7 +1038,10 @@
             messagingSenderId: "62557473299",
             appId: "1:62557473299:web:e2ebf2ee2520a9189e8de6"
         };
-        const isFirebaseConfigured = firebaseConfig.databaseURL && !firebaseConfig.databaseURL.includes("YOUR_PROJECT_ID");
+        // B7/test: lambdaLocalMode lets the sheet run entirely on localStorage so the
+        // healing/persistence features can be exercised without writing to the live
+        // campaign Firebase. Off by default — production behaviour is unchanged.
+        const isFirebaseConfigured = firebaseConfig.databaseURL && !firebaseConfig.databaseURL.includes("YOUR_PROJECT_ID") && localStorage.getItem('lambdaLocalMode') !== 'on';
         // ==========================================
         // 2. DEFAULT WEAPON PRESETS DATABASE
         // ==========================================
@@ -1054,6 +1128,20 @@
         let defenderModifier = 0;
         let defenderDisplay = "";
 
+        function idxValid(x) { return x !== undefined && x !== null && x >= 0; }
+        function effectiveActiveIndex(combat) {
+            if (!combat) return 0;
+            if (idxValid(combat.jokerActiveIndex)) return combat.jokerActiveIndex;
+            if (idxValid(combat.holdActiveIndex)) return combat.holdActiveIndex;
+            return combat.activeTurnIndex || 0;
+        }
+        function hasEdge(edgeName) {
+            if (!charData || !charData.edges) return false;
+            let norm = charData.edges.toLowerCase().replace(/[^a-z0-9]/g, "");
+            let target = edgeName.toLowerCase().replace(/[^a-z0-9]/g, "");
+            return norm.includes(target);
+        }
+
         // Part 4: Called Shots
         let calledShotId = "none";
         let calledShotModifier = 0;
@@ -1138,6 +1226,7 @@ function storeAttackContext(ctx, hit, results) {
         setAttackContext(ctx.storageKey, {
             targetId: ctx.targetId || null,
             targetName: ctx.targetName || "",
+            attackerName: charData.name || "Attacker",
             hit: !!hit,
             ap: ctx.activeWeaponContext.ap ?? "0",
             weaponName: ctx.activeWeaponContext.name || "Weapon",
@@ -1230,7 +1319,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         }
         if (masterPreset && masterPreset.heavyWeapon) isHeavyWeapon = true;
     }
-    if (target.heavyArmor && weaponObj && !isHeavyWeapon && !ap.ignore) {
+    if (target.heavyArmor && weaponObj && !isHeavyWeapon) {
         result.message = `> <b style="color:#ff3333;">HEAVY ARMOR:</b> ${weaponObj.name || "This weapon"} is NOT a Heavy Weapon. ${target.name}'s Heavy Armor is immune to this attack.`;
         result.plainText = `HEAVY ARMOR: ${weaponObj.name || "This weapon"} cannot damage ${target.name}'s Heavy Armor.`;
         return result;
@@ -1273,12 +1362,40 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
     if ((target.wounds || 0) >= woundCap) {
         target.wounds = woundCap;
         target.incapacitated = true;
+        // Reset the incap prompt so a fresh Incapacitation re-triggers the overlay
+        // (previously it only showed once because incapacitationResolved stayed true).
+        target.incapacitationResolved = false;
     } else if (
         target.incapacitated &&
         (target.wounds || 0) < woundCap &&
         (target.fatigue || 0) < 3
     ) {
         target.incapacitated = false;
+    }
+
+    // B7: mirror the new wound total onto the persistent character object (with a
+    // fresh Golden Hour timestamp per added wound) so wounds survive endCombat().
+    if (target.isPlayer && target.id && globalState.characters && globalState.characters[target.id]) {
+        let sheet = globalState.characters[target.id];
+        let netWounds = target.wounds || 0;
+        if (typeof sheet.wounds !== 'number') sheet.wounds = 0;
+        if (!Array.isArray(sheet.woundLog)) sheet.woundLog = [];
+        // Post a Discord embed per newly-added wound (with Golden Hour expiry).
+        if (woundsAdded > 0 && window.Embeds && globalState.webhook) {
+            await window.Embeds.post(globalState.webhook,
+                window.Embeds.woundTaken(target.name, woundsAdded, netWounds, attack.attackerName || null, target.incapacitated));
+        }
+        while (sheet.woundLog.length < netWounds) {
+            sheet.woundLog.push({ ts: Date.now(), attemptedBy: [] });
+        }
+        while (sheet.woundLog.length > netWounds) {
+            sheet.woundLog.pop();
+        }
+        sheet.wounds = netWounds;
+        if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
+            set(ref(db, `campaignState/characters/${target.id}/wounds`), sheet.wounds);
+            set(ref(db, `campaignState/characters/${target.id}/woundLog`), sheet.woundLog);
+        }
     }
 
     // If damage Shakes someone who was holding, they lose Hold.
@@ -1496,20 +1613,34 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             return parsed;
         }
         function getUnarmedDamageDisplay() {
-            let hasMA = charData.edges && charData.edges.toLowerCase().includes("martial artist");
+            let hasMA = hasEdge("Martial Artist");
+            let hasBrawler = hasEdge("Brawler");
+            let hasBruiser = hasEdge("Bruiser");
+
             let strDieRaw = charData.attributes?.Strength?.die || "4";
             let strDie = strDieRaw.toString().toLowerCase().startsWith('d') ? strDieRaw : `d${strDieRaw}`;
             let strModStr = charData.attributes?.Strength?.mod || "+0";
             let strModVal = parseInt(strModStr.replace('+', '')) || 0;
-            let baseStrFormula = strDie;
-            if (strModVal > 0) baseStrFormula += `+${strModVal}`;
-            else if (strModVal < 0) baseStrFormula += `${strModVal}`;
-            return hasMA ? `${baseStrFormula}+d4` : baseStrFormula;
+            let baseStrFormula = strDie + (strModVal > 0 ? `+${strModVal}` : (strModVal < 0 ? `${strModVal}` : ''));
+
+            if (!hasMA && !hasBrawler && !hasBruiser) return baseStrFormula;
+
+            let dieStep = "d4";
+            if ((hasMA && hasBrawler) || hasBruiser) dieStep = "d6";
+            if (hasMA && hasBrawler && hasBruiser) dieStep = "d8";
+
+            return `${baseStrFormula}+${dieStep}`;
         }
         // ==========================================
         // 4. REAL-TIME EVENT-DRIVEN DATABASE SYNC
         // ==========================================
         function init() {
+            // Inject the shared TEM situational-modifier panel (defined in settings.js)
+            // into the player TN modal so it stays in sync with the GM tracker.
+            let temHost = document.getElementById('tn-tem-container');
+            if (temHost && window.buildTEMModifiersHTML) {
+                temHost.innerHTML = window.buildTEMModifiersHTML('tn');
+            }
             document.getElementById('char-name-display').innerText = "CONNECTING TO COGNITIVE ARRAY...";
             if (isFirebaseConfigured) {
                 onValue(ref(db, 'campaignState'), (snapshot) => {
@@ -1533,9 +1664,790 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 });
             } else {
                 globalState = JSON.parse(localStorage.getItem('localFallbackDB')) || { characters: defaultData, webhook: "", presets: defaultPresets };
+                // Persist the seed so the combat tracker (which shares this key) can see
+                // the characters when it runs in local mode too.
+                if (!localStorage.getItem('localFallbackDB')) {
+                    localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+                }
                 loadCharacter();
             }
         }
+        // ==========================================
+        // B7. PERSISTENT WOUNDS / FATIGUE + HEALING SYSTEM (SWADE p.96-98, 102)
+        // Wounds & fatigue live on the character object so they survive endCombat().
+        // The Golden Hour (p.96): a wound may only be Healing-skill treated within 60
+        // minutes of being taken, and each healer gets one attempt per wound in that
+        // window. After 60 min only Natural Healing (Vigor every 5 days) can remove
+        // wounds. Fatigue recovers one level per hour (p.102).
+        // ==========================================
+        const GOLDEN_HOUR_MS = 60 * 60 * 1000;        // 60 minutes
+        const FATIGUE_HOUR_MS = 60 * 60 * 1000;        // 1 hour per level
+        let diagnosticsTicker = null;
+
+        // Keep the woundLog / fatigueLog arrays the same length as the wound/fatigue
+        // counts. New levels get a fresh timestamp; removed levels drop off the end.
+        function reconcilePersistentWounds(charObj) {
+            if (!charObj) return;
+            if (typeof charObj.wounds !== 'number') charObj.wounds = 0;
+            if (typeof charObj.fatigue !== 'number') charObj.fatigue = 0;
+            if (!Array.isArray(charObj.woundLog)) charObj.woundLog = [];
+            if (!Array.isArray(charObj.fatigueLog)) charObj.fatigueLog = [];
+            while (charObj.woundLog.length < charObj.wounds) {
+                charObj.woundLog.push({ ts: Date.now(), attemptedBy: [] });
+            }
+            while (charObj.woundLog.length > charObj.wounds) {
+                charObj.woundLog.pop();
+            }
+            while (charObj.fatigueLog.length < charObj.fatigue) {
+                charObj.fatigueLog.push({ ts: Date.now() });
+            }
+            while (charObj.fatigueLog.length > charObj.fatigue) {
+                charObj.fatigueLog.pop();
+            }
+        }
+
+        function goldenHourRemaining(ts) {
+            return GOLDEN_HOUR_MS - (Date.now() - ts);
+        }
+        function fatigueHourRemaining(ts) {
+            return FATIGUE_HOUR_MS - (Date.now() - ts);
+        }
+        function formatCountdown(ms) {
+            if (ms <= 0) return '00:00';
+            let totalSec = Math.floor(ms / 1000);
+            let m = Math.floor(totalSec / 60);
+            let s = totalSec % 60;
+            return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        // List every character who knows Healing (for the healer dropdown). Returns
+        // [{id, name, die, mod, hasHealerEdge}].
+        function getAvailableHealers() {
+            let healers = [];
+            if (globalState && globalState.characters) {
+                for (const [id, c] of Object.entries(globalState.characters)) {
+                    if (!c) continue;
+                    let h = c.skills && c.skills.Healing;
+                    if (h) {
+                        let edgesNorm = (c.edges || "").toLowerCase().replace(/[^a-z]/g, "");
+                        healers.push({
+                            id: id,
+                            name: c.name || id,
+                            die: parseInt(h.die) || 4,
+                            mod: parseInt(h.mod) || 0,
+                            hasHealerEdge: edgesNorm.includes("healer")
+                        });
+                    }
+                }
+            }
+            return healers;
+        }
+
+        // Render the DIAGNOSTICS panel: persistent wounds w/ Golden Hour countdown,
+        // fatigue w/ hourly countdown, injuries list, and the Heal / Natural Healing /
+        // Recover Fatigue controls.
+        function renderDiagnostics() {
+            const panel = document.getElementById('diagnostics-panel');
+            if (!panel) return;
+            reconcilePersistentWounds(charData);
+            let wounds = charData.wounds || 0;
+            let fatigue = charData.fatigue || 0;
+            let injuries = Array.isArray(charData.injuries) ? charData.injuries : [];
+
+            // ---- Wounds list (GM-editable name per wound) ----
+            let woundsHtml = '';
+            if (wounds === 0) {
+                woundsHtml = `<div style="opacity:0.7; font-size:0.9em;">> NO WOUNDS RECORDED.</div>`;
+            } else {
+                charData.woundLog.forEach((w, i) => {
+                    let remaining = goldenHourRemaining(w.ts);
+                    let expired = remaining <= 0;
+                    let attemptedBy = Array.isArray(w.attemptedBy) ? w.attemptedBy : [];
+                    let woundName = w.name || `Wound ${i + 1}`;
+                    let label = expired
+                        ? `<span class="diag-gh" style="color:#ff3333;">GOLDEN HOUR EXPIRED — natural healing only</span>`
+                        : `<span class="diag-gh" style="color:#ff9900;">GOLDEN HOUR: ${formatCountdown(remaining)} remaining</span>`;
+                    let taken = new Date(w.ts).toLocaleTimeString();
+                    let attStr = attemptedBy.length
+                        ? `<span style="opacity:0.7; font-size:0.85em;"> | attempted by: ${attemptedBy.map(id => (globalState.characters?.[id]?.name) || id).join(', ')}</span>`
+                        : '';
+                    // GM can rename the wound inline; players see a static name.
+                    let nameHtml = isAdmin
+                        ? `<b class="diag-wound-name editable" contenteditable="true" data-wound-idx="${i}" style="border-bottom:1px dashed var(--theme-color); padding:0 3px;">${woundName}</b>`
+                        : `<b>${woundName}</b>`;
+                    woundsHtml += `<div class="diag-wound" style="border-left:2px solid ${expired ? '#ff3333' : '#ff9900'}; padding-left:8px; margin-bottom:6px; font-size:0.92em;">`
+                        + `${nameHtml} <span style="opacity:0.7; font-size:0.85em;">(taken ${taken})</span><br>`
+                        + `${label}${attStr}</div>`;
+                });
+            }
+
+            // ---- Healer controls ----
+            let healers = getAvailableHealers();
+            let healerOpts = healers.map(h =>
+                `<option value="${h.id}">${h.name} — Healing d${h.die}${h.hasHealerEdge ? ' (Healer +2)' : ''}</option>`
+            ).join('');
+            let noHealers = healers.length === 0;
+            let eligibleForHeal = wounds > 0 && charData.woundLog.some(w => goldenHourRemaining(w.ts) > 0);
+            let healDisabled = (noHealers || !eligibleForHeal) ? 'disabled' : '';
+            let healControls = `
+                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">
+                    <select id="diag-healer-select" class="admin-input" style="width:auto; min-width:200px; padding:3px 6px; ${noHealers ? 'disabled' : ''}">
+                        ${healerOpts || '<option value="">-- no healers with Healing skill --</option>'}
+                    </select>
+                    <label style="font-size:0.88em; display:flex; align-items:center; gap:4px;">
+                        <input type="checkbox" id="diag-no-kit" style="width:16px; height:16px;"> No first-aid kit (−1)
+                    </label>
+                    <button class="die-btn" id="diag-heal-btn" style="padding:4px 10px; border-color:#00ff00; color:#00ff00;" ${healDisabled} onclick="attemptHeal()">HEAL (TN 4)</button>
+                </div>
+                ${noHealers ? '<div style="font-size:0.82em; opacity:0.7; margin-top:4px;">No character currently has the Healing skill.</div>' : ''}
+                ${(!noHealers && wounds > 0 && !eligibleForHeal) ? '<div style="font-size:0.82em; opacity:0.7; margin-top:4px;">All wounds are past the Golden Hour — only Natural Healing applies.</div>' : ''}
+            `;
+
+            // ---- Natural healing ----
+            let natReady = !!charData.naturalHealingReady;
+            let natBtn = `<button class="die-btn" id="diag-natheal-btn" style="padding:4px 10px; border-color:#00ccff; color:#00ccff;" ${natReady ? '' : 'disabled'} onclick="naturalHealingRoll()">NATURAL HEALING (Vigor)</button>`;
+            let gmAward = isAdmin
+                ? `<button class="die-btn" style="padding:3px 8px; font-size:0.85em; ${natReady ? 'border-color:#00ff00;color:#00ff00;' : ''}" onclick="gmAwardNaturalHealing()">${natReady ? 'GM: REVOKE' : 'GM: AWARD'}</button>`
+                : '';
+            let natHtml = `
+                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">
+                    ${natBtn}
+                    ${gmAward}
+                    <span style="font-size:0.82em; opacity:0.7;">${natReady ? 'Available — roll Vigor (success = 1 wound, raise = 2).' : ''}</span>
+                </div>`;
+
+            // ---- Fatigue ----
+            let fatigueHtml = '';
+            if (fatigue === 0) {
+                fatigueHtml = `<div style="opacity:0.7; font-size:0.9em;">> NO FATIGUE.</div>`;
+            } else {
+                charData.fatigueLog.forEach((f, i) => {
+                    let remaining = fatigueHourRemaining(f.ts);
+                    let ready = remaining <= 0;
+                    let label = ready
+                        ? `<span style="color:#00ff00;">≥1h elapsed — may recover 1 level</span>`
+                        : `<span style="color:#ff9900;">recovers in ${formatCountdown(remaining)}</span>`;
+                    fatigueHtml += `<div class="diag-fatigue" style="border-left:2px solid #ff9900; padding-left:8px; margin-bottom:4px; font-size:0.92em;"><b>Fatigue ${i + 1}</b> — ${label}</div>`;
+                });
+            }
+            let fatigueRecover = fatigue > 0
+                ? `<button class="die-btn" style="padding:4px 10px; margin-top:6px; border-color:#00ff00; color:#00ff00;" onclick="recoverFatigue()">RECOVER 1 FATIGUE</button>`
+                : '';
+
+            // ---- Injuries ----
+            let injuriesHtml = '';
+            if (injuries.length === 0) {
+                injuriesHtml = `<div style="opacity:0.7; font-size:0.9em;">> NO INJURIES RECORDED.</div>`;
+            } else {
+                injuriesHtml = injuries.map((inj, i) => {
+                    let txt = typeof inj === 'string' ? inj : (inj.description || inj.name || JSON.stringify(inj));
+                    let loc = (typeof inj === 'object' && inj.location) ? ` (${inj.location})` : '';
+                    let suffix = '';
+                    if (typeof inj === 'object') {
+                        if (inj.permanent) suffix = ' <span style="color:#ff3333; font-size:0.85em;">[permanent]</span>';
+                        else if (typeof inj.timerRemainingHours === 'number') {
+                            let state = inj.timerPaused ? 'PAUSED' : 'running';
+                            suffix = ` <span style="color:#00ccff; font-size:0.85em;">[24h timer: ${inj.timerRemainingHours}h remaining, ${state}]</span>`;
+                        } else if (inj.untilHealed) suffix = ' <span style="color:#ff9900; font-size:0.85em;">[until healed]</span>';
+                    }
+                    // GM controls: remove injury, and for 24h-timer injuries, advance/backtrack/pause.
+                    let gmControls = '';
+                    if (isAdmin) {
+                        gmControls = `<div style="margin-top:3px; display:flex; gap:4px; flex-wrap:wrap;">`;
+                        gmControls += `<button class="die-btn" style="padding:1px 5px; font-size:0.75em; border-color:#ff3333; color:#ff3333;" onclick="removeInjury(${i})">REMOVE</button>`;
+                        if (typeof inj === 'object' && typeof inj.timerRemainingHours === 'number') {
+                            gmControls += `<button class="die-btn" style="padding:1px 5px; font-size:0.75em;" onclick="adjustInjuryTimer(${i}, -1)">−1h</button>`;
+                            gmControls += `<button class="die-btn" style="padding:1px 5px; font-size:0.75em;" onclick="adjustInjuryTimer(${i}, 1)">+1h</button>`;
+                            gmControls += `<button class="die-btn" style="padding:1px 5px; font-size:0.75em;" onclick="adjustInjuryTimer(${i}, -6)">−6h</button>`;
+                            gmControls += `<button class="die-btn" style="padding:1px 5px; font-size:0.75em;" onclick="adjustInjuryTimer(${i}, 6)">+6h</button>`;
+                            gmControls += `<button class="die-btn" style="padding:1px 5px; font-size:0.75em;" onclick="toggleInjuryTimer(${i})">${inj.timerPaused ? 'RESUME' : 'PAUSE'}</button>`;
+                        }
+                        gmControls += `</div>`;
+                    }
+                    return `<div style="border-left:2px solid #ff0055; padding-left:8px; margin-bottom:6px; font-size:0.9em;"><b>Injury ${i + 1}${loc}:</b> ${txt}${suffix}${gmControls}</div>`;
+                }).join('');
+            }
+            let gmInjuryRoll = isAdmin
+                ? `<button class="die-btn" style="padding:3px 8px; font-size:0.8em; margin-top:4px; border-color:#ff0055; color:#ff0055;" onclick="gmRollInjury()" title="Roll on the SWADE Injury Table (2d6)">GM: ROLL INJURY</button>`
+                : '';
+            let gmClearInjuries = isAdmin && injuries.length > 0
+                ? `<button class="die-btn" style="padding:2px 6px; font-size:0.8em; margin-top:4px;" onclick="clearInjuries()">GM: CLEAR ALL</button>`
+                : '';
+
+            panel.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin:0; border:none; padding:0;">CHARACTER HEALTH</h3>
+                    <span style="font-size:0.85em; opacity:0.8;">Wounds: <b>${wounds}</b> | Fatigue: <b>${fatigue}</b>${injuries.length ? ` | Injuries: <b>${injuries.length}</b>` : ''}</span>
+                </div>
+                <div style="margin-top:10px; font-size:0.95em;">
+                    <div style="margin-bottom:4px; opacity:0.85;">WOUNDS:</div>
+                    ${woundsHtml}
+                    ${healControls}
+                    ${natHtml}
+                </div>
+                <div style="margin-top:14px; border-top:1px dashed var(--theme-color); padding-top:10px;">
+                    <div style="margin-bottom:4px; opacity:0.85;">FATIGUE <span style="font-size:0.8em;">(recovers 1 level/hour)</span>:</div>
+                    ${fatigueHtml}
+                    ${fatigueRecover}
+                </div>
+                <div style="margin-top:14px; border-top:1px dashed var(--theme-color); padding-top:10px;">
+                    <div style="margin-bottom:4px; opacity:0.85; display:flex; align-items:center; gap:8px;">INJURIES: ${gmInjuryRoll}</div>
+                    ${injuriesHtml}
+                    ${gmClearInjuries}
+                </div>
+            `;
+            // Wire up GM wound-name editing.
+            panel.querySelectorAll('.diag-wound-name').forEach(el => {
+                el.addEventListener('blur', (e) => {
+                    let idx = parseInt(e.target.dataset.woundIdx);
+                    if (Array.isArray(charData.woundLog) && charData.woundLog[idx]) {
+                        let newName = e.target.innerText.trim() || `Wound ${idx + 1}`;
+                        charData.woundLog[idx].name = newName;
+                        saveCharacter();
+                    }
+                });
+                el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+            });
+        }
+
+        // Live-tick the Golden Hour / fatigue countdowns once per second without a
+        // full re-render (avoids stealing focus from selects/inputs in the panel).
+        function startDiagnosticsTicker() {
+            if (diagnosticsTicker) return;
+            diagnosticsTicker = setInterval(() => {
+                if (!charData || !Array.isArray(charData.woundLog)) return;
+                let woundDivs = document.querySelectorAll('#diagnostics-panel .diag-wound');
+                charData.woundLog.forEach((w, i) => {
+                    let div = woundDivs[i];
+                    if (!div) return;
+                    let remaining = goldenHourRemaining(w.ts);
+                    let span = div.querySelector('.diag-gh');
+                    if (!span) return;
+                    if (remaining <= 0) {
+                        if (!span.textContent.includes('EXPIRED')) {
+                            span.style.color = '#ff3333';
+                            span.textContent = 'GOLDEN HOUR EXPIRED — natural healing only';
+                        }
+                    } else {
+                        span.style.color = '#ff9900';
+                        span.textContent = `GOLDEN HOUR: ${formatCountdown(remaining)} remaining`;
+                    }
+                });
+                let fatDivs = document.querySelectorAll('#diagnostics-panel .diag-fatigue');
+                charData.fatigueLog.forEach((f, i) => {
+                    let div = fatDivs[i];
+                    if (!div) return;
+                    let remaining = fatigueHourRemaining(f.ts);
+                    let span = div.querySelector('span');
+                    if (span) {
+                        if (remaining <= 0) {
+                            span.style.color = '#00ff00';
+                            span.textContent = '≥1h elapsed — may recover 1 level';
+                        } else {
+                            span.style.color = '#ff9900';
+                            span.textContent = `recovers in ${formatCountdown(remaining)}`;
+                        }
+                    }
+                });
+                // Refresh the Heal button's enabled state when the golden hour expires.
+                let healBtn = document.getElementById('diag-heal-btn');
+                if (healBtn) {
+                    let eligible = (charData.wounds || 0) > 0 && charData.woundLog.some(w => goldenHourRemaining(w.ts) > 0);
+                    healBtn.disabled = !eligible || getAvailableHealers().length === 0;
+                }
+            }, 1000);
+        }
+
+        // HEAL: roll the chosen healer's Healing skill + Wild Die vs TN 4 (−1 no kit,
+        // +2 Healer Edge). Success removes 1 in-golden-hour wound, raise removes 2.
+        // Each healer may attempt each wound only once — track attemptedBy per wound.
+        async function attemptHeal() {
+            reconcilePersistentWounds(charData);
+            let healerId = document.getElementById('diag-healer-select').value;
+            let noKit = document.getElementById('diag-no-kit').checked;
+            let healers = getAvailableHealers();
+            let healer = healers.find(h => h.id === healerId);
+            if (!healer) { logToTerminal("> [!] No healer selected."); return; }
+            // Eligible wounds: within golden hour AND not already attempted by this healer.
+            let now = Date.now();
+            let eligible = charData.woundLog
+                .map((w, idx) => ({ idx, w }))
+                .filter(e => (now - e.w.ts) < GOLDEN_HOUR_MS && !(e.w.attemptedBy || []).includes(healerId));
+            if (eligible.length === 0) {
+                logToTerminal(`> [!] ${healer.name} cannot attempt healing here — no wounds are within the Golden Hour or already attempted by ${healer.name}.`);
+                return;
+            }
+            let kitMod = noKit ? -1 : 0;
+            let healerEdgeMod = healer.hasHealerEdge ? 2 : 0;
+            let totalMod = healer.mod + kitMod + healerEdgeMod;
+            let traitRoll = rollExploding(healer.die);
+            let wildRoll = rollExploding(6);
+            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
+            const TN = 4;
+            let healed = 0;
+            if (bestTotal >= TN) healed = 1 + Math.floor((bestTotal - TN) / 4);
+            healed = Math.min(healed, eligible.length);
+
+            // Mark every wound currently within the golden hour as attempted by this healer.
+            charData.woundLog.forEach(w => {
+                if ((now - w.ts) < GOLDEN_HOUR_MS) {
+                    if (!Array.isArray(w.attemptedBy)) w.attemptedBy = [];
+                    if (!w.attemptedBy.includes(healerId)) w.attemptedBy.push(healerId);
+                }
+            });
+
+            // Remove the oldest eligible wounds first (the ones being treated).
+            if (healed > 0) {
+                let toRemove = new Set(eligible.slice(0, healed).map(e => e.idx));
+                charData.woundLog = charData.woundLog.filter((_, idx) => !toRemove.has(idx));
+                charData.wounds = charData.woundLog.length;
+                // Mirror onto the live combat participant if present.
+                if (combatParticipant) {
+                    combatParticipant.wounds = charData.wounds;
+                    if (charData.wounds === 0 && combatParticipant.shaken) combatParticipant.shaken = false;
+                    if (combatParticipant.incapacitated && charData.wounds < (combatParticipant.woundCap || 4) && (charData.fatigue || 0) < 3) combatParticipant.incapacitated = false;
+                }
+                syncCombatParticipants();
+            }
+            await saveCharacter();
+            renderDiagnostics();
+            refreshCombatHUD();
+
+            let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
+            let patientName = charData.name;
+            let termLog = `> <b style="color:#00ff00;">HEALING:</b> ${healer.name} treats ${patientName}'s wounds (Healing d${healer.die} vs TN 4${modStr})<br>`;
+            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> `;
+            if (healed > 0) {
+                termLog += `<b style="color:#00ff00;">HEALED ${healed} WOUND(S)</b>. ${charData.wounds} wound(s) remain.`;
+            } else {
+                termLog += `<b style="color:#ff3333;">FAILURE — no wounds healed.</b> ${healer.name} may not retry these wounds (a different healer still can).`;
+            }
+            logToTerminal(termLog);
+            if (globalState && globalState.webhook && window.Embeds) {
+                await window.Embeds.post(globalState.webhook,
+                    window.Embeds.heal(healer.name, patientName, healer.die, traitRoll.history, wildRoll.history, totalMod, bestTotal, healed, charData.wounds));
+            }
+        }
+
+        // NATURAL HEALING: Vigor roll, success = 1 wound, raise = 2 (p.98). Only
+        // available when the GM has awarded it (every 5 in-game days).
+        async function naturalHealingRoll() {
+            if (!charData.naturalHealingReady) {
+                logToTerminal("> [!] Natural Healing is not available — the GM must award it (every 5 in-game days).");
+                return;
+            }
+            reconcilePersistentWounds(charData);
+            if ((charData.wounds || 0) <= 0) {
+                logToTerminal("> [!] No wounds to heal naturally.");
+                return;
+            }
+            let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
+            let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
+            let statusPenalty = -(Math.min(charData.wounds || 0, 3) + Math.min(charData.fatigue || 0, 2));
+            let totalMod = vigorMod + statusPenalty;
+            let traitRoll = rollExploding(vigorDie);
+            let wildRoll = rollExploding(6);
+            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
+            const TN = 4;
+            let healed = 0;
+            if (bestTotal >= TN) healed = 1 + Math.floor((bestTotal - TN) / 4);
+            healed = Math.min(healed, charData.wounds);
+            if (healed > 0) {
+                charData.woundLog.splice(0, healed); // remove oldest wounds
+                charData.wounds = charData.woundLog.length;
+                if (combatParticipant) {
+                    combatParticipant.wounds = charData.wounds;
+                    if (charData.wounds === 0 && combatParticipant.shaken) combatParticipant.shaken = false;
+                    if (combatParticipant.incapacitated && charData.wounds < (combatParticipant.woundCap || 4) && (charData.fatigue || 0) < 3) combatParticipant.incapacitated = false;
+                }
+                syncCombatParticipants();
+            }
+            charData.naturalHealingReady = false; // consume the award
+            await saveCharacter();
+            renderDiagnostics();
+            refreshCombatHUD();
+
+            let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
+            let termLog = `> <b style="color:#00ccff;">NATURAL HEALING:</b> ${charData.name} rolls Vigor (d${vigorDie} vs TN 4${modStr})<br>`;
+            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> `;
+            termLog += healed > 0
+                ? `<b style="color:#00ff00;">HEALED ${healed} WOUND(S)</b>. ${charData.wounds} wound(s) remain.`
+                : `<b style="color:#ff3333;">FAILURE — no wounds healed.</b>`;
+            logToTerminal(termLog);
+            // Discord embed (was missing).
+            if (globalState && globalState.webhook && window.Embeds) {
+                await window.Embeds.post(globalState.webhook,
+                    window.Embeds.naturalHealing(charData.name, vigorDie, traitRoll.history, wildRoll.history, totalMod, bestTotal, healed, charData.wounds));
+            }
+        }
+
+        async function gmAwardNaturalHealing() {
+            if (!isAdmin) return;
+            charData.naturalHealingReady = !charData.naturalHealingReady;
+            await saveCharacter();
+            renderDiagnostics();
+            logToTerminal(`> [GM] Natural Healing ${charData.naturalHealingReady ? 'AWARDED' : 'revoked'} for ${charData.name}.`);
+        }
+
+        async function recoverFatigue() {
+            reconcilePersistentWounds(charData);
+            if ((charData.fatigue || 0) <= 0) return;
+            charData.fatigueLog.splice(0, 1); // recover oldest fatigue level
+            charData.fatigue = charData.fatigueLog.length;
+            if (combatParticipant) {
+                combatParticipant.fatigue = charData.fatigue;
+            }
+            syncCombatParticipants();
+            await saveCharacter();
+            renderDiagnostics();
+            refreshCombatHUD();
+            logToTerminal(`> ${charData.name} recovered 1 Fatigue level. Fatigue now ${charData.fatigue}.`);
+        }
+
+        // ==========================================
+        // INCAPACITATION SYSTEM (SWADE p.96)
+        // On Incapacitation the player must SOAK (1 Benny, Vigor) or ROLL Vigor vs
+        // TN 4: crit fail = death, fail = permanent injury + Bleeding Out, success =
+        // injury until healed, raise = injury for 24h. Bleeding Out requires a Vigor
+        // roll each turn (or ally Healing to stabilize) or the character dies.
+        // ==========================================
+        function checkIncapacitationOverlay() {
+            let overlay = document.getElementById('incapacitation-overlay');
+            if (!overlay) return;
+            let show = !!(combatParticipant && combatParticipant.incapacitated && !combatParticipant.incapacitationResolved);
+            overlay.style.display = show ? 'flex' : 'none';
+            if (show) {
+                let nameEl = document.getElementById('incap-char-name');
+                if (nameEl) nameEl.innerText = charData.name || 'Character';
+                let soakBtn = document.getElementById('incap-soak-btn');
+                if (soakBtn) soakBtn.disabled = (charData.bennies || 0) <= 0;
+            }
+            // Bleeding Out banner (less intrusive, under TACTICAL STATUS).
+            let bleedBanner = document.getElementById('bleeding-banner');
+            if (bleedBanner) {
+                bleedBanner.style.display = (combatParticipant && combatParticipant.bleedingOut && !combatParticipant.dead) ? 'block' : 'none';
+            }
+        }
+        // SOAK on incapacitation: spend a benny, Vigor roll; success removes a wound
+        // and may end Incapacitation if wounds drop below the cap. A FAILED soak does
+        // NOT dismiss the prompt — the player can soak again (if they have bennies)
+        // or fall back to ROLL. The prompt only dismisses when Incapacitation ends
+        // or the player chooses ROLL.
+        async function incapSoak() {
+            if (!combatParticipant || !combatParticipant.incapacitated) return;
+            if ((charData.bennies || 0) <= 0) { logToTerminal("> [!] No Bennies to Soak."); return; }
+            let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
+            let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
+            let statusPenalty = -(Math.min(charData.wounds || 0, 3) + Math.min(charData.fatigue || 0, 2));
+            let ironJawMod = hasEdge("Iron Jaw") ? 2 : 0;
+            let totalMod = vigorMod + statusPenalty + ironJawMod;
+            let traitRoll = rollExploding(vigorDie);
+            let wildRoll = rollExploding(6);
+            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
+            let soaked = (bestTotal >= 4) ? (1 + Math.floor((bestTotal - 4) / 4)) : 0;
+            charData.bennies = Math.max(0, (charData.bennies || 0) - 1);
+            if (combatParticipant) {
+                combatParticipant.bennies = charData.bennies;
+            }
+            document.getElementById('benny-count').innerText = charData.bennies;
+            let incapEnded = false;
+            if (soaked > 0) {
+                charData.wounds = Math.max(0, (charData.wounds || 0) - soaked);
+                reconcilePersistentWounds(charData);
+                combatParticipant.wounds = charData.wounds;
+                let cap = combatParticipant.woundCap || 4;
+                if (charData.wounds < cap && (charData.fatigue || 0) < 3) {
+                    combatParticipant.incapacitated = false;
+                    incapEnded = true;
+                }
+            }
+            // Only resolve the prompt if Incapacitation actually ended. A failed soak
+            // leaves the overlay up so the player can try again or ROLL.
+            if (incapEnded) {
+                combatParticipant.incapacitationResolved = true;
+            }
+            // Update the SOAK button's disabled state in the overlay.
+            let soakBtn = document.getElementById('incap-soak-btn');
+            if (soakBtn) soakBtn.disabled = (charData.bennies || 0) <= 0;
+            syncCombatParticipants();
+            await saveCharacter();
+            renderDiagnostics();
+            refreshCombatHUD();
+            checkIncapacitationOverlay();
+            let termLog = `> <b style="color:#ffff00;">INCAP SOAK:</b> ${charData.name} (Vigor d${vigorDie}) = <b>${bestTotal}</b> → ${soaked > 0 ? `SOAKED ${soaked}, ${combatParticipant.incapacitated ? 'still Incapacitated' : 'back in the fight'}` : 'FAILED (no wounds removed)'}.<br>`;
+            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}`;
+            logToTerminal(termLog);
+            if (globalState && globalState.webhook && window.Embeds) {
+                await window.Embeds.post(globalState.webhook,
+                    window.Embeds.incapSoak(charData.name, vigorDie, traitRoll.history, wildRoll.history, bestTotal, soaked, combatParticipant.incapacitated));
+            }
+        }
+        // ROLL on incapacitation: Vigor vs TN 4. Determines death / injury / bleeding.
+        // Raise = injury with a 24h PAUSED timer (GM advances/backtracks in-game time,
+        // not real-world). Success = injury until healed. Failure = permanent injury
+        // + Bleeding Out. Crit fail = death.
+        async function incapRoll() {
+            if (!combatParticipant || !combatParticipant.incapacitated) return;
+            if (combatParticipant && (charData.wounds || 0) < (combatParticipant.woundCap || 4) && (charData.fatigue || 0) >= 3) {
+                logToTerminal("> [!] Incapacitated from Fatigue alone — Fatigue recovers 1 level per hour without rolling on the physical Injury Table.");
+                alert("Incapacitated from Fatigue: You do not roll on the Injury Table. You are unconscious/helpless and recover 1 Fatigue level per hour.");
+                return;
+            }
+            let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
+            let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
+            let statusPenalty = -(Math.min(charData.wounds || 0, 3) + Math.min(charData.fatigue || 0, 2));
+            let totalMod = vigorMod + statusPenalty;
+            let traitRoll = rollExploding(vigorDie);
+            let wildRoll = rollExploding(6);
+            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
+            // Critical failure = both trait die and wild die rolled a 1 (initial roll).
+            let isCritFail = (traitRoll.history[0] === 1 && wildRoll.history[0] === 1);
+            const TN = 4;
+            let outcome = "";
+            let color = 0xff3333;
+            let inj = null;
+            if (isCritFail) {
+                combatParticipant.dead = true;
+                outcome = "CRITICAL FAILURE — DEATH.";
+            } else if (bestTotal < TN) {
+                // Failure: permanent injury + Bleeding Out.
+                combatParticipant.bleedingOut = true;
+                inj = window.rollInjuryTable ? window.rollInjuryTable() : { location: 'Unknown', effect: 'Permanent injury', roll: 0 };
+                if (!Array.isArray(charData.injuries)) charData.injuries = [];
+                charData.injuries.push({ roll: inj.roll, location: inj.location, description: inj.effect, ts: Date.now(), permanent: true, source: 'Incap-Failure' });
+                outcome = `FAILURE — Permanent Injury (${inj.location}) + BLEEDING OUT.`;
+            } else {
+                let raises = Math.floor((bestTotal - TN) / 4);
+                inj = window.rollInjuryTable ? window.rollInjuryTable() : { location: 'Unknown', effect: 'Injury', roll: 0 };
+                if (!Array.isArray(charData.injuries)) charData.injuries = [];
+                if (raises > 0) {
+                    // Raise: 24h PAUSED timer (GM-controlled, not real-world countdown).
+                    charData.injuries.push({
+                        roll: inj.roll, location: inj.location, description: inj.effect, ts: Date.now(),
+                        timerHours: 24, timerRemainingHours: 24, timerPaused: true, source: 'Incap-Raise'
+                    });
+                    outcome = `RAISE — Injury (${inj.location}, 24h paused timer).`;
+                } else {
+                    // Success: injury until all wounds healed.
+                    charData.injuries.push({ roll: inj.roll, location: inj.location, description: inj.effect, ts: Date.now(), untilHealed: true, source: 'Incap-Success' });
+                    outcome = `SUCCESS — Injury (${inj.location}, until healed).`;
+                }
+                color = 0x00ff00;
+            }
+            combatParticipant.incapacitationResolved = true;
+            syncCombatParticipants();
+            await saveCharacter();
+            renderDiagnostics();
+            refreshCombatHUD();
+            checkIncapacitationOverlay();
+            let termLog = `> <b style="color:#ff3333;">INCAP ROLL:</b> ${charData.name} (Vigor d${vigorDie}) = <b>${bestTotal}</b><br>`;
+            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
+            termLog += `&nbsp;&nbsp;<b>${outcome}</b>`;
+            logToTerminal(termLog);
+            if (globalState && globalState.webhook && window.Embeds) {
+                await window.Embeds.post(globalState.webhook,
+                    window.Embeds.incapRoll(charData.name, vigorDie, traitRoll.history, wildRoll.history, bestTotal, outcome, color));
+            }
+        }
+        // Bleeding Out: Vigor vs TN 4 each turn. Success = stable. Failure = death.
+        // An ally's Healing roll can also stabilize (the GM clears bleedingOut).
+        async function rollBleedingOut() {
+            if (!combatParticipant || !combatParticipant.bleedingOut) return;
+            let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
+            let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
+            let woundPen = hasEdge("Hard to Kill") ? 0 : Math.min(charData.wounds || 0, 3);
+            let fatiguePen = Math.min(charData.fatigue || 0, 2);
+            let statusPenalty = -(woundPen + fatiguePen);
+            let totalMod = vigorMod + statusPenalty;
+            let traitRoll = rollExploding(vigorDie);
+            let wildRoll = rollExploding(6);
+            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
+            let stable = bestTotal >= 4;
+            combatParticipant.bleedingOutResolvedThisTurn = true;
+            if (stable) {
+                combatParticipant.bleedingOut = false;
+            } else {
+                combatParticipant.dead = true;
+            }
+            syncCombatParticipants();
+            await saveCharacter();
+            refreshCombatHUD();
+            checkIncapacitationOverlay();
+            let termLog = `> <b style="color:#ff3333;">BLEEDING OUT:</b> ${charData.name} (Vigor d${vigorDie}) = <b>${bestTotal}</b> → ${stable ? 'STABLE (bleeding stopped, still Incapacitated).' : 'FAILURE — DEATH.'}<br>`;
+            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}`;
+            logToTerminal(termLog);
+            if (globalState && globalState.webhook && window.Embeds) {
+                await window.Embeds.post(globalState.webhook,
+                    window.Embeds.bleedingOut(charData.name, vigorDie, traitRoll.history, wildRoll.history, bestTotal, stable));
+            }
+        }
+
+        async function clearInjuries() {
+            if (!isAdmin) return;
+            charData.injuries = [];
+            await saveCharacter();
+            renderDiagnostics();
+            logToTerminal(`> [GM] Injuries cleared for ${charData.name}.`);
+        }
+
+        // GM rolls on the SWADE Injury Table (settings.js). Adds the result to the
+        // character's injuries list and posts a Discord embed.
+        async function gmRollInjury() {
+            if (!isAdmin || !window.rollInjuryTable) return;
+            if (!Array.isArray(charData.injuries)) charData.injuries = [];
+            let result = window.rollInjuryTable();
+            let injury = {
+                roll: result.roll,
+                location: result.location,
+                description: result.effect,
+                ts: Date.now(),
+                source: 'GM-Roll'
+            };
+            if (result.sub) injury.sub = result.sub;
+            if (result.subRoll) injury.subRoll = result.subRoll;
+            charData.injuries.push(injury);
+            await saveCharacter();
+            renderDiagnostics();
+            let subStr = result.subRoll ? ` (sub-roll ${result.subRoll}: ${result.sub})` : '';
+            let termLog = `> <b style="color:#ff0055;">INJURY ROLL:</b> ${charData.name} — 2d6 = <b>${result.roll}</b> → <b>${result.location}</b>${subStr}<br>`;
+            termLog += `&nbsp;&nbsp;${result.effect}`;
+            logToTerminal(termLog);
+            // Discord embed for the new injury.
+            if (globalState && globalState.webhook && window.Embeds) {
+                await window.Embeds.post(globalState.webhook,
+                    window.Embeds.injurySustained(charData.name, result.roll, result.location, result.effect, subStr || null));
+            }
+        }
+
+        // GM removes a single injury by index.
+        async function removeInjury(idx) {
+            if (!isAdmin) return;
+            if (!Array.isArray(charData.injuries)) return;
+            if (idx < 0 || idx >= charData.injuries.length) return;
+            let removed = charData.injuries.splice(idx, 1)[0];
+            await saveCharacter();
+            renderDiagnostics();
+            logToTerminal(`> [GM] Removed injury (${removed.location || 'unknown'}) from ${charData.name}.`);
+        }
+
+        // GM advances or backtracks the paused 24h timer on a raise-source injury.
+        async function adjustInjuryTimer(idx, deltaHours) {
+            if (!isAdmin) return;
+            if (!Array.isArray(charData.injuries)) return;
+            let inj = charData.injuries[idx];
+            if (!inj || typeof inj.timerRemainingHours !== 'number') return;
+            inj.timerRemainingHours = Math.max(0, Math.min(inj.timerHours || 24, inj.timerRemainingHours + deltaHours));
+            if (inj.timerRemainingHours <= 0) {
+                // Timer expired — remove the injury.
+                charData.injuries.splice(idx, 1);
+                logToTerminal(`> [GM] Injury timer expired and removed for ${charData.name}.`);
+            } else {
+                logToTerminal(`> [GM] Injury timer for ${charData.name} adjusted by ${deltaHours > 0 ? '+' : ''}${deltaHours}h → ${inj.timerRemainingHours}h remaining.`);
+            }
+            await saveCharacter();
+            renderDiagnostics();
+        }
+
+        // GM toggles the paused state of a 24h injury timer.
+        async function toggleInjuryTimer(idx) {
+            if (!isAdmin) return;
+            if (!Array.isArray(charData.injuries)) return;
+            let inj = charData.injuries[idx];
+            if (!inj || typeof inj.timerRemainingHours !== 'number') return;
+            inj.timerPaused = !inj.timerPaused;
+            await saveCharacter();
+            renderDiagnostics();
+            logToTerminal(`> [GM] Injury timer for ${charData.name} ${inj.timerPaused ? 'PAUSED' : 'RESUMED'} (${inj.timerRemainingHours}h remaining).`);
+        }
+
+        // ==========================================
+        // B10. RUNNING & MOVEMENT (SWADE p.92/94/97)
+        // Running is a free action: roll the running die (d6 default, d10 with the
+        // Fleet-Footed Edge), add it to Pace for the turn, and take −2 to all other
+        // trait rolls that turn (−1 with Steady Hands). Wounds reduce Pace (p.97).
+        // ==========================================
+        // B7 helper: persist the combat participant list to whichever store is active
+        // (Firebase when configured, localStorage otherwise). Used by the healing /
+        // soak / fatigue functions so wound/fatigue changes mirror to the live tracker.
+        function syncCombatParticipants() {
+            if (!globalState || !globalState.combat || !globalState.combat.participants) return;
+            if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
+                set(ref(db, 'campaignState/combat/participants'), globalState.combat.participants);
+            } else {
+                localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+            }
+        }
+        // Refresh the TACTICAL STATUS HUD inline (without waiting for an onValue round
+        // trip) so soak/heal/fatigue changes show immediately on the character sheet.
+        function refreshCombatHUD() {
+            let hudEl = document.getElementById('combat-hud');
+            let hudStats = document.getElementById('hud-stats');
+            if (!hudEl || !hudStats) return;
+            if (combatParticipant && (globalState.combatActive)) {
+                hudEl.style.display = 'block';
+                let statusHtml = `Wounds: ${charData.wounds || 0} | Fatigue: ${charData.fatigue || 0}`;
+                if (combatParticipant.stunned) statusHtml += ` <br><span style="color:#ff0055; font-weight:bold;">[ STUNNED — CANNOT ACT ]</span>`;
+                if (combatParticipant.shaken) statusHtml += ` <br><span style="color:#ff9900;">[ SHAKEN ]</span>`;
+                if (combatParticipant.distracted) statusHtml += ` <span style="color:#ff3333;">[ DISTRACTED ]</span>`;
+                if (combatParticipant.vulnerable) statusHtml += ` <span style="color:#00ff00;">[ VULNERABLE ]</span>`;
+                if (combatParticipant.bleedingOut) statusHtml += ` <br><span style="color:#ff3333; font-weight:bold;">[ BLEEDING OUT — Vigor roll required! ]</span>`;
+                if (combatParticipant.card && combatParticipant.card.isJoker && combatParticipant.jokerRound === globalState.combat.round) {
+                    statusHtml += ` <br><span style="color:#ffff00; text-shadow: 0 0 5px #ffff00;">[ JOKER'S WILD: +2 APPLIED! ]</span>`;
+                }
+                hudStats.innerHTML = statusHtml;
+                // Feature 2: Wild Attack Vulnerable Reminder Banner
+                let wildBanner = document.getElementById('wild-attack-banner');
+                if (wildBanner && combatParticipant) {
+                    let isWildVulnerable = combatParticipant.vulnerable && combatParticipant.vulnerableTTL > 0;
+                    wildBanner.style.display = isWildVulnerable ? 'block' : 'none';
+                }
+            } else {
+                hudEl.style.display = 'none';
+            }
+        }
+        function getRunningDie() {
+            let edgesNorm = (charData.edges || "").toLowerCase().replace(/[^a-z]/g, "");
+            return edgesNorm.includes("fleetfooted") ? 10 : 6;
+        }
+        function hasSteadyHands() {
+            let edgesNorm = (charData.edges || "").toLowerCase().replace(/[^a-z]/g, "");
+            return edgesNorm.includes("steadyhands");
+        }
+        // Effective Pace accounting for persistent wounds (p.97) and armor penalty.
+        function getEffectivePace() {
+            let basePace = parseInt(charData.derived?.pace) || 6;
+            let armorPen = parseInt(charData.derived?.armorPenalty) || 0;
+            let wounds = charData.wounds || 0;
+            return Math.max(1, basePace - armorPen - wounds);
+        }
+        async function rollRunning() {
+            let runDie = getRunningDie();
+            // Running die does NOT Ace (p.94).
+            let runRoll = Math.floor(Math.random() * runDie) + 1;
+            let basePace = parseInt(charData.derived?.pace) || 6;
+            let armorPen = parseInt(charData.derived?.armorPenalty) || 0;
+            let wounds = charData.wounds || 0;
+            let effBasePace = Math.max(1, basePace - armorPen - wounds);
+            let paceThisTurn = effBasePace + runRoll;
+            let penalty = hasSteadyHands() ? -1 : -2;
+            let steadyNote = hasSteadyHands() ? " (Steady Hands: −1 instead of −2)" : "";
+            let termLog = `> <b style="color:#00ccff;">RUN:</b> ${charData.name} runs (running die d${runDie}${runDie === 10 ? " — Fleet-Footed" : ""})<br>`;
+            termLog += `&nbsp;&nbsp;Running die: <b>${runRoll}</b> (no Ace)<br>`;
+            termLog += `&nbsp;&nbsp;Pace this turn: <b>${paceThisTurn}</b> (effective base ${effBasePace} + ${runRoll})${wounds > 0 ? ` [base ${basePace} −${armorPen} armor −${wounds} wounds]` : (armorPen > 0 ? ` [base ${basePace} −${armorPen} armor]` : "")}<br>`;
+            termLog += `&nbsp;&nbsp;Apply <b>${penalty}</b> to all other trait rolls this turn${steadyNote}.`;
+            logToTerminal(termLog);
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${charData.name} runs`,
+                    description: `Running die (d${runDie}): **${runRoll}**\n**Pace this turn: ${paceThisTurn}**\n−${Math.abs(penalty)} to other actions this turn${steadyNote}.`,
+                    color: 0x00ccff
+                };
+                try { await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }); } catch (e) { }
+            }
+        }
+
         function loadCharacter() {
             if (globalState.characters && globalState.characters[activeCharId]) {
                 charData = globalState.characters[activeCharId];
@@ -1548,6 +2460,18 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (charData.equippedArmorSecondary === undefined) charData.equippedArmorSecondary = null;
             if (charData.equippedForceField === undefined) charData.equippedForceField = null;
             if (charData.naturalArmor === undefined) charData.naturalArmor = 0;
+            // B7: Persistent wounds/fatigue live on the character object (not just the
+            // combat participant), so they survive endCombat(). woundLog / fatigueLog hold
+            // one timestamped entry per current level (for the Golden Hour / hourly
+            // fatigue countdowns). injuries[] is the B4 injury store. naturalHealingReady
+            // is the GM-awarded flag that enables the Natural Healing Vigor roll.
+            if (charData.wounds === undefined) charData.wounds = 0;
+            if (charData.fatigue === undefined) charData.fatigue = 0;
+            if (!Array.isArray(charData.woundLog)) charData.woundLog = [];
+            if (!Array.isArray(charData.fatigueLog)) charData.fatigueLog = [];
+            if (!Array.isArray(charData.injuries)) charData.injuries = [];
+            if (charData.naturalHealingReady === undefined) charData.naturalHealingReady = false;
+            reconcilePersistentWounds(charData);
 
             // Part 4: normalize equipped armor instances.
             if (window.normalizeCharacterArmorInstances) {
@@ -1574,8 +2498,12 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                     clearAllAttackContexts();
                 }
                 lastCombatRound = globalState.combat.round;
+                // B7: the character object owns wounds/fatigue. Do NOT overwrite the
+                // combat participant here — during Firebase write races a stale character
+                // snapshot would wipe the participant's real wounds (the soak/heal bug).
+                // The damage/soak/heal write paths keep both stores in sync.
                 hudEl.style.display = 'block';
-                let statusHtml = `Wounds: ${combatParticipant.wounds || 0} | Fatigue: ${combatParticipant.fatigue || 0}`;
+                let statusHtml = `Wounds: ${charData.wounds || 0} | Fatigue: ${charData.fatigue || 0}`;
                 if (combatParticipant.stunned) statusHtml += ` <br><span style="color:#ff0055; font-weight:bold;">[ STUNNED — CANNOT ACT ]</span>`; // B6
                 if (combatParticipant.shaken) statusHtml += ` <br><span style="color:#ff9900;">[ SHAKEN ]</span>`;
                 if (combatParticipant.distracted) statusHtml += ` <span style="color:#ff3333;">[ DISTRACTED ]</span>`;
@@ -1598,6 +2526,12 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             renderSheet();
             renderWeapons();
             renderArmor();
+            // B7: render the persistent wounds/fatigue diagnostics panel + start the
+            // Golden Hour / fatigue countdown ticker.
+            renderDiagnostics();
+            startDiagnosticsTicker();
+            // Incapacitation overlay + bleeding-out banner check.
+            checkIncapacitationOverlay();
         }
         async function saveCharacter() {
             let showSync = localStorage.getItem('lambdaSyncNotif') === 'on';
@@ -1682,15 +2616,8 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 await set(ref(db, 'campaignState/combat/participants'), participants);
             }
             logToTerminal(`> ${charData.name} spent a Benny to <b style="color:#00ff00;">SHAKE OFF</b> the Shaken condition instantly. May act normally.`);
-            if (globalState && globalState.webhook) {
-                const embed = {
-                    title: `${charData.name} spent a Benny to Unshake`,
-                    description: `Removed **SHAKEN** instantly (no roll). May act normally.`,
-                    color: 0xffff00
-                };
-                try {
-                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
-                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
+            if (globalState && globalState.webhook && window.Embeds) {
+                await window.Embeds.post(globalState.webhook, window.Embeds.unshake(charData.name));
             }
         }
         async function gmNewSession() {
@@ -1724,8 +2651,9 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (!isFirebaseConfigured || !globalState.combat || !globalState.combat.participants) return;
             let spiritDie = parseInt(charData.attributes?.Spirit?.die) || 4;
             let spiritMod = parseInt(charData.attributes?.Spirit?.mod) || 0;
-            let statusPenalty = -(Math.min(combatParticipant.wounds || 0, 3) + Math.min(combatParticipant.fatigue || 0, 2) + (combatParticipant.distracted ? 2 : 0));
-            let totalMod = spiritMod + statusPenalty;
+            let statusPenalty = -(Math.min(charData.wounds || combatParticipant.wounds || 0, 3) + Math.min(charData.fatigue || combatParticipant.fatigue || 0, 2) + (combatParticipant.distracted ? 2 : 0));
+            let combatReflexesMod = hasEdge("Combat Reflexes") ? 2 : 0;
+            let totalMod = spiritMod + statusPenalty + combatReflexesMod;
             let traitRoll = rollExploding(spiritDie);
             let wildRoll = rollExploding(6);
             let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
@@ -1768,8 +2696,9 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (!isFirebaseConfigured || !globalState.combat || !globalState.combat.participants) return;
             let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
             let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
-            let statusPenalty = -(Math.min(combatParticipant.wounds || 0, 3) + Math.min(combatParticipant.fatigue || 0, 2));
-            let totalMod = vigorMod + statusPenalty;
+            let statusPenalty = -(Math.min(charData.wounds || combatParticipant.wounds || 0, 3) + Math.min(charData.fatigue || combatParticipant.fatigue || 0, 2));
+            let combatReflexesMod = hasEdge("Combat Reflexes") ? 2 : 0;
+            let totalMod = vigorMod + statusPenalty + combatReflexesMod;
             let traitRoll = rollExploding(vigorDie);
             let wildRoll = rollExploding(6);
             let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
@@ -1833,39 +2762,73 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 logToTerminal("> [!] SOAK FAILED: No Bennies remaining.");
                 return;
             }
+            // Disable the soak button immediately to prevent double-clicks / glitches
+            // while the async write resolves.
+            const soakBtn = document.getElementById('soak-btn');
+            if (soakBtn) soakBtn.disabled = true;
             let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
             let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
             let statusPenalty = 0;
-            if (combatParticipant) {
-                statusPenalty = -(Math.min(combatParticipant.wounds || 0, 3) + Math.min(combatParticipant.fatigue || 0, 2));
-            }
-            let totalMod = vigorMod + statusPenalty;
+            // B7: wounds/fatigue persist on the character, so the soak penalty applies
+            // whether or not combat is currently active.
+            let sw = charData.wounds ?? (combatParticipant ? combatParticipant.wounds : 0) ?? 0;
+            let sf = charData.fatigue ?? (combatParticipant ? combatParticipant.fatigue : 0) ?? 0;
+            statusPenalty = -(Math.min(sw, 3) + Math.min(sf, 2));
+            let ironJawMod = hasEdge("Iron Jaw") ? 2 : 0;
+            let totalMod = vigorMod + statusPenalty + ironJawMod;
             let traitRoll = rollExploding(vigorDie);
             let wildRoll = rollExploding(6);
             let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
             let soaked = 0;
             if (bestTotal >= 4) soaked = 1 + Math.floor((bestTotal - 4) / 4);
-            await adjustBennies(-1);
+            // B7: reduce wounds + spend the benny TOGETHER so a single saveCharacter
+            // write carries both changes (avoids the onValue race that previously
+            // wiped the soak). Removing all wounds also clears Shaken.
+            let actuallyRemoved = 0;
+            if (soaked > 0) {
+                reconcilePersistentWounds(charData);
+                let before = charData.wounds || 0;
+                charData.wounds = Math.max(0, before - soaked);
+                actuallyRemoved = before - charData.wounds;
+                reconcilePersistentWounds(charData); // trims woundLog to match
+                if (combatParticipant) {
+                    combatParticipant.wounds = charData.wounds;
+                    if (actuallyRemoved > 0 && charData.wounds === 0 && combatParticipant.shaken) {
+                        combatParticipant.shaken = false;
+                    }
+                    if (combatParticipant.incapacitated && charData.wounds < (combatParticipant.woundCap || 4) && (charData.fatigue || 0) < 3) {
+                        combatParticipant.incapacitated = false;
+                    }
+                }
+            }
+            // Spend the benny on the same charData object, then write once.
+            charData.bennies = Math.max(0, (charData.bennies || 0) - 1);
+            if (combatParticipant) {
+                combatParticipant.bennies = charData.bennies;
+            }
+            document.getElementById('benny-count').innerText = charData.bennies;
+            const unshakeBtn = document.getElementById('unshake-btn');
+            if (unshakeBtn) unshakeBtn.disabled = (charData.bennies || 0) <= 0;
+            // Write combat participants first (so the tracker reflects wounds+benny
+            // immediately), then persist the character. The order matters: writing
+            // the participant array after saveCharacter can re-trigger onValue and
+            // re-render loadCharacter, which previously caused the "glitch" where the
+            // soak sometimes didn't stick.
+            syncCombatParticipants();
+            await saveCharacter();
+            renderDiagnostics();
+            refreshCombatHUD();
+            // Re-enable the soak button based on the new benny count + remaining wounds.
+            if (soakBtn) soakBtn.disabled = (charData.bennies || 0) <= 0 || (charData.wounds || 0) <= 0;
             let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
             let termLog = `> ${charData.name} spent a Benny to SOAK (Vigor) vs TN 4${modStr}<br>`;
             termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
-            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> <b style="color:#00ff00;">SOAKED ${soaked} WOUND(S)</b><br>`;
-            termLog += `&nbsp;&nbsp;[ Report to the GM: remove ${soaked} Wound(s)${soaked > 0 ? " — if all Wounds are Soaked, Shaken is also removed" : ""}. ]`;
+            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> <b style="color:#00ff00;">SOAKED ${actuallyRemoved} WOUND(S)</b><br>`;
+            termLog += `&nbsp;&nbsp;[ Removed ${actuallyRemoved} Wound(s) from the sheet${actuallyRemoved > 0 && charData.wounds === 0 ? " — all Wounds Soaked, Shaken also removed" : ""}. ]`;
             logToTerminal(termLog);
-            if (globalState && globalState.webhook) {
-                const embed = {
-                    title: `${charData.name} spent a Benny to Soak`,
-                    description: `**Result: ${bestTotal}** (Vigor vs TN 4)\n**Soaked ${soaked} Wound(s)** — GM removes them on the tracker.`,
-                    color: soaked > 0 ? 0x00ff00 : 0xff3333,
-                    fields: [
-                        { name: `Vigor (d${vigorDie})`, value: traitRoll.history.join(' + '), inline: true },
-                        { name: "Wild (d6)", value: wildRoll.history.join(' + '), inline: true }
-                    ]
-                };
-                if (totalMod !== 0) embed.fields.push({ name: "Modifier", value: `${totalMod > 0 ? '+' : ''}${totalMod}`, inline: true });
-                try {
-                    await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
-                } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
+            if (globalState && globalState.webhook && window.Embeds) {
+                await window.Embeds.post(globalState.webhook,
+                    window.Embeds.soak(charData.name, vigorDie, traitRoll.history, wildRoll.history, totalMod, bestTotal, actuallyRemoved, actuallyRemoved > 0 && charData.wounds === 0));
             }
         }
         function evaluateMinStr(weaponMinStr) {
@@ -2004,8 +2967,13 @@ d<span class="editable die-input" data-cat="skills" data-key="${skill}" contente
             }
             let basePace = parseInt(charData.derived.pace) || 6;
             let armorPen = parseInt(charData.derived.armorPenalty) || 0;
-            let effectivePace = Math.max(1, basePace - armorPen);
-            document.getElementById('der-pace').innerText = effectivePace + (armorPen > 0 ? ` (base ${basePace}, −${armorPen} armor)` : '');
+            // B10: wounds reduce Pace (p.97). Show the breakdown so the source is clear.
+            let wounds = charData.wounds || 0;
+            let effectivePace = Math.max(1, basePace - armorPen - wounds);
+            let paceParts = [];
+            if (armorPen > 0) paceParts.push(`−${armorPen} armor`);
+            if (wounds > 0) paceParts.push(`−${wounds} wounds`);
+            document.getElementById('der-pace').innerText = effectivePace + (paceParts.length ? ` (base ${basePace}, ${paceParts.join(', ')})` : '');
             charData.derived.paceEffective = effectivePace;
             document.getElementById('notes-edges').value = charData.edges;
             document.getElementById('notes-gear').value = charData.gear;
@@ -2931,6 +3899,7 @@ ${reloadBtn}
                 return;
             }
             await adjustBennies(-1);
+            let noMercyMod = hasEdge("No Mercy") ? 2 : 0;
             let newTotal = 0;
             let newRolls = [];
             last.baseDice.forEach(d => {
@@ -2946,6 +3915,7 @@ ${reloadBtn}
                 newRolls.push(`Raise:${bRoll.history.join('+')}`);
             }
             newTotal += last.staticBonus;
+            newTotal += noMercyMod;
             // Consume the stored roll — one reroll per damage roll
             lastDamageRolls[key] = null;
             // Hide the button now that the roll is finalized
@@ -3142,36 +4112,128 @@ function updateDefenderModifierAndStatus() {
 
     defenderDisplay = `Target: ${target.name}` + (defenderModifier !== 0 ? ` (${defenderModifier > 0 ? '+' : ''}${defenderModifier} defender mod)` : "");
 }
-function populateTargetSelect() {
-    let select = document.getElementById('target-select');
-    select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
+        window.onActionModeChange = function () {
+            let mode = document.getElementById('action-mode-select').value;
+            let testRow = document.getElementById('test-options-row');
+            testRow.style.display = (mode === 'test') ? 'flex' : 'none';
+        };
 
-    if (!globalState.combat || !globalState.combat.participants) return;
+        async function handleTestOrSupportOutcome(ctx, results, target) {
+            let mode = document.getElementById('action-mode-select')?.value || 'normal';
+            if (mode === 'normal' || !target) return;
 
-    let melee = isMeleeWeapon(activeWeaponContext);
+            let hit = results.some(r => r.outcome.includes("SUCCESS"));
+            let hasRaise = results.some(r => r.hasRaise);
 
-    globalState.combat.participants.forEach(p => {
-        if (p.id === activeCharId) return;
+            if (mode === 'test' && hit) {
+                let effect = document.getElementById('test-effect-select').value;
+                let participants = globalState.combat.participants;
+                let pIdx = participants.findIndex(p => p.id === target.id);
 
-        let parry = parseInt(p.parry) || 0;
-        let toughness = parseInt(p.toughness) || 0;
-        let armor = parseInt(p.armor) || 0;
-        let wounds = p.wounds || 0;
-        let fatigue = p.fatigue || 0;
+                if (pIdx !== -1) {
+                    let t = participants[pIdx];
+                    if (effect === 'distracted') {
+                        t.distracted = true;
+                        t.distractedTTL = 2;
+                    } else if (effect === 'vulnerable') {
+                        t.vulnerable = true;
+                        t.vulnerableTTL = 2;
+                    }
+                    if (hasRaise) {
+                        t.shaken = true;
+                    }
+                    await set(ref(db, 'campaignState/combat/participants'), participants);
 
-        let armorLabel = armor > 0 ? "+" + armor : "";
+                    let logMsg = `> <b style="color:#00ff00;">TEST SUCCESS:</b> ${target.name} is now <b>${effect.toUpperCase()}</b>!`;
+                    if (hasRaise) logMsg += ` <b style="color:#ffff00;">(RAISE: Also SHAKEN!)</b>`;
+                    logToTerminal(logMsg);
+                }
+            } else if (mode === 'support' && hit) {
+                let bonus = hasRaise ? 2 : 1;
+                let storageKey = `support_${target.id}`;
+                sessionStorage.setItem(storageKey, bonus.toString());
+                logToTerminal(`> <b style="color:#00ccff;">SUPPORT SUCCESS:</b> ${target.name} receives <b>+${bonus}</b> to their next Trait roll!`);
+            }
+        }
 
-        let label = melee
-            ? `${p.name} — Parry ${parry}`
-            : `${p.name} — Tgh ${toughness}${armorLabel} | W ${wounds} | F ${fatigue}`;
+        async function applyMassDamageToTracker(weaponObj, damageTotal) {
+            let multiSelect = document.getElementById('multi-target-select');
+            let selectedTargetIds = Array.from(multiSelect.selectedOptions).map(o => o.value);
 
-        let opt = document.createElement('option');
-        opt.value = p.id;
-        opt.textContent = label;
-        opt.title = label;
-        select.appendChild(opt);
-    });
-}
+            if (selectedTargetIds.length === 0) {
+                let singleKey = getWeaponBonusKey(weaponObj, activeWeaponIndex);
+                return [await applyDamageToTracker(singleKey, weaponObj, damageTotal)];
+            }
+
+            let results = [];
+            for (let targetId of selectedTargetIds) {
+                let attackKey = `mass_blast_${targetId}_${Date.now()}`;
+                setAttackContext(attackKey, {
+                    targetId: targetId,
+                    targetName: globalState.combat.participants.find(p => p.id === targetId)?.name || "Target",
+                    attackerName: charData.name || "Attacker",
+                    hit: true,
+                    ap: weaponObj.ap || "0",
+                    weaponName: weaponObj.name,
+                    round: globalState.combat?.round || 1,
+                    savedAt: Date.now()
+                });
+                let res = await applyDamageToTracker(attackKey, weaponObj, damageTotal);
+                results.push(res);
+            }
+            return results;
+        }
+
+        function populateTargetSelect() {
+            let select = document.getElementById('target-select');
+            let multiSelect = document.getElementById('multi-target-select');
+            let multiRow = document.getElementById('multi-target-row');
+
+            select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
+            multiSelect.innerHTML = '';
+
+            let isAreaEffect = activeWeaponContext && (
+                (activeWeaponContext.range || "").toLowerCase().includes("cone") ||
+                (activeWeaponContext.range || "").toLowerCase().includes("throw") ||
+                (activeWeaponContext.name || "").toLowerCase().includes("grenade") ||
+                (activeWeaponContext.name || "").toLowerCase().includes("rpg") ||
+                (activeWeaponContext.name || "").toLowerCase().includes("orb") ||
+                (activeWeaponContext.name || "").toLowerCase().includes("mine")
+            );
+
+            multiRow.style.display = isAreaEffect ? 'flex' : 'none';
+
+            if (!globalState.combat || !globalState.combat.participants) return;
+
+            let melee = isMeleeWeapon(activeWeaponContext);
+
+            globalState.combat.participants.forEach(p => {
+                if (p.id === activeCharId || p.name === charData.name) return;
+
+                let parry = parseInt(p.parry) || 0;
+                let toughness = parseInt(p.toughness) || 0;
+                let armor = parseInt(p.armor) || 0;
+                let wounds = p.wounds || 0;
+                let fatigue = p.fatigue || 0;
+
+                let armorLabel = armor > 0 ? "+" + armor : "";
+
+                let label = melee
+                    ? `${p.name} — Parry ${parry}`
+                    : `${p.name} — Tgh ${toughness}${armorLabel} | W ${wounds} | F ${fatigue}`;
+
+                let opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = label;
+                opt.title = label;
+                select.appendChild(opt);
+
+                let mOpt = document.createElement('option');
+                mOpt.value = p.id;
+                mOpt.textContent = label;
+                multiSelect.appendChild(mOpt);
+            });
+        }
 window.onTargetChange = function () {
     let target = getSelectedTarget();
     let dodgeRow = document.getElementById('target-dodge-row');
@@ -3186,10 +4248,12 @@ window.onTargetChange = function () {
         return;
     }
 
-    let melee = isMeleeWeapon(activeWeaponContext);
-    document.getElementById('tn-input').value = melee ? target.parry : "4";
+            let melee = isMeleeWeapon(activeWeaponContext);
+            let baseParry = parseInt(target.parry) || 4;
+            let effectiveParry = baseParry + (target.defending ? 4 : 0);
+            document.getElementById('tn-input').value = melee ? effectiveParry : "4";
 
-    if (!melee) {
+            if (!melee) {
         dodgeCheckbox.checked = targetHasDodge(target);
         dodgeCheckbox.disabled = false;
         dodgeRow.style.display = "flex";
@@ -3280,8 +4344,10 @@ window.onTargetChange = function () {
             }
             let statusPenalty = 0;
             if (combatParticipant) {
-                let woundPen = Math.min(combatParticipant.wounds || 0, 3);
-                let fatiguePen = Math.min(combatParticipant.fatigue || 0, 2);
+                // B7: read wounds/fatigue from the persistent character object (the
+                // combat participant mirrors it). Wound penalty still caps at 3, fatigue at 2.
+                let woundPen = Math.min(charData.wounds ?? combatParticipant.wounds ?? 0, 3);
+                let fatiguePen = Math.min(charData.fatigue ?? combatParticipant.fatigue ?? 0, 2);
                 let distPen = combatParticipant.distracted ? 2 : 0;
                 statusPenalty = -(woundPen + fatiguePen + distPen);
             }
@@ -3442,7 +4508,7 @@ window.onTargetChange = function () {
             let storageKey = ctx.storageKey;
             let hitWithRaise = results.some(r => r.hasRaise);
             let hit = results.some(r => r.outcome.includes("SUCCESS"));
-            if (hitWithRaise) {
+            if (hitWithRaise && !ctx.isSupp) {
                 setPendingDamageBonus(storageKey, { raise: true });
                 logToTerminal(`> [!] TARGET LOCKED: Attack hit with a raise! Next damage roll for ${ctx.activeWeaponContext.name} will include +1d6 raise bonus.`);
             } else {
@@ -3469,7 +4535,8 @@ window.onTargetChange = function () {
                 let pIdx = participants.findIndex(p => p.id === activeCharId);
                 if (pIdx !== -1) {
                     participants[pIdx].vulnerable = true;
-                    participants[pIdx].vulnerableTTL = (pIdx === globalState.combat.activeTurnIndex) ? 2 : 1;
+                    let currentActiveIdx = effectiveActiveIndex(globalState.combat);
+                    participants[pIdx].vulnerableTTL = (pIdx === currentActiveIdx) ? 2 : 1;
                     set(ref(db, 'campaignState/combat/participants'), participants);
                 }
             }
@@ -3481,6 +4548,12 @@ window.onTargetChange = function () {
 
             storeAttackContext(ctx, attackHit, outcome.results);
             applyDamageBonusSideEffects(outcome.results, ctx);
+            if (ctx.isSupp) {
+                // Suppressive Fire does NOT apply Test/Support effects
+            } else {
+                let target = getSelectedTarget();
+                await handleTestOrSupportOutcome(ctx, outcome.results, target);
+            }
             lastRollContext = {
                 ...ctx,
                 results: outcome.results,
@@ -3516,6 +4589,8 @@ window.onTargetChange = function () {
             }
             await adjustBennies(-1);
             let ctx = lastRollContext;
+            let elanMod = hasEdge("Elan") ? 2 : 0;
+            ctx.totalModifier += elanMod;
             let newOutcome = performRoll(ctx);
             let newScore = scoreVolley(newOutcome.results, newOutcome.isCritFail);
             let oldScore = ctx.score;
@@ -3675,6 +4750,37 @@ window.onTargetChange = function () {
                         value: `Range: ${ctx.activeWeaponContext.range}\nDamage: ${ctx.activeWeaponContext.damage}\nAP: ${ctx.activeWeaponContext.ap}\nRoF: ${ctx.activeWeaponContext.rof}\nShots: ${ctx.activeWeaponContext.shots}\nMin Str: ${ctx.activeWeaponContext.minStr}`
                     });
                 }
+                // TEM: list every non-default tactical modifier on the embed (Cover,
+                // Gang Up, The Drop, Illumination, Defend, Running, Range, RoF, MAP,
+                // Wild Attack, Called Shot) so the table can see what was applied.
+                let temExtras = [];
+                if (ctx.activeWeaponContext) {
+                    let rangeSel = document.getElementById('range-select');
+                    if (rangeSel && parseInt(rangeSel.value) !== 0) {
+                        temExtras.push('Range: ' + rangeSel.options[rangeSel.selectedIndex].text);
+                    }
+                    if (ctx.is3RB) temExtras.push('3-Round Burst (+1)');
+                    if (ctx.isDoubleTap) temExtras.push('Double Tap (+1)');
+                    if (ctx.isSupp) temExtras.push('Suppressive Fire');
+                    let rofSel = document.getElementById('rof-select');
+                    if (rofSel && parseInt(rofSel.value) > 1 && !ctx.is3RB && !ctx.isDoubleTap && !ctx.isSupp) {
+                        temExtras.push('RoF: ' + rofSel.value);
+                    }
+                    if (document.getElementById('scope-checkbox')?.checked) temExtras.push('Aiming');
+                    if (document.getElementById('wild-attack-checkbox')?.checked) temExtras.push('Wild Attack (+2)');
+                    if (ctx.calledShot && ctx.calledShot.id && ctx.calledShot.id !== 'none') {
+                        temExtras.push('Called Shot: ' + (ctx.calledShot.label || ctx.calledShot.id));
+                    }
+                }
+                let mapSel = document.getElementById('map-select');
+                if (mapSel && parseInt(mapSel.value) !== 0) {
+                    temExtras.push('MAP: ' + mapSel.options[mapSel.selectedIndex].text);
+                }
+                let temSummary = (typeof getActiveTEMSummary === 'function') ? getActiveTEMSummary() : lastTEMSummary;
+                let allMods = temExtras.concat(temSummary || []);
+                if (allMods.length > 0) {
+                    embed.fields.push({ name: "Active Modifiers", value: allMods.join('\n'), inline: false });
+                }
                 try {
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
                 } catch (e) { logToTerminal("> ERROR: Discord Webhook connection failed."); }
@@ -3698,6 +4804,21 @@ window.onTargetChange = function () {
             document.getElementById('tn-input').value = "4";
             document.getElementById('mod-override-input').value = "0";
             document.getElementById('map-select').value = "0";
+
+            // Shared TEM: reset the situational modifier controls to defaults.
+            if (window.resetTEMModifiers) window.resetTEMModifiers('tn');
+            let runLbl = document.getElementById('tn-running-penalty-label');
+            if (runLbl) runLbl.innerText = hasSteadyHands() ? '−1 to this roll (Steady Hands)' : '−2 to this roll';
+
+            // B11: Defend blocks Multi-Actions (p.100) — a defending combatant may only
+            // take a single action. Lock the MAP selector to 1 action while defending.
+            let mapSelect = document.getElementById('map-select');
+            if (combatParticipant && combatParticipant.defending) {
+                mapSelect.value = "0";
+                mapSelect.disabled = true;
+            } else {
+                mapSelect.disabled = false;
+            }
 
             // Part 4: Called Shots are only for attacks.
             const calledShotRow = document.getElementById('called-shot-row');
@@ -3742,6 +4863,9 @@ window.onTargetChange = function () {
                     logToTerminal(`> [!] ARMOR PENALTY: −${armorPenalty} applied to ${name} (Min Str not met).`);
                 }
             }
+            // B10/B11: capture the non-weapon base modifier (armor penalty etc.) so the
+            // situational/running toggles can recompute the box without wiping it.
+            nonWeaponBaseModifier = weaponObj ? 0 : (parseInt(document.getElementById('mod-override-input').value) || 0);
             const rangedOpts = document.getElementById('ranged-options-container');
             const rofOpts = document.getElementById('rof-options-container');
             const scopeRow = document.getElementById('scope-row');
@@ -3859,8 +4983,50 @@ window.onTargetChange = function () {
             } else {
                 warning.style.display = 'none';
             }
-            applyComputedModifiers(aim.penalty + aim.bonus + trbBonus + dtBonus);
+            // Shared TEM: include the situational modifiers (Cover, Gang Up, The Drop,
+            // Illumination, Defend, Running) and the armor min-str penalty so they are
+            // not wiped whenever the GM tweaks range/RoF.
+            let _armorPen = parseInt(charData.derived?.armorPenalty) || 0;
+            let _isMelee = activeWeaponContext && isMeleeWeapon(activeWeaponContext);
+            let _tem = window.getTEMModifierValues('tn', { isMelee: _isMelee, steadyHands: hasSteadyHands() });
+            lastTEMSummary = _tem.summary.slice();
+            let _defendMod = (_tem.values.defend && _isMelee) ? -4 : 0;
+            applyComputedModifiers(aim.penalty + aim.bonus + trbBonus + dtBonus + _tem.total + _defendMod - _armorPen);
         }
+        // Shared TEM: read the situational modifier total (Cover, Gang Up, The Drop,
+        // Illumination, Running) from the shared panel, plus Defend (-4 roll, melee).
+        function getExtraModifiers() {
+            if (!document.getElementById('tn-sit-cover')) return 0;
+            let _isMelee = activeWeaponContext && isMeleeWeapon(activeWeaponContext);
+            let _tem = window.getTEMModifierValues('tn', { isMelee: _isMelee, steadyHands: hasSteadyHands() });
+            let total = _tem.total;
+            // Defend = target defending (+4 Parry = -4 to attacker's roll, melee only).
+            if (_tem.values.defend && _isMelee) total -= 4;
+            return total;
+        }
+        // Capture the active TEM summary (non-default settings only) for Discord embeds.
+        let lastTEMSummary = [];
+        function getActiveTEMSummary() {
+            let _isMelee = activeWeaponContext && isMeleeWeapon(activeWeaponContext);
+            let _tem = window.getTEMModifierValues('tn', { isMelee: _isMelee, steadyHands: hasSteadyHands() });
+            return _tem.summary;
+        }
+        // Recompute the modifier box when a shared TEM control changes. For weapon rolls
+        // updateRecoilPenalty is the master recomputer; for plain trait rolls we reapply
+        // the (base + extra) total directly.
+        let nonWeaponBaseModifier = 0;
+        function updateExtraModifiers() {
+            // Keep the running-penalty label in sync with Steady Hands.
+            let runLbl = document.getElementById('tn-running-penalty-label');
+            if (runLbl) runLbl.innerText = hasSteadyHands() ? '−1 to this roll (Steady Hands)' : '−2 to this roll';
+            if (activeWeaponContext) {
+                updateRecoilPenalty();
+            } else {
+                applyComputedModifiers(nonWeaponBaseModifier + getExtraModifiers());
+            }
+        }
+        // Wire the shared TEM onchange handler to this page's recomputer.
+        window.__temChanged = function () { updateExtraModifiers(); };
         function applyComputedModifiers(computedVal) {
             document.getElementById('mod-override-input').value = computedVal;
         }
@@ -4431,6 +5597,21 @@ ${charData.equippedArmorPenalty > 0 ? `<br><span style="color:#ff9900;">Min Str 
         window.rollStunRecovery = rollStunRecovery; // B6
         window.soakWounds = soakWounds;
         window.unshakeWithBenny = unshakeWithBenny;
+        // B7/B10/B11 exports so inline onclick handlers can reach module-scoped fns.
+        window.rollRunning = rollRunning;
+        window.attemptHeal = attemptHeal;
+        window.naturalHealingRoll = naturalHealingRoll;
+        window.gmAwardNaturalHealing = gmAwardNaturalHealing;
+        window.recoverFatigue = recoverFatigue;
+        window.clearInjuries = clearInjuries;
+        window.gmRollInjury = gmRollInjury;
+        window.removeInjury = removeInjury;
+        window.adjustInjuryTimer = adjustInjuryTimer;
+        window.toggleInjuryTimer = toggleInjuryTimer;
+        window.updateExtraModifiers = updateExtraModifiers;
+        window.incapSoak = incapSoak;
+        window.incapRoll = incapRoll;
+        window.rollBleedingOut = rollBleedingOut;
         window.gmNewSession = gmNewSession;
         window.rerollLastRoll = rerollLastRoll;
         window.rerollWeaponDamage = rerollWeaponDamage;

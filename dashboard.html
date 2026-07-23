@@ -30,7 +30,7 @@
         
         <div class="panel-grid" id="main-panel-grid">
             <a href="#" id="link-character" class="panel">MY CHARACTER SHEET</a>
-            <a href="https://strangers-in-silence.vercel.app/tracker/combatview" class="panel">COMBAT TRACKER</a>
+            <a href="tracker.html" class="panel">COMBAT TRACKER</a>
             <div class="panel locked">SETTLEMENT LEDGER</div>
         </div>
     </div>
@@ -53,9 +53,9 @@
         displayUsername.innerText = `USER: ${currentUser.toUpperCase()}`;
 
         function getCharacterUrl(name) {
-            if (name === "Administrator") return "https://strangers-in-silence.vercel.app/character.html";
+            if (name === "Administrator") return "character.html";
             let formattedName = name.toLowerCase().replace(' ', '-');
-            return `https://strangers-in-silence.vercel.app/character/${formattedName}`;
+            return `character.html?user=${formattedName}`;
         }
 
         linkCharacter.href = getCharacterUrl(currentUser);
@@ -65,7 +65,7 @@
             // Inject GM Threat Registry Button
             const grid = document.getElementById('main-panel-grid');
             const threatBtn = document.createElement('a');
-            threatBtn.href = "https://strangers-in-silence.vercel.app/threats.html";
+            threatBtn.href = "threats.html";
             threatBtn.className = "panel";
             threatBtn.style.borderColor = "#ff3333";
             threatBtn.style.color = "#ff3333";

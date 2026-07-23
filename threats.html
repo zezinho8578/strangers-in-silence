@@ -628,6 +628,22 @@ style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bot
             <span>Target Number (TN):</span>
             <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center;">
         </div>
+        <!-- Action Type selector for Test/Support (SWADE p.106, 108) -->
+        <div class="setting-row" id="action-mode-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Action Type:</span>
+            <select id="action-mode-select" class="admin-input" style="width:200px;" onchange="onActionModeChange()">
+                <option value="normal">Normal Action / Attack</option>
+                <option value="test">Perform Test (Distract/Vulnerable)</option>
+                <option value="support">Perform Support (+1/+2 Ally)</option>
+            </select>
+        </div>
+        <div class="setting-row" id="test-options-row" style="display:none; background:rgba(255,153,0,0.1); padding:8px; border:1px solid var(--theme-color);">
+            <span>Test Primary Effect:</span>
+            <select id="test-effect-select" class="admin-input" style="width:180px;">
+                <option value="distracted">Distracted (-2 Trait Rolls)</option>
+                <option value="vulnerable">Vulnerable (+2 to be Hit)</option>
+            </select>
+        </div>
         <!-- B8: Target selection (auto Parry for melee, defender modifiers) -->
         <div id="target-select-container"
             style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px; margin-top: 10px;">
@@ -636,6 +652,10 @@ style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bot
                 <select id="target-select" class="admin-input" style="width:240px;" onchange="onTargetChange()">
                     <option value="">-- No Target (TN 4) --</option>
                 </select>
+            </div>
+            <div class="setting-row" id="multi-target-row" style="display:none; flex-direction:column; align-items:flex-start; gap:5px;">
+                <span style="font-size:0.85em; color:#00ccff;">Hold Ctrl/Cmd to select multiple targets for Area Effect (Blast/Cone):</span>
+                <select id="multi-target-select" class="admin-input" multiple style="width:100%; height:80px; font-size:0.85em;"></select>
             </div>
             <div id="target-status"
                 style="font-size:0.85em; opacity:0.9; text-align:left; min-height:1.2em; margin: 4px 0;"></div>
@@ -722,6 +742,8 @@ style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bot
                 <input type="checkbox" id="wild-attack-checkbox"> Wild Attack (+2 Hit/Dmg, Vulnerable)
             </label>
         </div>
+        <!-- Shared TEM situational modifiers (from settings.js) -->
+        <div id="tn-tem-container"></div>
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Actions this Turn:</span>
             <select id="map-select" class="admin-input" style="width:180px;">
@@ -740,6 +762,7 @@ style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bot
             <button class="die-btn" onclick="cancelRoll()">[ CANCEL ]</button>
         </div>
     </div>
+    <script src="/embeds.js"></script>
     <script src="/settings.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -905,7 +928,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         }
         if (masterPreset && masterPreset.heavyWeapon) isHeavyWeapon = true;
     }
-    if (target.heavyArmor && weaponObj && !isHeavyWeapon && !ap.ignore) {
+    if (target.heavyArmor && weaponObj && !isHeavyWeapon) {
         result.message = `> <b style="color:#ff3333;">HEAVY ARMOR:</b> ${weaponObj.name || "This weapon"} is NOT a Heavy Weapon. ${target.name}'s Heavy Armor is immune to this attack.`;
         result.plainText = `HEAVY ARMOR: ${weaponObj.name || "This weapon"} cannot damage ${target.name}'s Heavy Armor.`;
         return result;
@@ -1544,7 +1567,11 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
             let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
             let sides = match ? parseInt(match[1]) : 4;
             let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
-            let totalMod = modifier + intrinsicMod;
+            let isJokerActive = activeThreat && globalState.combat?.participants?.some(p =>
+                p.name === activeThreat.name && p.card?.isJoker && p.jokerRound === globalState.combat?.round
+            );
+            let jokerBonus = isJokerActive ? 2 : 0;
+            let totalMod = modifier + intrinsicMod + jokerBonus;
             let tRoll = rollExploding(sides);
             let wRoll = activeThreat.isWildCard ? rollExploding(6) : null;
             let finalTotal = tRoll.total + totalMod;
@@ -1724,34 +1751,126 @@ function updateDefenderModifierAndStatus() {
 
     defenderDisplay = `Target: ${target.name}` + (defenderModifier !== 0 ? ` (${defenderModifier > 0 ? '+' : ''}${defenderModifier} defender mod)` : "");
 }
-function populateTargetSelect() {
-    let select = document.getElementById('target-select');
-    select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
+        window.onActionModeChange = function () {
+            let mode = document.getElementById('action-mode-select').value;
+            let testRow = document.getElementById('test-options-row');
+            testRow.style.display = (mode === 'test') ? 'flex' : 'none';
+        };
 
-    if (!globalState.combat || !globalState.combat.participants) return;
+        async function handleTestOrSupportOutcome(ctx, results, target) {
+            let mode = document.getElementById('action-mode-select')?.value || 'normal';
+            if (mode === 'normal' || !target) return;
 
-    let melee = isMeleeWeapon(activeWeaponContext);
+            let hit = results.some(r => r.outcome.includes("SUCCESS"));
+            let hasRaise = results.some(r => r.hasRaise);
 
-    globalState.combat.participants.forEach(p => {
-        let parry = parseInt(p.parry) || 0;
-        let toughness = parseInt(p.toughness) || 0;
-        let armor = parseInt(p.armor) || 0;
-        let wounds = p.wounds || 0;
-        let fatigue = p.fatigue || 0;
+            if (mode === 'test' && hit) {
+                let effect = document.getElementById('test-effect-select').value;
+                let participants = globalState.combat.participants;
+                let pIdx = participants.findIndex(p => p.id === target.id);
 
-        let armorLabel = armor > 0 ? "+" + armor : "";
+                if (pIdx !== -1) {
+                    let t = participants[pIdx];
+                    if (effect === 'distracted') {
+                        t.distracted = true;
+                        t.distractedTTL = 2;
+                    } else if (effect === 'vulnerable') {
+                        t.vulnerable = true;
+                        t.vulnerableTTL = 2;
+                    }
+                    if (hasRaise) {
+                        t.shaken = true;
+                    }
+                    await set(ref(db, 'campaignState/combat/participants'), participants);
 
-        let label = melee
-            ? `${p.name} — Parry ${parry}`
-            : `${p.name} — Tgh ${toughness}${armorLabel} | W ${wounds} | F ${fatigue}`;
+                    let logMsg = `> <b style="color:#00ff00;">TEST SUCCESS:</b> ${target.name} is now <b>${effect.toUpperCase()}</b>!`;
+                    if (hasRaise) logMsg += ` <b style="color:#ffff00;">(RAISE: Also SHAKEN!)</b>`;
+                    logToTerminal(logMsg);
+                }
+            } else if (mode === 'support' && hit) {
+                let bonus = hasRaise ? 2 : 1;
+                let storageKey = `support_${target.id}`;
+                sessionStorage.setItem(storageKey, bonus.toString());
+                logToTerminal(`> <b style="color:#00ccff;">SUPPORT SUCCESS:</b> ${target.name} receives <b>+${bonus}</b> to their next Trait roll!`);
+            }
+        }
 
-        let opt = document.createElement('option');
-        opt.value = p.id;
-        opt.textContent = label;
-        opt.title = label;
-        select.appendChild(opt);
-    });
-}
+        async function applyMassDamageToTracker(weaponObj, damageTotal) {
+            let multiSelect = document.getElementById('multi-target-select');
+            let selectedTargetIds = Array.from(multiSelect.selectedOptions).map(o => o.value);
+
+            if (selectedTargetIds.length === 0) {
+                let singleKey = `${activeTemplateId || activeThreat.name}_${weaponObj.id || weaponObj.name}`;
+                return [await applyDamageToTracker(singleKey, weaponObj, damageTotal)];
+            }
+
+            let results = [];
+            for (let targetId of selectedTargetIds) {
+                let attackKey = `mass_blast_${targetId}_${Date.now()}`;
+                setAttackContext(attackKey, {
+                    targetId: targetId,
+                    targetName: globalState.combat.participants.find(p => p.id === targetId)?.name || "Target",
+                    attackerName: activeThreat.name || "Attacker",
+                    hit: true,
+                    ap: weaponObj.ap || "0",
+                    weaponName: weaponObj.name,
+                    round: globalState.combat?.round || 1,
+                    savedAt: Date.now()
+                });
+                let res = await applyDamageToTracker(attackKey, weaponObj, damageTotal);
+                results.push(res);
+            }
+            return results;
+        }
+
+        function populateTargetSelect() {
+            let select = document.getElementById('target-select');
+            let multiSelect = document.getElementById('multi-target-select');
+            let multiRow = document.getElementById('multi-target-row');
+
+            select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
+            multiSelect.innerHTML = '';
+
+            let isAreaEffect = activeWeaponContext && (
+                (activeWeaponContext.range || "").toLowerCase().includes("cone") ||
+                (activeWeaponContext.range || "").toLowerCase().includes("throw") ||
+                (activeWeaponContext.name || "").toLowerCase().includes("grenade") ||
+                (activeWeaponContext.name || "").toLowerCase().includes("rpg") ||
+                (activeWeaponContext.name || "").toLowerCase().includes("orb") ||
+                (activeWeaponContext.name || "").toLowerCase().includes("mine")
+            );
+
+            multiRow.style.display = isAreaEffect ? 'flex' : 'none';
+
+            if (!globalState.combat || !globalState.combat.participants) return;
+
+            let melee = isMeleeWeapon(activeWeaponContext);
+
+            globalState.combat.participants.forEach(p => {
+                let parry = parseInt(p.parry) || 0;
+                let toughness = parseInt(p.toughness) || 0;
+                let armor = parseInt(p.armor) || 0;
+                let wounds = p.wounds || 0;
+                let fatigue = p.fatigue || 0;
+
+                let armorLabel = armor > 0 ? "+" + armor : "";
+
+                let label = melee
+                    ? `${p.name} — Parry ${parry}`
+                    : `${p.name} — Tgh ${toughness}${armorLabel} | W ${wounds} | F ${fatigue}`;
+
+                let opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = label;
+                opt.title = label;
+                select.appendChild(opt);
+
+                let mOpt = document.createElement('option');
+                mOpt.value = p.id;
+                mOpt.textContent = label;
+                multiSelect.appendChild(mOpt);
+            });
+        }
 window.onTargetChange = function () {
     let target = getSelectedTarget();
     let dodgeRow = document.getElementById('target-dodge-row');
@@ -1768,10 +1887,12 @@ window.onTargetChange = function () {
         return;
     }
     
-    let melee = isMeleeWeapon(activeWeaponContext);
-    document.getElementById('tn-input').value = melee ? target.parry : "4";
-    
-    if (!melee) {
+            let melee = isMeleeWeapon(activeWeaponContext);
+            let baseParry = parseInt(target.parry) || 4;
+            let effectiveParry = baseParry + (target.defending ? 4 : 0);
+            document.getElementById('tn-input').value = melee ? effectiveParry : "4";
+            
+            if (!melee) {
         dodgeCheckbox.checked = targetHasDodge(target);
         dodgeCheckbox.disabled = false;
         dodgeRow.style.display = "flex";
@@ -1873,6 +1994,8 @@ window.onTargetDodgeChange = async function () {
             document.getElementById('tn-input').value = "4";
             document.getElementById('mod-override-input').value = "0";
             document.getElementById('map-select').value = "0";
+            // Reset the shared TEM situational modifiers.
+            if (window.resetTEMModifiers) window.resetTEMModifiers('tn');
 
             // Part 4: Called Shots.
             const calledShotRow = document.getElementById('called-shot-row');
@@ -1981,8 +2104,30 @@ window.onTargetDodgeChange = async function () {
                     computedRangePenalty = Math.min(0, rangePenalty + cap);
                 }
             }
-            document.getElementById('mod-override-input').value = computedRangePenalty + recoilPenalty + trbBonus + aimBonus;
+            document.getElementById('mod-override-input').value = computedRangePenalty + recoilPenalty + trbBonus + aimBonus + getThreatsTEMTotal();
         };
+        // Shared TEM helpers (settings.js). The TEM panel is injected into #tn-tem-container.
+        function threatsIsMelee() {
+            if (!activeWeaponContext) return false;
+            let r = (activeWeaponContext.range || '').toLowerCase();
+            return r.includes('melee') || r.includes('contact');
+        }
+        function getThreatsTEMTotal() {
+            if (!window.getTEMModifierValues || !document.getElementById('tn-sit-cover')) return 0;
+            let tem = window.getTEMModifierValues('tn', { isMelee: threatsIsMelee() });
+            let total = tem.total;
+            // Defend = target defending (+4 Parry = -4 to roll, melee only).
+            if (tem.values.defend && threatsIsMelee()) total -= 4;
+            return total;
+        }
+        window.__temChanged = function () { window.updateModifierAdjust(); };
+        // Inject the shared TEM panel once the DOM is ready.
+        (function injectThreatsTEM() {
+            let host = document.getElementById('tn-tem-container');
+            if (host && window.buildTEMModifiersHTML) {
+                host.innerHTML = window.buildTEMModifiersHTML('tn');
+            }
+        })();
         window.confirmRoll = function () {
             let tn = parseInt(document.getElementById('tn-input').value) || 4;
             let is3RB = false;
@@ -2125,11 +2270,16 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
         ? window.getCurrentCalledShot()
         : { id: "none", hitMod: 0, dmgMod: 0 };
 
+    let isJokerActive = activeThreat && globalState.combat?.participants?.some(p =>
+        p.name === activeThreat.name && p.card?.isJoker && p.jokerRound === globalState.combat?.round
+    );
+    let jokerBonus = isJokerActive ? 2 : 0;
     let totalModifier = intrinsicMod
         + unskilledMod
         + customMod
         + mapPenalty
         + defenderModifier
+        + jokerBonus
         + (parseInt(calledShot.hitMod) || 0);
     
     let isWildAttack = !isMeleeWeapon(activeWeaponContext) ? false : document.getElementById('wild-attack-checkbox').checked;
@@ -2159,6 +2309,10 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
 
     let attackHit = isSuppressive ? outcome.results.some(r => r.hasRaise) : hit;
     storeThreatAttackContext(attackHit, outcome.results, calledShot);
+    if (!isSuppressive) {
+        let target = getSelectedTarget();
+        await handleTestOrSupportOutcome(null, outcome.results, target);
+    }
     renderAttackEmbed(skillName, sides, totalModifier, targetNumber, outcome.results, outcome.isCritFail, is3RB, isSuppressive, wepRoF, null, calledShot);
 };
 
@@ -2341,6 +2495,11 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                 return;
             }
             total += flatMod;
+            let isJokerActive = activeThreat && globalState.combat?.participants?.some(p =>
+                p.name === activeThreat.name && p.card?.isJoker && p.jokerRound === globalState.combat?.round
+            );
+            let jokerBonus = isJokerActive ? 2 : 0;
+            total += jokerBonus;
             let bonusStr = ""; let bonusRolls = [];
             if (addRaise) {
                 let rRoll = rollExploding(6);
@@ -2474,6 +2633,7 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
                 newRolls.push(`Raise:${bRoll.history.join('+')}`);
             }
             newTotal += last.staticBonus;
+            newTotal += (window.hasEdge ? (window.hasEdge("No Mercy") ? 2 : 0) : 0);
 
             last.usedReroll = true;
             updateDamageRerollButton(wepIndex);

@@ -194,6 +194,17 @@
             text-transform: uppercase;
         }
 
+        .badge.entangled {
+            border-color: #9933ff;
+            color: #9933ff;
+        }
+
+        .badge.bound {
+            border-color: #ff0055;
+            color: #ff0055;
+            background: rgba(255, 0, 85, 0.15);
+        }
+
         .badge.anytime {
             border-color: #ffff00;
             color: #ffff00;
@@ -454,6 +465,11 @@
                         <button id="btn-vulnerable" class="die-btn" style="flex-grow: 1;"
                             onclick="toggleStatus('vulnerable')">VULNERABLE</button>
                     </div>
+                    <!-- B11: Defend toggle (+4 Parry until next turn, blocks Multi-Actions) -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button id="btn-defend" class="die-btn" style="flex-grow: 1; border-color: #00ccff; color: #00ccff;"
+                            onclick="toggleStatus('defending')" title="Defend: +4 Parry until next turn, no Multi-Actions (p.100)">DEFEND (+4 Parry)</button>
+                    </div>
                     <!-- B6: Stunned toggle + recovery -->
                     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                         <button id="btn-stunned" class="die-btn" style="flex-grow: 1; border-color: #ff0055; color: #ff0055;"
@@ -461,6 +477,13 @@
                         <button id="btn-stun-recover" class="die-btn"
                             style="flex-grow: 1; border-color: #ff0055; color: #ff0055; display: none;"
                             onclick="rollStunRecovery()">ROLL VIGOR RECOVERY</button>
+                    </div>
+                    <!-- Entangled & Bound status toggles -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button id="btn-entangled" class="die-btn" style="flex-grow: 1; border-color: #9933ff; color: #9933ff;"
+                            onclick="toggleStatus('entangled')">ENTANGLED</button>
+                        <button id="btn-bound" class="die-btn" style="flex-grow: 1; border-color: #ff0055; color: #ff0055;"
+                            onclick="toggleStatus('bound')">BOUND</button>
                     </div>
                     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                         <button id="btn-recover" class="die-btn"
@@ -518,9 +541,9 @@
                             onclick="removeParticipant()">REMOVE FROM TRACKER</button>
                     </div>
                 </div>
-                <!-- TARGET CALCULATOR (GM/All visible) -->
+                <!-- TARGET CALCULATOR (GM/All visible) — now uses the shared TEM -->
                 <div class="target-calc" id="target-calc-container">
-                    <div style="margin-bottom: 10px;">> QUICK TARGET CALCULATOR</div>
+                    <div style="margin-bottom: 10px;">> TACTICAL ENGAGEMENT MONITOR (TEM)</div>
                     <div class="calc-row">
                         <select id="calc-target" class="calc-select" onchange="onCalcTargetChange()">
                             <option value="">-- Select Target --</option>
@@ -541,6 +564,9 @@
                             <option value="Energy">Energy</option>
                             <option value="Melee">Melee</option>
                         </select>
+                        <label style="font-size:0.85em; display:flex; align-items:center; gap:4px;">
+                            <input type="checkbox" id="calc-hw-checkbox"> Heavy Weapon?
+                        </label>
                         <button class="die-btn" onclick="calcDamage()">COMPARE TOUGHNESS</button>
                     </div>
 
@@ -550,6 +576,9 @@
                             <option value="none">None</option>
                         </select>
                     </div>
+                    <!-- Shared TEM situational modifiers (Cover, Gang Up, The Drop,
+                         Illumination, Defend, Running) — same panel as the player sheet. -->
+                    <div id="calc-tem-container"></div>
                     <div id="calc-result">> WAITING FOR INPUT...</div>
                 </div>
                 <!-- GM CONTROLS -->
@@ -581,10 +610,11 @@
             <button class="die-btn" onclick="resolveYesNo(false)">NO — KEEP</button>
         </div>
     </div>
+    <script src="/embeds.js"></script>
     <script src="/settings.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref as fbRef, set as fbSet, onValue as fbOnValue, update as fbUpdate } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
         // ==========================================
         // 1. CONFIGURATION & AUTH
         // ==========================================
@@ -597,8 +627,101 @@
             messagingSenderId: "62557473299",
             appId: "1:62557473299:web:e2ebf2ee2520a9189e8de6"
         };
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+        // B7/test: lambdaLocalMode routes ALL tracker reads/writes through localStorage
+        // (the same 'localFallbackDB' key the character sheet uses) so the combat tracker
+        // can be exercised end-to-end without touching the live campaign Firebase. When
+        // the flag is off (default) the shim is inert and every call hits Firebase exactly
+        // as before. This also gives the tracker the offline fallback it previously lacked.
+        const LOCAL_MODE = localStorage.getItem('lambdaLocalMode') === 'on';
+        const LOCAL_DB_KEY = 'localFallbackDB';
+        let db = null;
+        if (!LOCAL_MODE) {
+            const app = initializeApp(firebaseConfig);
+            db = getDatabase(app);
+        }
+        // ---- localStorage-backed mock of the Firebase surface used by this file ----
+        const _localListeners = [];
+        function _localGetRoot() {
+            try { return JSON.parse(localStorage.getItem(LOCAL_DB_KEY)) || {}; }
+            catch (e) { return {}; }
+        }
+        function _localSetRoot(obj) {
+            localStorage.setItem(LOCAL_DB_KEY, JSON.stringify(obj));
+        }
+        function _localPathParts(path) {
+            // Firebase path 'campaignState' maps to the whole localFallbackDB object
+            // (the sheet stores globalState — {characters, combat, ...} — directly in it),
+            // so we strip the leading 'campaignState' segment before navigating.
+            let parts = (path || '').split('/').filter(Boolean);
+            if (parts[0] === 'campaignState') parts.shift();
+            return parts;
+        }
+        function _localNavigate(obj, parts, create) {
+            let cur = obj;
+            for (let i = 0; i < parts.length; i++) {
+                if (cur[parts[i]] === undefined || cur[parts[i]] === null) {
+                    if (create) cur[parts[i]] = {};
+                    else return undefined;
+                }
+                cur = cur[parts[i]];
+            }
+            return cur;
+        }
+        function _localGet(path) {
+            let root = _localGetRoot();
+            let parts = _localPathParts(path);
+            if (parts.length === 0) return root;
+            return _localNavigate(root, parts, false);
+        }
+        function _localSet(path, val) {
+            let root = _localGetRoot();
+            let parts = _localPathParts(path);
+            if (parts.length === 0) {
+                _localSetRoot(val || {});
+            } else {
+                let parent = _localNavigate(root, parts.slice(0, -1), true);
+                if (val === null || val === undefined) delete parent[parts[parts.length - 1]];
+                else parent[parts[parts.length - 1]] = val;
+                _localSetRoot(root);
+            }
+            _localNotify();
+        }
+        function _localUpdate(path, val) {
+            let root = _localGetRoot();
+            let parts = _localPathParts(path);
+            let target = parts.length === 0 ? root : _localNavigate(root, parts, true);
+            if (val && typeof val === 'object' && !Array.isArray(val)) {
+                Object.assign(target, val);
+            }
+            _localSetRoot(root);
+            _localNotify();
+        }
+        function _localNotify() {
+            let root = _localGetRoot();
+            let snap = { val: () => JSON.parse(JSON.stringify(root)) };
+            _localListeners.forEach(cb => { try { cb(snap); } catch (e) { console.warn(e); } });
+        }
+        // ---- drop-in replacements for ref/set/update/onValue ----
+        function ref(database, path) {
+            if (LOCAL_MODE) return path;            // plain path string in local mode
+            return fbRef(database, path);           // real Firebase reference otherwise
+        }
+        async function set(reference, val) {
+            if (LOCAL_MODE) { _localSet(reference, val); return; }
+            await fbSet(reference, val);
+        }
+        async function update(reference, val) {
+            if (LOCAL_MODE) { _localUpdate(reference, val); return; }
+            await fbUpdate(reference, val);
+        }
+        function onValue(reference, cb) {
+            if (LOCAL_MODE) {
+                _localListeners.push(cb);
+                _localNotify(); // fire immediately with current state
+                return;
+            }
+            fbOnValue(reference, cb);
+        }
         const isAdmin = (currentUser === "Administrator");
         let globalState = null;
         let selectedParticipantId = null;
@@ -642,6 +765,13 @@
                 changed = true;
             }
 
+            // B11: Defend lasts until the defender's next turn (p.100).
+            if ((p.defendingTTL || 0) > 0) {
+                p.defendingTTL--;
+                if (p.defendingTTL === 0) p.defending = false;
+                changed = true;
+            }
+
             if (changed) {
                 await set(ref(db, `campaignState/combat/participants/${idx}`), p);
             }
@@ -672,8 +802,7 @@
         // 2. FIREBASE SYNC & GATEKEEPER
         // ==========================================
         onValue(ref(db, 'campaignState'), (snapshot) => {
-            globalState = snapshot.val();
-            if (!globalState) return;
+            globalState = snapshot.val() || {};
             checkGatekeeper();
             if (globalState.combatActive && globalState.combat) {
                 renderCombatUI();
@@ -866,10 +995,13 @@
                         heavyArmor: !!data.derived?.heavyArmor,
                         scale: parseInt(data.derived?.scale) || 0,
                         pace: parseInt(data.derived?.paceEffective ?? data.derived?.pace) || 6,
-                        wounds: 0,
-                        fatigue: 0,
+                        // B7: carry persistent wounds/fatigue (and the wound-log timestamps)
+                        // over from the character sheet instead of resetting to 0.
+                        wounds: data.wounds || 0,
+                        fatigue: data.fatigue || 0,
                         woundCap: woundCap,
-                        incapacitated: false,
+                        // B7: if carried-over wounds/fatigue already meet the cap, mark incapacitated.
+                        incapacitated: (data.wounds || 0) >= woundCap || (data.fatigue || 0) >= 3,
                         shaken: false,
                         distracted: false,
                         distractedTTL: 0,
@@ -929,7 +1061,8 @@
                 if (unit.type === 'group') {
                     totalNeeded += 1;
                 } else {
-                    let f = unit.participant.initFlags || {};
+                    // B15: Incapacitated chars ignore Quick/LH/Hesitant (1 card only).
+                    let f = (unit.participant.incapacitated) ? {} : (unit.participant.initFlags || {});
                     if (f.hesitant) totalNeeded += 2;
                     else if (f.improvedLevelHeaded) totalNeeded += 3;
                     else if (f.levelHeaded) totalNeeded += 2;
@@ -951,6 +1084,11 @@
                 if (unit.type === 'single') {
                     let p = unit.participant;
                     let f = p.initFlags || {};
+                    // B15: Incapacitated characters are still dealt a card, but their
+                    // Quick / Level Headed / Hesitant edges are ignored while Incapacitated.
+                    if (p.incapacitated) {
+                        f = { hesitant: false, quick: false, levelHeaded: false, improvedLevelHeaded: false };
+                    }
                     let finalCard = null;
                     if (f.hesitant) {
                         // HESITANT (p.27): draw two, act on the lowest. A Joker overrides.
@@ -1024,11 +1162,13 @@
             // Sort by card (SWADE). JS sort is stable, so group members holding the
             // identical card stay adjacent and keep their relative order.
             combat.participants.sort((a, b) => {
-                if (b.card.rank !== a.card.rank) {
-                    return b.card.rank - a.card.rank;
-                } else {
-                    return b.card.suit - a.card.suit;
-                }
+                let rankA = a.card ? a.card.rank : -1;
+                let rankB = b.card ? b.card.rank : -1;
+                let suitA = a.card ? a.card.suit : -1;
+                let suitB = b.card ? b.card.suit : -1;
+
+                if (rankB !== rankA) return rankB - rankA;
+                return suitB - suitA;
             });
             let firstValidIdx = combat.participants.findIndex(p => !p.card.isJoker && !p.incapacitated);
             combat.activeTurnIndex = firstValidIdx !== -1 ? firstValidIdx : 0;
@@ -1050,20 +1190,30 @@
             if (idxValid(combat.jokerActiveIndex)) {
                 await decrementEndOfTurnTTL(combat.jokerActiveIndex);
                 await set(ref(db, 'campaignState/combat/jokerActiveIndex'), -1);
+                if (isAdmin) postTurnOrderEmbed(combat);
                 return;
             }
             // B5: If a held character is currently interrupting, end it and resume normal turn order
             if (idxValid(combat.holdActiveIndex)) {
                 await decrementEndOfTurnTTL(combat.holdActiveIndex);
                 await set(ref(db, 'campaignState/combat/holdActiveIndex'), -1);
+                if (isAdmin) postTurnOrderEmbed(combat);
+                return;
+            }
+            // Bleeding Out: the active participant must resolve their Vigor roll before
+            // the turn can end. Block nextTurn until they roll (or an ally stabilizes).
+            let oldIdx = combat.activeTurnIndex || 0;
+            let oldP = combat.participants[oldIdx];
+            if (oldP && oldP.bleedingOut && !oldP.bleedingOutResolvedThisTurn && !oldP.dead) {
+                alert(`${oldP.name} is BLEEDING OUT and must roll Vigor before the turn can end (or an ally must stabilize them with Healing).`);
                 return;
             }
             // A12 Fix: Decrement TTLs for the participant whose turn is ending
-            let oldIdx = combat.activeTurnIndex || 0;
             await decrementEndOfTurnTTL(oldIdx);
-            
+
             let nextIdx = oldIdx + 1;
-            // A11 Fix + B5: Skip Jokers, Incapacitated, AND On-Hold participants in normal progression
+            // A11 Fix + B5: Skip Jokers, On-Hold. Incapacitated are skipped in normal
+            // progression (they're still dealt cards but don't take turns).
             while (nextIdx < combat.participants.length && combat.participants[nextIdx].card && (combat.participants[nextIdx].card.isJoker || combat.participants[nextIdx].incapacitated || combat.participants[nextIdx].onHold)) {
                 nextIdx++;
             }
@@ -1080,11 +1230,15 @@
                     activeTurnIndex: combat.activeTurnIndex,
                     round: combat.round
                 });
+                if (isAdmin) postTurnOrderEmbed(globalState.combat);
                 return;
             } else {
                 combat.activeTurnIndex = nextIdx;
+                // Reset the new active participant's bleeding-out-per-turn flag.
+                if (combat.participants[nextIdx]) combat.participants[nextIdx].bleedingOutResolvedThisTurn = false;
             }
             await set(ref(db, 'campaignState/combat/activeTurnIndex'), combat.activeTurnIndex);
+            if (isAdmin) postTurnOrderEmbed(globalState.combat);
         };
         // ADDED: Functions to handle Joker interrupts
         window.jokerTakeTurn = async function (index) {
@@ -1278,6 +1432,12 @@
         function renderCombatUI() {
             let combat = globalState.combat;
             let groupOn = combat.groupExtras !== false; // B14
+            // Inject the shared TEM panel into the calculator once.
+            let temHost = document.getElementById('calc-tem-container');
+            if (temHost && window.buildTEMModifiersHTML && !temHost.dataset.injected) {
+                temHost.innerHTML = window.buildTEMModifiersHTML('calc');
+                temHost.dataset.injected = '1';
+            }
             document.getElementById('round-display').innerText = `ROUND: ${combat.round || 1}`;
             document.getElementById('deck-display').innerText = `ACTIVE DECK: ${combat.deck ? combat.deck.length : 0}/54 CARDS${combat.needsReshuffle ? ' [RESHUFFLE PENDING]' : ''}`;
             // B3: GM Pool display
@@ -1302,7 +1462,13 @@
             else if (idxValid(combat.holdActiveIndex)) activeIdx = combat.holdActiveIndex;
             else activeIdx = combat.activeTurnIndex || 0;
             let activeP = combat.participants[activeIdx];
-            if (activeP && activeP.stunned && !activeP.incapacitated) {
+            if (activeP && activeP.bleedingOut && !activeP.dead) {
+                // Bleeding Out takes priority — Vigor roll required or the character dies.
+                banner.style.display = 'block';
+                banner.style.borderColor = '#ff3333';
+                banner.style.color = '#ff3333';
+                banner.innerHTML = `> BLEEDING OUT: ${activeP.name.toUpperCase()} MUST ROLL VIGOR (TN 4) OR DIE — THE ROUND CANNOT PROCEED UNTIL THEY ROLL OR AN ALLY STABILIZES THEM. <button class="die-btn" style="margin-left: 10px; border-color: #ff3333; color: #ff3333;" onclick="event.stopPropagation(); window.open('/character.html','_blank')">OPEN SHEET</button>`;
+            } else if (activeP && activeP.stunned && !activeP.incapacitated) {
                 // B6: Stunned takes priority — show Vigor recovery banner
                 banner.style.display = 'block';
                 banner.style.borderColor = '#ff0055';
@@ -1355,11 +1521,15 @@
                 if ((parseInt(p.forceField) || 0) > 0) badges += `<span class="badge" style="border-color:#00ccff; color:#00ccff;">FF:${p.forceField}</span>`;
                 if (p.heavyArmor) badges += `<span class="badge" style="border-color:#ff3333; color:#ff3333;">HEAVY</span>`;
                 if (p.incapacitated) badges += `<span class="badge incap">INCAPACITATED</span>`;
+                if (p.dead) badges += `<span class="badge" style="border-color:#000; color:#ff3333; background:#000;">DEAD</span>`;
+                if (p.bleedingOut) badges += `<span class="badge" style="border-color:#ff3333; color:#ff3333;">BLEEDING OUT</span>`;
                 if (p.stunned) badges += `<span class="badge stunned">STUNNED</span>`; // B6
                 if (p.onHold) badges += `<span class="badge onhold">ON HOLD</span>`; // B5
                 if (p.shaken) badges += `<span class="badge shaken">SHAKEN</span>`;
                 if (p.distracted) badges += `<span class="badge distracted">DISTRACTED [-2]</span>`;
                 if (p.vulnerable) badges += `<span class="badge vulnerable">VULNERABLE [+2 to be hit]</span>`;
+                if (p.entangled) badges += `<span class="badge entangled">ENTANGLED</span>`;
+                if (p.bound) badges += `<span class="badge bound">BOUND</span>`;
                 let wounds = p.wounds || 0;
                 let fatigue = p.fatigue || 0;
                 let totalPenalty = Math.min(wounds, 3) + Math.min(fatigue, 2);
@@ -1464,9 +1634,12 @@
                 penaltyEl.style.fontWeight = "normal";
             }
             let basePace = p.pace || 6;
-            let effPace = p.incapacitated ? 0 : Math.max(1, basePace - Math.min(wounds, 3));
-            document.getElementById('detail-pace').innerText = `${effPace} (Base: ${basePace})`;
-            document.getElementById('detail-parry').innerText = p.parry;
+            // B10: effective Pace = max(1, pace − wounds) (p.97). Incapacitated → 0.
+            let effPace = p.incapacitated ? 0 : Math.max(1, basePace - wounds);
+            document.getElementById('detail-pace').innerText = `${effPace} (Base: ${basePace}${wounds > 0 ? `, −${wounds} wounds` : ''})`;
+            // B11: Defend gives +4 Parry until next turn (p.100).
+            let effParry = (p.parry || 0) + (p.defending ? 4 : 0);
+            document.getElementById('detail-parry').innerText = effParry + (p.defending ? ' (Defending +4)' : '');
             document.getElementById('detail-toughness').innerText = p.toughness;
             normalizeArmorData(p);
             let armorDisplay = p.armor || 0;
@@ -1491,6 +1664,11 @@
             document.getElementById('btn-shaken').className = `die-btn ${p.shaken ? 'active-toggle' : ''}`;
             document.getElementById('btn-distracted').className = `die-btn ${p.distracted ? 'active-toggle' : ''}`;
             document.getElementById('btn-vulnerable').className = `die-btn ${p.vulnerable ? 'active-toggle' : ''}`;
+            // B11: Defend toggle highlight
+            let defendBtn = document.getElementById('btn-defend');
+            if (defendBtn) defendBtn.className = `die-btn ${p.defending ? 'active-toggle' : ''}` + (p.defending ? '' : '');
+            if (defendBtn) defendBtn.style.borderColor = '#00ccff';
+            if (defendBtn) defendBtn.style.color = '#00ccff';
             document.getElementById('btn-wounds-up').disabled = p.incapacitated;
             document.getElementById('btn-fatigue-up').disabled = p.incapacitated;
             document.getElementById('btn-recover').style.display = (p.shaken && !p.incapacitated) ? 'block' : 'none';
@@ -1573,6 +1751,42 @@
                 }
             }
             p[stat] = newVal;
+            // B7: mirror wounds/fatigue onto the persistent character object (with a
+            // fresh Golden Hour wound timestamp per added wound) so they survive
+            // endCombat(). This mirrors the existing benny sync above.
+            if (p.isPlayer && (stat === 'wounds' || stat === 'fatigue')) {
+                if (stat === 'wounds') {
+                    let sheet = globalState.characters && globalState.characters[p.id];
+                    if (sheet) {
+                        if (!Array.isArray(sheet.woundLog)) sheet.woundLog = [];
+                        while (sheet.woundLog.length < newVal) sheet.woundLog.push({ ts: Date.now(), attemptedBy: [] });
+                        while (sheet.woundLog.length > newVal) sheet.woundLog.pop();
+                        sheet.wounds = newVal;
+                        await set(ref(db, `campaignState/characters/${p.id}/wounds`), newVal);
+                        await set(ref(db, `campaignState/characters/${p.id}/woundLog`), sheet.woundLog);
+                    }
+                    // Discord embed when a wound is ADDED (with Golden Hour expiry).
+                    if (amount > 0 && globalState.webhook && window.Embeds) {
+                        await window.Embeds.post(globalState.webhook,
+                            window.Embeds.woundTaken(p.name, 1, newVal, null, p.incapacitated));
+                    }
+                } else {
+                    let sheet = globalState.characters && globalState.characters[p.id];
+                    if (sheet) {
+                        if (!Array.isArray(sheet.fatigueLog)) sheet.fatigueLog = [];
+                        while (sheet.fatigueLog.length < newVal) sheet.fatigueLog.push({ ts: Date.now() });
+                        while (sheet.fatigueLog.length > newVal) sheet.fatigueLog.pop();
+                        sheet.fatigue = newVal;
+                        await set(ref(db, `campaignState/characters/${p.id}/fatigue`), newVal);
+                        await set(ref(db, `campaignState/characters/${p.id}/fatigueLog`), sheet.fatigueLog);
+                    }
+                    // Discord embed when fatigue is ADDED (with hourly recovery note).
+                    if (amount > 0 && globalState.webhook && window.Embeds) {
+                        await window.Embeds.post(globalState.webhook,
+                            window.Embeds.fatigueGained(p.name, newVal, p.incapacitated));
+                    }
+                }
+            }
             await set(ref(db, 'campaignState/combat/participants'), participants);
         };
         window.toggleStatus = async function (status) {
@@ -1744,6 +1958,17 @@
             }
             let cap = p.woundCap || (p.isWildCard ? 4 : 1);
             if (p.incapacitated && p.wounds < cap && (p.fatigue || 0) < 3) p.incapacitated = false;
+            // B7: mirror the reduced wound total onto the persistent character sheet.
+            if (p.isPlayer) {
+                let sheet = globalState.characters && globalState.characters[p.id];
+                if (sheet) {
+                    if (!Array.isArray(sheet.woundLog)) sheet.woundLog = [];
+                    while (sheet.woundLog.length > p.wounds) sheet.woundLog.pop();
+                    sheet.wounds = p.wounds;
+                    await set(ref(db, `campaignState/characters/${p.id}/wounds`), sheet.wounds);
+                    await set(ref(db, `campaignState/characters/${p.id}/woundLog`), sheet.woundLog);
+                }
+            }
             await set(ref(db, 'campaignState/combat/participants'), participants);
             let desc = `${p.name} spent a Benny to Soak (Vigor d${vigorDie}): ${tRoll.history.join(' + ')}`;
             if (wRoll) desc += ` | Wild: ${wRoll.history.join(' + ')}`;
@@ -1827,7 +2052,7 @@
                 ? window.getCalledShotConfig(sel.value, target)
                 : { id: "none", hitMod: 0, dmgMod: 0 };
         };
-        window.calcAttack = function () {
+        window.calcAttack = async function () {
             let targetId = document.getElementById('calc-target').value;
             let roll = parseInt(document.getElementById('calc-attack').value);
             let resultBox = document.getElementById('calc-result');
@@ -1836,25 +2061,39 @@
                 return;
             }
             let target = globalState.combat.participants.find(x => x.id === targetId);
-            let parry = parseInt(target.parry);
+            let baseParry = parseInt(target.parry) || 4;
+            // Shared TEM: Defend = TARGET defending (+4 Parry, melee only). Applied ONLY
+            // to Parry (not also to the roll) to avoid double-counting.
+            let dmgType = document.getElementById('calc-dmgtype')?.value || 'Melee';
+            let isMelee = (dmgType === 'Melee');
+            let temVals = window.getTEMModifierValues ? window.getTEMModifierValues('calc', { isMelee: isMelee }) : { total: 0, summary: [], values: {} };
+            let targetDefending = target.defending || temVals.values.defend;
+            let defendBonus = (targetDefending && isMelee) ? 4 : 0;
+            let parry = baseParry + defendBonus;
             let calcCalled = window.getCalcCalledShot ? window.getCalcCalledShot() : { hitMod: 0 };
-            let effectiveRoll = roll + (parseInt(calcCalled.hitMod) || 0) + (target.vulnerable ? 2 : 0);
+            // The shared TEM total includes Cover/GangUp/Drop/Illum/Running (NOT Defend).
+            let temTotal = temVals.total;
+            let effectiveRoll = roll + (parseInt(calcCalled.hitMod) || 0) + (target.vulnerable ? 2 : 0) + temTotal;
+            let modNotes = [];
+            if (defendBonus) modNotes.push(`Target Defending +${defendBonus} Parry (melee)`);
+            if (target.vulnerable) modNotes.push("Vulnerable +2");
+            temVals.summary.forEach(s => modNotes.push(s));
+            if (calcCalled.label) modNotes.push('Called Shot: ' + calcCalled.label);
             resultBox.style.borderColor = "var(--theme-color)";
+            let hitText = "";
             if (effectiveRoll < parry) {
-                resultBox.innerHTML = `FAILURE against ${target.name}'s Parry (${target.parry}).` +
-                    (calcCalled.label ? `<br><span style="font-size:0.9em;">Called Shot: ${calcCalled.label}</span>` : "");
+                hitText = `FAILURE against ${target.name}'s Parry (${parry}${modNotes.length ? ' [' + modNotes.join(', ') + ']' : ''}).`;
                 resultBox.style.color = "var(--theme-color)";
             } else {
                 let raises = Math.floor((effectiveRoll - parry) / 4);
-                if (raises > 0) {
-                    resultBox.innerHTML = `HIT WITH ${raises} RAISE(S)! (+1d6 Dmg)` +
-                        (calcCalled.label ? `<br><span style="font-size:0.9em;">Called Shot: ${calcCalled.label}</span>` : "");
-                    resultBox.style.color = "#00ff00";
-                } else {
-                    resultBox.innerHTML = `SUCCESS! Hit against ${target.name}.` +
-                        (calcCalled.label ? `<br><span style="font-size:0.9em;">Called Shot: ${calcCalled.label}</span>` : "");
-                    resultBox.style.color = "#00ff00";
-                }
+                hitText = raises > 0 ? `HIT WITH ${raises} RAISE(S)! (+1d6 Dmg)` : `SUCCESS! Hit against ${target.name}.`;
+                resultBox.style.color = "#00ff00";
+            }
+            resultBox.innerHTML = hitText + (modNotes.length ? `<br><span style="font-size:0.85em;">${modNotes.join(' · ')}</span>` : "");
+            // Post a Discord embed with the active TEM settings (only non-default).
+            if (globalState && globalState.webhook && window.Embeds) {
+                await window.Embeds.post(globalState.webhook,
+                    window.Embeds.temAttack(target.name, roll, effectiveRoll, parry, hitText, modNotes));
             }
         };
         window.calcDamage = async function () {
@@ -1866,6 +2105,12 @@
                 return;
             }
             let target = globalState.combat.participants.find(x => x.id === targetId);
+            let isHeavyWeapon = document.getElementById('calc-hw-checkbox')?.checked || false;
+            if (target.heavyArmor && !isHeavyWeapon) {
+                resultBox.innerHTML = `<span style="color:#ff3333;">HEAVY ARMOR: ${target.name} has Heavy Armor and is IMMUNE to non-Heavy Weapons.</span>`;
+                resultBox.style.color = "#ff3333";
+                return;
+            }
             let apInput = document.getElementById('calc-ap').value || "0";
             let ap = parseApForDamage(apInput);
             let selectedDmgType = document.getElementById('calc-dmgtype').value || "Ballistic";
@@ -1893,6 +2138,18 @@
                             participants[idx].wounds = (participants[idx].wounds || 0) + 1;
                             let cap = participants[idx].woundCap || (participants[idx].isWildCard ? 4 : 1);
                             if (participants[idx].wounds >= cap) participants[idx].incapacitated = true;
+                            // B7: mirror the wound onto the persistent character sheet.
+                            if (participants[idx].isPlayer) {
+                                let pid = participants[idx].id;
+                                let sheet = globalState.characters && globalState.characters[pid];
+                                if (sheet) {
+                                    if (!Array.isArray(sheet.woundLog)) sheet.woundLog = [];
+                                    sheet.woundLog.push({ ts: Date.now(), attemptedBy: [] });
+                                    sheet.wounds = participants[idx].wounds;
+                                    await set(ref(db, `campaignState/characters/${pid}/wounds`), sheet.wounds);
+                                    await set(ref(db, `campaignState/characters/${pid}/woundLog`), sheet.woundLog);
+                                }
+                            }
                             await set(ref(db, 'campaignState/combat/participants'), participants);
                         }
                         output = `Target was already SHAKEN — physical damage inflicts **1 WOUND** (applied to tracker).`;
@@ -1905,6 +2162,16 @@
                 resultBox.innerHTML = `${output}<br><span style="font-size:0.9em;">${breakdown}</span>` +
                     (calcCalled.label ? `<br><span style="font-size:0.9em;">Called Shot: ${calcCalled.label}</span>` : "");
                 resultBox.style.color = "#ff9900";
+                // Post a Discord embed with the active TEM settings for the damage compare.
+                if (globalState && globalState.webhook && window.Embeds) {
+                    let dmgType = document.getElementById('calc-dmgtype')?.value || 'Ballistic';
+                    let temVals = window.getTEMModifierValues ? window.getTEMModifierValues('calc', { isMelee: dmgType === 'Melee' }) : { summary: [] };
+                    let modNotes = [];
+                    if (calcCalled.label) modNotes.push('Called Shot: ' + calcCalled.label);
+                    temVals.summary.forEach(s => modNotes.push(s));
+                    await window.Embeds.post(globalState.webhook,
+                        window.Embeds.temDamage(target.name, roll, effectiveToughness, output, breakdown, modNotes));
+                }
             }
         };
         // ==========================================
@@ -1918,6 +2185,41 @@
                 } catch (e) { console.warn("Webhook failed", e); }
             }
         }
+
+        // ==========================================
+        // 9. COMBAT TURN-ORDER EMBED (delete + resend on every turn change)
+        // Posts a single Discord message showing the round, current actor, each
+        // participant's card (with suit symbol), and active conditions. The previous
+        // message is deleted so the channel isn't spammed. NO Discord emojis;
+        // incapacitated/dead names are struck through with Markdown (~~Name~~).
+        // ==========================================
+        let _turnOrderMessageId = null;
+        async function postTurnOrderEmbed(combat) {
+            if (!combat || !combat.participants || !combat.participants.length) return;
+            if (!globalState || !globalState.webhook) return;
+            if (!window.Embeds) return;
+            // Delete the previous turn-order message (if any) so we don't spam.
+            if (_turnOrderMessageId) {
+                await window.Embeds.deleteMessage(globalState.webhook, _turnOrderMessageId);
+                _turnOrderMessageId = null;
+            }
+            let activeIdx = effectiveActiveIndex(combat);
+            let isJokerInt = idxValid(combat.jokerActiveIndex);
+            let isHoldInt = idxValid(combat.holdActiveIndex);
+            let embed = window.Embeds.turnOrder(combat, activeIdx, isJokerInt, isHoldInt);
+            if (embed) {
+                _turnOrderMessageId = await window.Embeds.postTracked(globalState.webhook, embed);
+            }
+        }
+        // Post the turn-order embed after initiative is dealt too.
+        (function () {
+            const origDeal = window.dealInitiative;
+            window.dealInitiative = async function () {
+                await origDeal();
+                if (isAdmin) postTurnOrderEmbed(globalState.combat);
+            };
+        })();
+        window.postTurnOrderEmbed = postTurnOrderEmbed;
     </script>
 </body>
 
