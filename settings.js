@@ -1351,10 +1351,17 @@ function buildAreaAttackPlan(areaInfo, weaponObj, attackerName, participants, ro
     const bracketIndex = rangeBracketValue === '-2' ? 1
         : rangeBracketValue === '-4' ? 2 : rangeBracketValue === '-8' ? 3 : 0;
     const distanceNumber = parseAreaRangeDistance(weaponObj ? weaponObj.range : '', bracketIndex);
-    // thrown/fired show the bracket + distance; cone/line/contact show fixed reach.
-    const rangeOrReachLabel = (kind === 'thrown' || kind === 'fired')
-        ? `${rangeBracketLabel} (~${distanceNumber}" to point)`
-        : `Reach ${weaponObj ? (weaponObj.range || '—') : '—'}`;
+    // Phrasing that reads naturally for every kind. thrown/fired cite the range
+    // bracket + parsed distance; cone/line/contact cite a *reach* (never the raw
+    // "48 Line" string, which produced "placed at Reach 48 Line").
+    let rangeOrReachLabel;
+    if (kind === 'thrown' || kind === 'fired') {
+        rangeOrReachLabel = `${rangeBracketLabel} · ~${distanceNumber}" to point`;
+    } else {
+        const rng = weaponObj ? (weaponObj.range || '') : '';
+        const reachNum = (rng.match(/\d+/) || [])[0];
+        rangeOrReachLabel = reachNum ? `reach ${reachNum}"` : `reach: ${rng || '—'}`;
+    }
     // Intended targets from the Ctrl‑click list (with read‑only Tgh/Armor).
     const mSel = $('multi-target-select');
     const targets = [];
@@ -1401,3 +1408,32 @@ window.setAreaAttackPlan = setAreaAttackPlan;
 window.getAreaAttackPlan = getAreaAttackPlan;
 window.clearAreaAttackPlan = clearAreaAttackPlan;
 window.clearAllAreaPlans = clearAllAreaPlans;
+// ==========================================
+// CUSTOM AREA TARGET LIST — replaces the native <select multiple> UX.
+// A native multi-select loses its *visible* selection the moment focus moves to
+// another control (Range Bracket, TEM, Aiming…), which read as "it deselected my
+// targets". Here each target is a <div> row whose selected state is a CSS class,
+// so it is focus‑independent and persists across the whole modal. The hidden
+// native <select multiple> is kept in sync on every toggle, so buildAreaAttackPlan
+// and the damage step keep reading selectedOptions unchanged.
+// ==========================================
+function setupAreaTargetList() {
+    const list = document.getElementById('multi-target-list');
+    if (!list || list.__areaWired) return;
+    list.__areaWired = true;
+    list.addEventListener('click', function (e) {
+        const row = e.target.closest('.area-target-row');
+        if (!row) return;
+        const id = row.dataset.id;
+        const sel = document.getElementById('multi-target-select');
+        if (!sel) return;
+        const opt = Array.from(sel.options).find(o => o.value === id);
+        if (!opt) return;
+        opt.selected = !opt.selected;                 // keep the hidden select in sync
+        row.classList.toggle('area-target-selected', opt.selected);
+    });
+}
+window.setupAreaTargetList = setupAreaTargetList;
+// settings.js loads after the modal markup on every page that has the list; pages
+// without it no-op via the guard above (tracker, dashboard, etc.).
+setupAreaTargetList();

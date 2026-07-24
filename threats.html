@@ -669,8 +669,9 @@ style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bot
                 </select>
             </div>
             <div class="setting-row" id="multi-target-row" style="display:none; flex-direction:column; align-items:flex-start; gap:5px;">
-                <span style="font-size:0.85em; color:#00ccff;">Hold Ctrl/Cmd to select multiple targets for Area Effect (Blast/Cone):</span>
-                <select id="multi-target-select" class="admin-input" multiple style="width:100%; height:80px; font-size:0.85em;"></select>
+                <span style="font-size:0.85em; color:#00ccff;">Click targets to add them to the Area Effect (click again to remove):</span>
+                <select id="multi-target-select" class="admin-input" multiple style="display:none;"></select>
+                <div id="multi-target-list" style="width:100%; max-height:140px; overflow-y:auto; border:1px solid var(--theme-color); text-align:left; pointer-events:auto !important;"></div>
             </div>
             <div id="target-status"
                 style="font-size:0.85em; opacity:0.9; text-align:left; min-height:1.2em; margin: 4px 0;"></div>
@@ -1901,9 +1902,11 @@ function updateDefenderModifierAndStatus() {
         function populateTargetSelect() {
             let select = document.getElementById('target-select');
             let multiSelect = document.getElementById('multi-target-select');
+            let multiList = document.getElementById('multi-target-list');
 
             select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
             multiSelect.innerHTML = '';
+            if (multiList) multiList.innerHTML = '';
 
             if (!globalState.combat || !globalState.combat.participants || globalState.combat.participants.length === 0) {
                 return;
@@ -1933,6 +1936,14 @@ function updateDefenderModifierAndStatus() {
                 mOpt.value = p.id;
                 mOpt.textContent = label;
                 multiSelect.appendChild(mOpt);
+                if (multiList) {
+                let row = document.createElement('div');
+                row.className = 'area-target-row' + (mOpt.selected ? ' area-target-selected' : '');
+                row.dataset.id = p.id;
+                row.textContent = label;
+                row.title = label;
+                multiList.appendChild(row);
+                }
             });
         }
 window.onTargetChange = function () {
@@ -2480,8 +2491,7 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
     termLog += `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
     if (currentAreaPlan) {
         let _names = currentAreaPlan.targets.length ? currentAreaPlan.targets.map(t => t.name).join(', ') : 'none (point blast)';
-        termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">⚠ AREA EFFECT: ${currentAreaPlan.templateLabel} @ ${currentAreaPlan.rangeOrReachLabel}. Intended targets: ${_names}.</span><br>`;
-        termLog += `&nbsp;&nbsp;<span style="opacity:0.8;">Called Shot disabled (area attack targets a location).</span><br>`;
+        termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">⚠ AREA EFFECT: ${currentAreaPlan.templateLabel} (${currentAreaPlan.rangeOrReachLabel}). Intended targets: ${_names}.</span><br>`;
     }
     if (defenderDisplay) termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">${defenderDisplay}</span><br>`;
     if (calledShot && calledShot.id && calledShot.id !== "none") {
@@ -2525,9 +2535,8 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
             let _names = currentAreaPlan.targets.length
                 ? currentAreaPlan.targets.map(t => `**${t.name}** (Tgh ${t.tgh}${t.armor ? '+' + t.armor : ''})`).join(', ')
                 : '_none — blast placed at the point_';
-            desc += `⚠ **AREA EFFECT** — ${currentAreaPlan.templateLabel} placed at ${currentAreaPlan.rangeOrReachLabel}.
+            desc += `⚠ **AREA EFFECT** — ${currentAreaPlan.templateLabel} (${currentAreaPlan.rangeOrReachLabel}).
 Intended targets: ${_names}
-Called Shot: _disabled (area attack)_
 `;
         }
         results.forEach(r => {
@@ -2548,7 +2557,7 @@ Called Shot: _disabled (area attack)_
             embed.fields.push({ name: "Template / Range", value: `${currentAreaPlan.templateLabel} — ${currentAreaPlan.rangeOrReachLabel}`, inline: false });
         }
         let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || "";
-        if (imgUrl && !imgUrl.includes("Orange_lambda.svg")) {
+        if (imgUrl) {
             embed.thumbnail = { url: imgUrl };
         }
         

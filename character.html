@@ -798,8 +798,9 @@
                 </select>
             </div>
             <div class="setting-row" id="multi-target-row" style="display:none; flex-direction:column; align-items:flex-start; gap:5px;">
-                <span style="font-size:0.85em; color:#00ccff;">Hold Ctrl/Cmd to select multiple targets for Area Effect (Blast/Cone):</span>
-                <select id="multi-target-select" class="admin-input" multiple style="width:100%; height:80px; font-size:0.85em; pointer-events: auto !important;"></select>
+                <span style="font-size:0.85em; color:#00ccff;">Click targets to add them to the Area Effect (click again to remove):</span>
+                <select id="multi-target-select" class="admin-input" multiple style="display:none;"></select>
+                <div id="multi-target-list" style="width:100%; max-height:140px; overflow-y:auto; border:1px solid var(--theme-color); text-align:left; pointer-events:auto !important;"></div>
             </div>
             <div id="target-status"
                 style="font-size:0.85em; opacity:0.9; text-align:left; min-height:1.2em; margin: 4px 0;"></div>
@@ -4273,9 +4274,11 @@ function updateDefenderModifierAndStatus() {
         function populateTargetSelect() {
             let select = document.getElementById('target-select');
             let multiSelect = document.getElementById('multi-target-select');
+            let multiList = document.getElementById('multi-target-list');
 
             select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
             multiSelect.innerHTML = '';
+            if (multiList) multiList.innerHTML = '';
 
             if (!globalState.combat || !globalState.combat.participants) return;
 
@@ -4322,6 +4325,14 @@ function updateDefenderModifierAndStatus() {
                 mOpt.value = p.id;
                 mOpt.textContent = label;
                 multiSelect.appendChild(mOpt);
+                if (multiList) {
+                let row = document.createElement('div');
+                row.className = 'area-target-row' + (mOpt.selected ? ' area-target-selected' : '');
+                row.dataset.id = p.id;
+                row.textContent = label;
+                row.title = label;
+                multiList.appendChild(row);
+                }
             });
         }
 window.onTargetChange = function () {
@@ -4760,8 +4771,7 @@ window.onTargetChange = function () {
             // AREA EFFECT: annotate the terminal with template / range / intended targets.
             if (currentAreaPlan) {
                 let _names = currentAreaPlan.targets.length ? currentAreaPlan.targets.map(t => t.name).join(', ') : 'none (point blast)';
-                termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">⚠ AREA EFFECT: ${currentAreaPlan.templateLabel} @ ${currentAreaPlan.rangeOrReachLabel}. Intended targets: ${_names}.</span><br>`;
-                termLog += `&nbsp;&nbsp;<span style="opacity:0.8;">Called Shot disabled (area attack targets a location).</span><br>`;
+                termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">⚠ AREA EFFECT: ${currentAreaPlan.templateLabel} (${currentAreaPlan.rangeOrReachLabel}). Intended targets: ${_names}.</span><br>`;
             }
             // B8: show the selected target and defender modifier breakdown
             if (defenderDisplay) {
@@ -4813,9 +4823,8 @@ window.onTargetChange = function () {
                     let _names = currentAreaPlan.targets.length
                         ? currentAreaPlan.targets.map(t => `**${t.name}** (Tgh ${t.tgh}${t.armor ? '+' + t.armor : ''})`).join(', ')
                         : '_none — blast placed at the point_';
-                    desc += `⚠ **AREA EFFECT** — ${currentAreaPlan.templateLabel} placed at ${currentAreaPlan.rangeOrReachLabel}.
+                    desc += `⚠ **AREA EFFECT** — ${currentAreaPlan.templateLabel} (${currentAreaPlan.rangeOrReachLabel}).
 Intended targets: ${_names}
-Called Shot: _disabled (area attack)_
 `;
                 }
                 results.forEach(r => {

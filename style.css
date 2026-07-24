@@ -337,3 +337,29 @@ PART 4: CALLED SHOTS / WEAK POINTS / ARMOR DEGRADATION
 #armor-min-str-modal h3 {
     color: #ff3333;
 }
+
+/* ==========================================
+   AREA EFFECT — custom target list
+   Replaces the native multi-select so selections survive focus changes and the
+   list scrolls (the old 80px native box clipped at ~3 rows with no scroll).
+   ========================================== */
+#multi-target-list {
+    background: rgba(0, 0, 0, 0.3);
+}
+.area-target-row {
+    padding: 3px 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 0.85em;
+    user-select: none;
+    transition: background 0.1s, border-color 0.1s;
+}
+.area-target-row:hover {
+    background: rgba(0, 204, 255, 0.08);
+}
+.area-target-row.area-target-selected {
+    border: 1px solid #00ccff;
+    background: rgba(0, 204, 255, 0.15);
+    color: #00ccff;
+    text-shadow: 0 0 4px rgba(0, 204, 255, 0.6);
+}
