@@ -4005,6 +4005,7 @@ ${reloadBtn}
                 areaPlanForWep.damageApplied = true;
                 if (currentAreaPlanKey) setAreaAttackPlan(currentAreaPlanKey, areaPlanForWep);
             }
+            }
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
