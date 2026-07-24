@@ -1578,151 +1578,197 @@ window.showAreaCoverModal = showAreaCoverModal;
 // ==========================================
 // DRAMATIC CLOCKS — shared engine (Forged-in-the-Dark / Blades-style progress &
 // countdown clocks, themed for the LambdaOS terminal). The MODEL + the SVG RING
-// renderer live HERE so any page (the dedicated clocks.html board, or a future
-// read-only strip on the tracker / character sheet) draws identical rings from
-// the same source of truth — the same pattern as buildTEMModifiersHTML /
-// computeArmorPipeline / populateCalledShotSelect. Page-specific orchestration
-// (Firebase wiring, the editor modal, click handlers, embeds, the terminal)
-// stays on each page; this file only knows how a clock *is* and how it *looks*.
+// renderer live HERE so any page draws identical rings from the same source of
+// truth. Page-specific orchestration (Firebase wiring, the editor modal, click
+// handlers, embeds, the terminal) stays on each page.
 // ==========================================
-// Palette is drawn from the semantic colours the rest of the app already uses
-// (theme orange, success green, danger red, info cyan, benny yellow, plus the
-// magenta/purple already seen on Stunned/Entangled badges) so a clock never
-// introduces an off-theme hue. A custom hex is still allowed in the editor.
+
 const CLOCKS_PALETTE = [
-  { id: 'theme',  label: 'Amber',   hex: null       }, // null => var(--theme-color) at draw time
-  { id: 'green',  label: 'Green',   hex: '#00ff00' },
-  { id: 'red',    label: 'Red',     hex: '#ff3333' },
-  { id: 'cyan',   label: 'Cyan',    hex: '#00ccff' },
-  { id: 'yellow', label: 'Yellow',  hex: '#ffff00' },
-  { id: 'magenta',label: 'Magenta', hex: '#ff0055' },
-  { id: 'purple', label: 'Violet',  hex: '#9933ff' }
+    { id: 'theme',   label: 'Amber',   hex: null       },  // null => var(--theme-color)
+    { id: 'green',   label: 'Green',   hex: '#00ff00' },
+    { id: 'red',     label: 'Red',     hex: '#ff3333' },
+    { id: 'cyan',    label: 'Cyan',    hex: '#00ccff' },
+    { id: 'yellow',  label: 'Yellow',  hex: '#ffff00' },
+    { id: 'magenta', label: 'Magenta', hex: '#ff0055' },
+    { id: 'purple',  label: 'Violet',  hex: '#9933ff' }
 ];
+
 function clockColorHex(c) {
-  if (c && c.colorHex) return c.colorHex;       // explicit custom hex wins
-  if (c && c.colorId) {
-    const p = CLOCKS_PALETTE.find(x => x.id === c.colorId);
-    if (p && p.hex) return p.hex;
-  }
-  return null; // null => the renderer emits var(--theme-color)
-}
-// Fill defaults so old/partial records (or a hand-edited DB) never crash a draw.
-function normalizeClock(c) {
-  if (!c || typeof c !== 'object') c = {};
-  if (typeof c.id !== 'string' || !c.id) c.id = 'clock_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-  if (typeof c.name !== 'string' || !c.name.trim()) c.name = 'Untitled Clock';
-  if (typeof c.subtitle !== 'string') c.subtitle = '';
-  let seg = parseInt(c.segments); c.segments = isNaN(seg) ? 6 : Math.max(2, Math.min(12, seg));
-  let filled = parseInt(c.filled); c.filled = isNaN(filled) ? 0 : Math.max(0, Math.min(c.segments, filled));
-  if (c.direction !== 'drain') c.direction = 'fill';   // 'fill' (progress) | 'drain' (countdown)
-  if (c.control !== 'open') c.control = 'gm';           // 'gm' (GM ticks) | 'open' (table may tick)
-  c.secret = !!c.secret;                                // GM-only visibility
-  if (c.status !== 'completed' && c.status !== 'paused') c.status = 'active';
-  if (typeof c.note !== 'string') c.note = '';          // shown on completion / as a footer line
-  // Optional calm wall-clock timer (off by default — see scheduler note below).
-  c.timerOn = !!c.timerOn;
-  let tm = parseInt(c.timerMinutes); c.timerMinutes = isNaN(tm) ? 0 : Math.max(0, tm);
-  if (typeof c.timerEndsAt !== 'number') c.timerEndsAt = 0;
-  if (typeof c.timerFrozenRemaining !== 'number') c.timerFrozenRemaining = 0;
-  // timerOn implies drain semantics + a sane starting anchor if none set.
-  if (c.timerOn) {
-    c.direction = 'drain';
-    if (!c.timerEndsAt && c.timerMinutes > 0 && !c.ghPausedClock) {
-      c.timerEndsAt = Date.now() + c.timerMinutes * 60000;
+    if (c && c.colorHex) return c.colorHex;
+    if (c && c.colorId) {
+        const p = CLOCKS_PALETTE.find(x => x.id === c.colorId);
+        if (p && p.hex) return p.hex;
     }
-  }
-  // Roll-to-advance config (self-contained on the board; no cross-page coupling).
-  let rd = parseInt(c.rollDie); c.rollDie = isNaN(rd) ? 6 : Math.max(2, Math.min(20, rd));
-  c.rollWild = (c.rollWild === false) ? false : true;   // default a wild die (dramatic effort)
-  if (!c.createdAt) c.createdAt = Date.now();
-  c.updatedAt = Date.now();
-  return c;
+    return null; // null => renderer emits var(--theme-color)
 }
-// A clock is "complete" when a fill clock is full or a drain clock is empty.
-// Timer clocks complete on elapsed wall-time (handled by the page scheduler);
-// this helper covers the manual/roll model.
-function clockIsComplete(c) {
-  if (!c) return false;
-  if (c.status === 'completed') return true;
-  if (c.direction === 'drain') return (c.filled || 0) <= 0;
-  return (c.filled || 0) >= (c.segments || 0);
-}
-// Lit segments to draw. For the manual model that is simply c.filled. For a
-// running timer it is derived from remaining/total so the ring tracks the clock
-// (paused timers freeze on timerFrozenRemaining — the same pause semantics the
-// Golden Hour timers use, so the table's mental model stays consistent).
-function clockLitCount(c, now) {
-  now = now || Date.now();
-  if (c && c.timerOn && c.timerMinutes > 0) {
-    let rem;
-    if (c.status === 'paused' || c.ghPausedClock) rem = (typeof c.timerFrozenRemaining === 'number') ? c.timerFrozenRemaining : 0;
-    else rem = Math.max(0, c.timerEndsAt - now);
-    let frac = Math.max(0, Math.min(1, rem / (c.timerMinutes * 60000)));
-    return Math.round(frac * c.segments);
-  }
-  return Math.max(0, Math.min(c.segments || 0, c.filled || 0));
-}
-function clockRemainingMs(c, now) {
-  now = now || Date.now();
-  if (!(c && c.timerOn && c.timerMinutes > 0)) return null;
-  if (c.status === 'paused' || c.ghPausedClock) return Math.max(0, c.timerFrozenRemaining || 0);
-  return Math.max(0, c.timerEndsAt - now);
-}
-// Calm, whole-minute text — never a per-second MM:SS, by design (accessibility).
-function formatClockMinutes(ms) {
-  if (ms === null || ms === undefined) return null;
-  if (ms <= 0) return '0m';
-  return Math.ceil(ms / 60000) + 'm';
-}
-// ---- SVG ring geometry -----------------------------------------------------
-// A segmented donut: N thick stroked arcs with small radial gaps, drawn
-// clockwise from 12 o'clock (matches the reference image, including the gap
-// straddling the top). Empty segments are drawn as a dark track so the ring
-// reads as a ring, not as floating dashes.
-function _polar(cx, cy, r, deg) {
-  const rad = (deg - 90) * Math.PI / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-function _arc(cx, cy, r, startDeg, endDeg) {
-  const s = _polar(cx, cy, r, startDeg);
-  const e = _polar(cx, cy, r, endDeg);
-  const large = (endDeg - startDeg) > 180 ? 1 : 0;
-  return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
-}
-// Returns ONLY the ring SVG (square viewBox). The page composes the card
-// (title, subtitle, centre count, controls) around it as HTML overlays so the
-// text stays crisp, themeable and selectable — and so the same SVG can be
-// dropped at any size into a future compact strip.
-function buildClockSVG(c, opts) {
-  opts = opts || {};
-  c = normalizeClock(c);
-  const lit = (typeof opts.lit === 'number') ? opts.lit : clockLitCount(c);
-  const N = c.segments;
-  const cx = 50, cy = 50, r = 37, sw = 15, gap = 7; // donut proportions
-  const hex = clockColorHex(c);
-  const stroke = hex ? hex : 'var(--theme-color)';
-  const glow = hex ? hex : 'var(--theme-color)';
-  const complete = clockIsComplete(c);
-  const paused = (c.status === 'paused');
-  const interactive = !!opts.interactive && !c.timerOn && !complete;
-  const full = 360 / N;
-  let arcs = '';
-  for (let i = 0; i < N; i++) {
-    const a0 = i * full + gap / 2;
-    const a1 = (i + 1) * full - gap / 2;
-    const isLit = i < lit;
-    const d = _arc(cx, cy, r, a0, a1);
-    if (isLit) {
-      arcs += `<path class="clock-seg clock-seg-lit" data-seg="${i}" d="${d}" fill="none" stroke="${stroke}" stroke-width="${sw}" stroke-linecap="butt" style="filter:drop-shadow(0 0 3px ${glow});"/>`;
+
+// Fill defaults so old/partial records never crash a draw.
+// FIX 3.1: no longer mutates updatedAt on every call — only sets it on creation.
+// FIX 3.2: timerOn no longer forces direction='drain'; the two are independent.
+// FIX 3.8: rollWild defaults to false (opt-in drama).
+// FIX 3.6: drain clocks start with filled=segments (full) so they aren't born complete.
+function normalizeClock(c, isCreation) {
+    if (!c || typeof c !== 'object') c = {};
+    if (typeof c.id !== 'string' || !c.id) c.id = 'clock_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    if (typeof c.name !== 'string' || !c.name.trim()) c.name = 'Untitled Clock';
+    if (typeof c.subtitle !== 'string') c.subtitle = '';
+
+    let seg = parseInt(c.segments);
+    c.segments = isNaN(seg) ? 6 : Math.max(2, Math.min(12, seg));
+
+    // Direction first (needed for filled default)
+    if (c.direction !== 'drain') c.direction = 'fill';
+
+    // FIX 3.6: default filled depends on direction
+    let filled = parseInt(c.filled);
+    if (isNaN(filled)) {
+        c.filled = (c.direction === 'drain') ? c.segments : 0;
     } else {
-      arcs += `<path class="clock-seg clock-seg-empty" data-seg="${i}" d="${d}" fill="none" stroke="rgba(128,128,128,0.14)" stroke-width="${sw}" stroke-linecap="butt"/>`;
+        c.filled = Math.max(0, Math.min(c.segments, filled));
     }
-  }
-  const cls = 'clock-svg' + (interactive ? ' clock-svg-interactive' : '') + (complete ? ' clock-svg-complete' : '') + (paused ? ' clock-svg-paused' : '');
-  return `<svg class="${cls}" viewBox="0 0 100 100" role="img" aria-label="${c.name.replace(/"/g, '')}: ${lit} of ${N}">${arcs}</svg>`;
+
+    if (c.control !== 'open') c.control = 'gm';
+    c.secret = !!c.secret;
+    if (c.status !== 'completed' && c.status !== 'paused') c.status = 'active';
+    if (typeof c.note !== 'string') c.note = '';
+
+    // Timer (independent of direction — FIX 3.2)
+    c.timerOn = !!c.timerOn;
+    let tm = parseInt(c.timerMinutes);
+    c.timerMinutes = isNaN(tm) ? 0 : Math.max(0, tm);
+    if (typeof c.timerEndsAt !== 'number') c.timerEndsAt = 0;
+    if (typeof c.timerFrozenRemaining !== 'number') c.timerFrozenRemaining = 0;
+    if (c.timerOn && !c.timerEndsAt && c.timerMinutes > 0 && c.status === 'active') {
+        c.timerEndsAt = Date.now() + c.timerMinutes * 60000;
+    }
+
+    // Roll-to-advance
+    let rd = parseInt(c.rollDie);
+    c.rollDie = isNaN(rd) ? 6 : Math.max(2, Math.min(20, rd));
+    c.rollWild = (c.rollWild === true);  // FIX 3.8: default false
+
+    // FIX 3.1: only stamp timestamps on creation
+    if (!c.createdAt) c.createdAt = Date.now();
+    if (isCreation || !c.updatedAt) c.updatedAt = c.createdAt;
+
+    return c;
 }
+
+// FIX 3.6: a drain clock is complete only when filled <= 0 AND it has been
+// explicitly started (filled was set below segments at some point, or timerOn).
+function clockIsComplete(c) {
+    if (!c) return false;
+    if (c.status === 'completed') return true;
+    if (c.direction === 'drain') {
+        // A brand-new drain clock at full segments is NOT complete
+        if ((c.filled || 0) >= (c.segments || 0) && !c.timerOn && !c._everTicked) return false;
+        return (c.filled || 0) <= 0;
+    }
+    return (c.filled || 0) >= (c.segments || 0);
+}
+
+// FIX 3.5: use floor for lit count to avoid flicker at boundaries
+function clockLitCount(c, now) {
+    now = now || Date.now();
+    if (c && c.timerOn && c.timerMinutes > 0) {
+        let rem;
+        if (c.status === 'paused') {
+            rem = (typeof c.timerFrozenRemaining === 'number') ? c.timerFrozenRemaining : 0;
+        } else {
+            rem = Math.max(0, c.timerEndsAt - now);
+        }
+        let frac = Math.max(0, Math.min(1, rem / (c.timerMinutes * 60000)));
+        // FIX 3.5: floor avoids the 0↔1 flicker at segment boundaries
+        return Math.floor(frac * c.segments + 0.0001);
+    }
+    return Math.max(0, Math.min(c.segments || 0, c.filled || 0));
+}
+
+function clockRemainingMs(c, now) {
+    now = now || Date.now();
+    if (!(c && c.timerOn && c.timerMinutes > 0)) return null;
+    if (c.status === 'paused') return Math.max(0, c.timerFrozenRemaining || 0);
+    return Math.max(0, c.timerEndsAt - now);
+}
+
+function formatClockMinutes(ms) {
+    if (ms === null || ms === undefined) return null;
+    if (ms <= 0) return '0m';
+    return Math.ceil(ms / 60000) + 'm';
+}
+
+// FIX 3.4: freeze a running timer (snapshot remaining ms)
+function freezeClockTimer(c) {
+    if (!c || !c.timerOn) return c;
+    c.timerFrozenRemaining = Math.max(0, c.timerEndsAt - Date.now());
+    c.status = 'paused';
+    return c;
+}
+
+// FIX 3.4: resume a paused timer (recompute endsAt from frozen remaining)
+function resumeClockTimer(c) {
+    if (!c || !c.timerOn) return c;
+    c.timerEndsAt = Date.now() + (c.timerFrozenRemaining || 0);
+    c.status = 'active';
+    return c;
+}
+
+// ---- SVG ring geometry ----
+function _polar(cx, cy, r, deg) {
+    const rad = (deg - 90) * Math.PI / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function _arc(cx, cy, r, startDeg, endDeg) {
+    const s = _polar(cx, cy, r, startDeg);
+    const e = _polar(cx, cy, r, endDeg);
+    const large = (endDeg - startDeg) > 180 ? 1 : 0;
+    return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
+}
+
+// FIX 4.1: gap scales inversely with segment count
+// FIX 4.3: empty track uses theme color at low opacity
+// FIX 3.9: timer clocks CAN be interactive (GM manual advance)
+// FIX 3.10: data-clock-id on the SVG root
+function buildClockSVG(c, opts) {
+    opts = opts || {};
+    c = normalizeClock(c);
+    const lit = (typeof opts.lit === 'number') ? opts.lit : clockLitCount(c);
+    const N = c.segments;
+    const cx = 50, cy = 50, r = 37, sw = 15;
+    // FIX 4.1: scale gap — 7° for 2-4 segs, shrinking to 3° for 12 segs
+    const gap = Math.max(3, Math.round(7 - (N - 2) * 0.4));
+    const hex = clockColorHex(c);
+    const stroke = hex ? hex : 'var(--theme-color)';
+    const complete = clockIsComplete(c);
+    const paused = (c.status === 'paused');
+    // FIX 3.9: interactive unless complete (timer clocks CAN be manually ticked)
+    const interactive = !!opts.interactive && !complete;
+    const full = 360 / N;
+    let arcs = '';
+    for (let i = 0; i < N; i++) {
+        const a0 = i * full + gap / 2;
+        const a1 = (i + 1) * full - gap / 2;
+        const isLit = i < lit;
+        const d = _arc(cx, cy, r, a0, a1);
+        if (isLit) {
+            arcs += `<path class="clock-seg clock-seg-lit" data-seg="${i}" d="${d}" fill="none" stroke="${stroke}" stroke-width="${sw}" stroke-linecap="butt" style="filter:drop-shadow(0 0 3px ${stroke});"/>`;
+        } else {
+            // FIX 4.3: track uses theme at 12% opacity
+            arcs += `<path class="clock-seg clock-seg-empty" data-seg="${i}" d="${d}" fill="none" stroke="var(--theme-color)" stroke-opacity="0.12" stroke-width="${sw}" stroke-linecap="butt"/>`;
+        }
+    }
+    const cls = 'clock-svg'
+        + (interactive ? ' clock-svg-interactive' : '')
+        + (complete ? ' clock-svg-complete' : '')
+        + (paused ? ' clock-svg-paused' : '');
+    // FIX 3.10: data-clock-id for click handlers
+    return `<svg class="${cls}" data-clock-id="${c.id}" viewBox="0 0 100 100" role="progressbar" aria-valuenow="${lit}" aria-valuemin="0" aria-valuemax="${N}" aria-label="${c.name.replace(/"/g, '')}: ${lit} of ${N}">${arcs}</svg>`;
+}
+
 window.CLOCKS_PALETTE = CLOCKS_PALETTE;
 window.Clocks = {
-  normalizeClock, clockColorHex, clockIsComplete, clockLitCount, clockRemainingMs,
-  formatClockMinutes, buildClockSVG
+    normalizeClock, clockColorHex, clockIsComplete, clockLitCount,
+    clockRemainingMs, formatClockMinutes, buildClockSVG,
+    freezeClockTimer, resumeClockTimer
 };
