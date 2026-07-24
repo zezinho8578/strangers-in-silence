@@ -262,6 +262,50 @@
         return conds.length ? conds.join(', ') : 'OK';
     }
 
+    // AREA EFFECT damage (Phase 4) — one rolled blast applied per-target with
+    // individual Cover / Evasion. Carries the dice notation + per-die history
+    // (like every other damage embed) plus one field per target so the table can
+    // see exactly how each figure's wound count was reached.
+    function areaDamage(opts) {
+        opts = opts || {};
+        const w = opts.weapon || {};
+        const perTarget = opts.perTarget || [];
+        const descLines = [`**Damage: ${opts.total}** applied to ${perTarget.length} target(s)`];
+        if (opts.raiseRolls && opts.raiseRolls.length) descLines.push('*(Includes +1d6 Raise Bonus)*');
+        if (opts.has3RB) descLines.push('*(Includes +1 Damage from 3-Round Burst)*');
+        if (opts.hasDT && opts.dtVal) descLines.push(`*(Includes +${opts.dtVal} Damage from Double Tap)*`);
+        if (opts.jokerBonus) descLines.push(`*(Includes +${opts.jokerBonus} Joker Bonus)*`);
+        if (opts.wildAttackDmgBonus) descLines.push(`*(Includes +${opts.wildAttackDmgBonus} Wild Attack Bonus)*`);
+        if (opts.calledDmg) descLines.push(`*(Includes +${opts.calledDmg} Called Shot damage)*`);
+        const fields = [];
+        fields.push({ name: "Dice", value: (opts.diceHistory && opts.diceHistory.length) ? opts.diceHistory.join(' + ') : '—', inline: true });
+        if (opts.modifier) fields.push({ name: "Modifier", value: `${opts.modifier > 0 ? '+' : ''}${opts.modifier}`, inline: true });
+        if (opts.raiseRolls && opts.raiseRolls.length) fields.push({ name: "Raise Bonus (+1d6)", value: opts.raiseRolls.join(' + '), inline: true });
+        if (opts.has3RB) fields.push({ name: "Three-Round Burst", value: "+1 Damage", inline: true });
+        if (opts.hasDT && opts.dtVal) fields.push({ name: "Double Tap", value: `+${opts.dtVal} Damage`, inline: true });
+        if (opts.jokerBonus) fields.push({ name: "Joker's Wild", value: `+${opts.jokerBonus}`, inline: true });
+        if (opts.wildAttackDmgBonus) fields.push({ name: "Wild Attack", value: `+${opts.wildAttackDmgBonus}`, inline: true });
+        if (opts.calledDmg) fields.push({ name: "Called Shot", value: `+${opts.calledDmg} Damage`, inline: true });
+        fields.push({ name: "Weapon Specifications", value: `Range: ${w.range || '—'}\nDamage: ${w.damage || '—'}\nAP: ${w.ap || '0'}\nRoF: ${w.rof || '1'}`, inline: false });
+        perTarget.forEach((t) => {
+            const mit = `Cover −${t.coverApplied || 0}` + (t.evasion ? ' + Evasion (halved)' : '');
+            const body = (t.plainText || 'No effect.').replace(/^AUTO-APPLIED:\s*/, '').replace(/^AUTO-CHECK:\s*/, '');
+            fields.push({
+                name: `${t.targetName} (Tgh ${t.tgh || 0}${t.armor ? '+' + t.armor : ''})`,
+                value: `${mit} → eff dmg ${t.effectiveDamage}\n${body}`,
+                inline: false
+            });
+        });
+        const embed = {
+            title: `${opts.attackerName || 'Attacker'} — Area Damage: ${w.name || 'Weapon'}`,
+            description: descLines.join('\n'),
+            color: 0xff3333,
+            fields: fields
+        };
+        const imgUrl = w.icon || w.image || '';
+        if (imgUrl) embed.thumbnail = { url: imgUrl };
+        return embed;
+    }
     // ---- public API ----
     window.Embeds = {
         post,
@@ -282,7 +326,8 @@
         temAttack,
         temDamage,
         turnOrder,
-        participantConditions
+        participantConditions,
+        areaDamage
     };
 
     // Back-compat aliases (older code referenced these names on window).

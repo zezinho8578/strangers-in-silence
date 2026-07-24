@@ -2668,56 +2668,89 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                 bonusStr = ` + ${rRoll.history.join('+')} [Raise]`;
             }
             let attackKey = `${activeTemplateId || activeThreat.name}_${wep.id || wep.name}`;
-
             // Part 4: Called Shot damage bonus.
             let preAttack = getAttackContext(attackKey);
             let calledShot = preAttack?.calledShot || {};
             let calledDmg = parseInt(calledShot.dmgMod) || 0;
             total += calledDmg;
             let calledStr = calledDmg > 0 ? ` + ${calledDmg} (Called Shot)` : "";
-
-            let multiSelect = document.getElementById('multi-target-select');
-            let isMass = document.getElementById('multi-target-row').style.display !== 'none'
-                         && multiSelect && multiSelect.selectedOptions.length > 0;
-            let application;
+            // PHASE 4 — AREA EFFECT damage application (replaces the old multi-select mass
+            // path). On a confirmed hit with selected targets, the SAME rolled damage is
+            // applied to each target, reduced individually (Cover subtracted, then Evasion
+            // halves the remainder) via the cover modal. The live multi-select is no longer
+            // consulted, so a stale selection can never mis-apply a normal weapon.
             let wepAreaInfo = getAreaEffectInfo(wep);
             let areaPlanForWep = wepAreaInfo ? (currentAreaPlan && currentAreaPlan.weaponName === wep.name ? currentAreaPlan : null) : null;
-            let areaNote = wepAreaInfo ? areaDamageApplicationNote(areaPlanForWep, true) : null;
-            if (areaNote) {
-                application = { applied: false, message: `> <b style="color:#ff9900;">AREA:</b> ${areaNote}`, plainText: `AREA: ${areaNote}` };
-            } else if (wepAreaInfo && multiSelect && multiSelect.selectedOptions.length > 0) {
-                let massResults = await applyMassDamageToTracker(wep, total);
-                let termLines = massResults.map(r =>
-                    `&nbsp;&nbsp;<b>${r.targetName}:</b> ${r.plainText || 'No effect.'}`
-                );
-                application = {
-                    message: termLines.join('<br>'),
-                    plainText: massResults.map(r => `${r.targetName}: ${r.plainText || 'No effect.'}`).join('\n')
-                };
-                if (globalState && globalState.webhook) {
-                    let fields = massResults.map(r => ({
-                        name: r.targetName,
-                        value: r.plainText || 'No effect.',
-                        inline: false
-                    }));
-                    const embed = {
-                        title: `${activeThreat.name} — Area Damage: ${wep.name}`,
-                        description: `**Damage: ${total}** applied to ${massResults.length} target(s)`,
-                        color: 0xff3333,
-                        fields: fields
+            let curRound = globalState.combat?.round ?? null;
+            let areaHitWithTargets = !!(areaPlanForWep
+                && areaPlanForWep.attackHit === true
+                && !areaPlanForWep.damageApplied
+                && (areaPlanForWep.round === null || areaPlanForWep.round === curRound)
+                && areaPlanForWep.targets && areaPlanForWep.targets.length > 0);
+            let application;
+            if (areaHitWithTargets) {
+                let coverMap = await window.showAreaCoverModal(areaPlanForWep);
+                if (coverMap === null) {
+                    application = { applied: false, embedPosted: true, message: `> <b style="color:#ff9900;">AREA:</b> Cover / Evasion selection cancelled — <b>${total}</b> damage was rolled but NOT applied. Apply it manually via the tracker, or press REROLL DMG.`, plainText: `AREA: cover selection cancelled; ${total} damage not applied.` };
+                } else {
+                    let massResults = [];
+                    for (let t of areaPlanForWep.targets) {
+                        let cm = coverMap[t.id] || {};
+                        let cov = parseInt(cm.cover) || 0;
+                        let ev = !!cm.evasion;
+                        let eff = Math.max(0, total - cov);
+                        if (ev) eff = Math.floor(eff / 2);
+                        let aKey = `area_plan_${t.id}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                        setAttackContext(aKey, {
+                            targetId: t.id, targetName: t.name,
+                            attackerName: areaPlanForWep.attackerName || activeThreat.name || "Attacker",
+                            hit: true, ap: wep.ap ?? "0", weaponName: wep.name,
+                            round: globalState.combat?.round ?? null, savedAt: Date.now(),
+                            calledShot: { id: "none" }
+                        });
+                        let res = await applyDamageToTracker(aKey, wep, eff);
+                        massResults.push({
+                            targetName: t.name, tgh: t.tgh, armor: t.armor,
+                            coverApplied: cov, evasion: ev, effectiveDamage: eff,
+                            applied: res.applied, plainText: res.plainText || ""
+                        });
+                    }
+                    areaPlanForWep.damageApplied = true;
+                    if (currentAreaPlanKey) setAreaAttackPlan(currentAreaPlanKey, areaPlanForWep);
+                    let termLines = massResults.map(r => {
+                        let mit = `Cover −${r.coverApplied}` + (r.evasion ? ' + Evasion (halved)' : '');
+                        let body = (r.plainText || 'No effect.').replace(/^AUTO-APPLIED:\s*/, '').replace(/^AUTO-CHECK:\s*/, '');
+                        return `&nbsp;&nbsp;<b>${r.targetName}</b> [${mit} → eff dmg ${r.effectiveDamage}]: ${body}`;
+                    });
+                    application = {
+                        applied: massResults.some(r => r.applied), embedPosted: true,
+                        message: `> <b style="color:#ff3333;">AREA DAMAGE (${total})</b> — same blast, per-target cover/Evasion:<br>` + termLines.join('<br>'),
+                        plainText: massResults.map(r => `${r.targetName}: ${r.plainText || 'No effect.'}`).join(' | ')
                     };
-                    let imgUrl = wep.image || wep.icon || "";
-                    if (imgUrl && !imgUrl.includes("Orange_lambda.svg")) embed.thumbnail = { url: imgUrl };
-                    fetch(globalState.webhook, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ embeds: [embed] })
-                    }).catch(e => {});
+                    if (globalState && globalState.webhook && window.Embeds && window.Embeds.areaDamage) {
+                        await window.Embeds.post(globalState.webhook, window.Embeds.areaDamage({
+                            attackerName: activeThreat.name, weapon: wep, total: total,
+                            diceHistory: rolls, modifier: flatMod,
+                            raiseRolls: addRaise ? bonusRolls : null,
+                            has3RB: has3RBBonus, hasDT: false, dtVal: 0,
+                            jokerBonus: jokerBonus, wildAttackDmgBonus: wildAttackDmgBonus, calledDmg: calledDmg,
+                            plan: areaPlanForWep, perTarget: massResults
+                        }));
+                    }
                 }
+            } else if (wepAreaInfo) {
+                let note;
+                if (areaPlanForWep && areaPlanForWep.damageApplied) {
+                    note = 'This area attack\'s damage was already applied. A rerolled/second damage value is NOT auto-applied — apply manually if needed.';
+                } else if (areaPlanForWep && areaPlanForWep.attackHit === true) {
+                    note = 'Blast on target at the intended point, but no targets were selected — GM adjudicates who (if anyone) is caught and applies manually.';
+                } else {
+                    note = areaDamageApplicationNote(areaPlanForWep, true);
+                }
+                application = { applied: false, embedPosted: true, message: `> <b style="color:#ff9900;">AREA:</b> ${note}`, plainText: `AREA: ${note}` };
             } else {
                 application = await applyDamageToTracker(attackKey, wep, total);
             }
-
             // Store context for a Benny damage reroll (one reroll per damage roll).
             lastDamageContext = {
                 wepIndex,
@@ -2736,22 +2769,18 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                 usedReroll: false
             };
             updateDamageRerollButton(wepIndex);
-
             let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
             let termLog = `> ${activeThreat.name} dealt damage with ${wep.name.toUpperCase()}<br>&nbsp;&nbsp;Dmg Roll [${wep.damage}]: ${rolls.join(' + ')}${flatMod !== 0 ? (flatMod > 0 ? '+' + flatMod : flatMod) : ''}${trbStr}${bonusStr}${calledStr}<br>&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
-
             if (application.message) {
                 termLog += `<br>&nbsp;&nbsp;${application.message}`;
             }
-
             // Damage reroll button (terminal) — shown when GM Benny pool > 0.
             let gmPool = globalState.combat?.gmPool || 0;
             if (gmPool > 0) {
                 termLog += `<br>&nbsp;&nbsp;<button class="die-btn dmg-reroll-btn" onclick="rerollThreatDamage(${wepIndex})">⟳ REROLL DMG (1 BENNY — GM POOL: ${gmPool})</button>`;
             }
-
             logToTerminal(termLog);
-            if (globalState && globalState.webhook && !isMass) {
+            if (!application.embedPosted && globalState && globalState.webhook) {
                 const embed = {
                     title: `${activeThreat.name} rolled damage with ${wep.name}`,
                     description: `**Damage Total: ${total}**`, color: 0xff3333,
@@ -2774,8 +2803,7 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                     if (calledDmg > 0) csVal += ` (+${calledDmg} Dmg)`;
                     embed.fields.push({ name: "Called Shot", value: csVal, inline: true });
                     if (calledDmg > 0) {
-                        embed.description += `
-*(Includes +${calledDmg} Called Shot damage)*`;
+                        embed.description += `\n*(Includes +${calledDmg} Called Shot damage)*`;
                     }
                 }
                 let imgUrl = wep.image || wep.icon || "";
@@ -2783,11 +2811,9 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                     embed.thumbnail = { url: imgUrl };
                 }
                 embed.fields.push({ name: "Weapon Specifications", value: `Range: ${wep.range || "—"}\nDamage: ${wep.damage || "—"}\nAP: ${wep.ap || "0"}\nRoF: ${wep.rof || "1"}` });
-
                 if (application.plainText) {
                     embed.description += `\n${application.plainText}`;
                 }
-
                 fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
             }
         };

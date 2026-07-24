@@ -1484,9 +1484,9 @@ if (!attackHit) {
 let kind = (areaInfo && areaInfo.kind) || plan.areaKind || 'fired';
 if (kind === 'thrown' || kind === 'fired') {
 plan.deviation = rollAreaDeviation(plan);
-} else if (kind === 'cone' || kind === 'line') {
-plan.missNote = "The attack goes over the targets' heads, hits the ground, or simply falters — no deviation for cone/line templates.";
-} else {
+        } else if (kind === 'cone' || kind === 'line') {
+            plan.missNote = "The attack goes over the targets' heads, hits the ground, or simply falters (no deviation).";
+        } else {
 plan.missNote = 'No detonation in the intended zone — the charge did not go off where placed.';
 }
 }
@@ -1516,3 +1516,61 @@ window.areaDamageApplicationNote = areaDamageApplicationNote;
 // settings.js loads after the modal markup on every page that has the list; pages
 // without it no-op via the guard above (tracker, dashboard, etc.).
 setupAreaTargetList();
+// ==========================================
+// AREA EFFECT — PHASE 4: PER-TARGET COVER / EVASION MODAL
+// Shown at the DAMAGE step on a confirmed area hit (Q-A). For each intended
+// target it collects a Cover value (subtracted from the blast damage) and an
+// Evasion flag (halves the remainder). Returns a Promise that resolves to
+// { [targetId]: { cover, evasion } } on APPLY, or null on CANCEL (the caller
+// then auto-applies nothing — the rolled number is left on screen for manual use).
+// The modal is built lazily on first use and reused afterwards.
+// ==========================================
+function showAreaCoverModal(plan) {
+    return new Promise((resolve) => {
+        let modal = document.getElementById('area-cover-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'area-cover-modal';
+            modal.style.cssText = 'display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); border:2px solid #00ccff; background:var(--bg-color); color:var(--theme-color); padding:20px; z-index:9999999; box-shadow:0 0 25px rgba(0,0,0,0.95); max-width:92vw; max-height:88vh; overflow-y:auto; text-align:left; pointer-events:auto !important; font-family:var(--font-family); font-size:var(--font-size);';
+            document.body.appendChild(modal);
+        }
+        let targets = (plan && plan.targets) ? plan.targets : [];
+        let rowsHtml = targets.map((t) => {
+            let armorLbl = t.armor ? ('+' + t.armor) : '0';
+            let safeName = String(t.name || 'Target').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return `<div class="acm-row" data-id="${t.id}" style="display:grid; grid-template-columns: 1fr auto auto; gap:10px; align-items:center; border-bottom:1px dashed rgba(0,204,255,0.3); padding:8px 2px;">`
+                + `<div style="font-size:0.92em;"><b>${safeName}</b> <span style="opacity:0.7; font-size:0.85em;">(Tgh ${t.tgh || 0} / Armor ${armorLbl})</span></div>`
+                + `<select class="acm-cover" data-id="${t.id}" style="background:var(--bg-color); color:var(--theme-color); border:1px solid var(--theme-color); font-family:inherit; padding:4px; pointer-events:auto !important;">`
+                + `<option value="0">No cover (0)</option>`
+                + `<option value="2">Light (-2 dmg)</option>`
+                + `<option value="4">Medium (-4 dmg)</option>`
+                + `<option value="6">Heavy (-6 dmg)</option>`
+                + `<option value="8">Full (-8 dmg)</option>`
+                + `</select>`
+                + `<label style="display:flex; align-items:center; gap:5px; font-size:0.85em; white-space:nowrap; pointer-events:auto !important;"><input type="checkbox" class="acm-evade" data-id="${t.id}" style="width:18px; height:18px; pointer-events:auto !important;"> Evasion (halve)</label>`
+                + `</div>`;
+        }).join('');
+        modal.innerHTML = `
+            <div style="color:#00ccff; font-weight:bold; font-size:1.05em; border-bottom:1px solid #00ccff; padding-bottom:8px; margin-bottom:10px;">&#9888; AREA EFFECT &mdash; SET COVER / EVASION PER TARGET</div>
+            <div style="font-size:0.82em; opacity:0.9; margin-bottom:10px;">The blast landed on the intended point. For each target set the cover between them and the blast (subtracted from the damage) and whether they made an Evasion roll (the remainder is halved). Applied in order: cover first, then Evasion.</div>
+            <div id="acm-rows">${rowsHtml || '<div style="opacity:0.7;">No targets in the plan.</div>'}</div>
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:14px;">
+                <button id="acm-cancel" style="background:transparent; color:#ff3333; border:1px solid #ff3333; padding:6px 14px; cursor:pointer; font-family:inherit; pointer-events:auto !important;">[ CANCEL ]</button>
+                <button id="acm-confirm" style="background:transparent; color:#00ff00; border:1px solid #00ff00; padding:6px 14px; cursor:pointer; font-family:inherit; pointer-events:auto !important;">[ APPLY DAMAGE ]</button>
+            </div>`;
+        modal.style.display = 'block';
+        modal.querySelector('#acm-cancel').onclick = () => { modal.style.display = 'none'; resolve(null); };
+        modal.querySelector('#acm-confirm').onclick = () => {
+            let map = {};
+            modal.querySelectorAll('.acm-row').forEach((row) => {
+                let id = row.dataset.id;
+                let cover = parseInt(row.querySelector('.acm-cover').value) || 0;
+                let evasion = !!row.querySelector('.acm-evade').checked;
+                map[id] = { cover: cover, evasion: evasion };
+            });
+            modal.style.display = 'none';
+            resolve(map);
+        };
+    });
+}
+window.showAreaCoverModal = showAreaCoverModal;
