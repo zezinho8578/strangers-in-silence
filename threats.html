@@ -812,6 +812,8 @@ style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bot
         let defenderDisplay = "";
         // Area‑effect descriptor for the weapon currently being aimed (null = normal).
         let currentAreaInfo = null;
+        let currentAreaPlan = null;
+        let currentAreaPlanKey = null;
 
         // Part 4: Called Shots
         let calledShotId = "none";
@@ -2050,6 +2052,9 @@ window.onTargetDodgeChange = async function () {
             pendingRoll = { skill: skillName };
             activeWeaponContext = wep;
             currentAreaInfo = getAreaEffectInfo(wep);
+            if (currentAreaPlanKey) clearAreaAttackPlan(currentAreaPlanKey);
+            currentAreaPlan = null;
+            currentAreaPlanKey = null;
             document.getElementById('tn-input').value = "4";
             document.getElementById('mod-override-input').value = "0";
             document.getElementById('map-select').value = "0";
@@ -2118,6 +2123,8 @@ window.onTargetDodgeChange = async function () {
         };
         window.updateModifierAdjust = function () {
             if (!activeWeaponContext) return;
+            // Gate on the RANGED container (not RoF): area mode hides RoF but keeps the
+            // range bracket for thrown/fired, so the range penalty must still apply.
             let isRanged = document.getElementById('ranged-options-container').style.display !== 'none';
             let rangePenalty = 0;
             let recoilPenalty = 0;
@@ -2202,6 +2209,17 @@ window.onTargetDodgeChange = async function () {
         window.confirmRoll = function () {
             if (!pendingRoll) return;
             let tn = parseInt(document.getElementById('tn-input').value) || 4;
+            if (currentAreaInfo) {
+                currentAreaPlan = buildAreaAttackPlan(
+                    currentAreaInfo, activeWeaponContext, activeThreat ? activeThreat.name : "Attacker",
+                    (globalState.combat && globalState.combat.participants) ? globalState.combat.participants : [],
+                    globalState.combat ? globalState.combat.round : null);
+                currentAreaPlanKey = getThreatAttackKey();
+                setAreaAttackPlan(currentAreaPlanKey, currentAreaPlan);
+            } else {
+                currentAreaPlan = null;
+                currentAreaPlanKey = null;
+            }
             let is3RB = false;
             let isSupp = false;
             let shotsFired = 1;
@@ -2226,6 +2244,9 @@ window.onTargetDodgeChange = async function () {
             pendingRoll = null;
             activeWeaponContext = null;
             currentAreaInfo = null;
+            if (currentAreaPlanKey) clearAreaAttackPlan(currentAreaPlanKey);
+            currentAreaPlan = null;
+            currentAreaPlanKey = null;
             // B8: clear defender state on cancel
             defenderModifier = 0;
             defenderDisplay = "";
@@ -2443,7 +2464,9 @@ window.rerollLastRoll = async function () {
 async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, rerollInfo = null, calledShot = null) {
     let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
     let modStrDisplay = totalModifier !== 0 ? ` (${totalModifier > 0 ? '+' : ''}${totalModifier})` : "";
-    let title = `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
+    let title = currentAreaPlan
+        ? `${activeThreat.name} — AREA ATTACK: ${activeWeaponContext.name}`
+        : `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
     
     let termLog = "";
     if (rerollInfo) {
@@ -2455,6 +2478,11 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
     }
     
     termLog += `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
+    if (currentAreaPlan) {
+        let _names = currentAreaPlan.targets.length ? currentAreaPlan.targets.map(t => t.name).join(', ') : 'none (point blast)';
+        termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">⚠ AREA EFFECT: ${currentAreaPlan.templateLabel} @ ${currentAreaPlan.rangeOrReachLabel}. Intended targets: ${_names}.</span><br>`;
+        termLog += `&nbsp;&nbsp;<span style="opacity:0.8;">Called Shot disabled (area attack targets a location).</span><br>`;
+    }
     if (defenderDisplay) termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">${defenderDisplay}</span><br>`;
     if (calledShot && calledShot.id && calledShot.id !== "none") {
         termLog += `&nbsp;&nbsp;<span style="color:#ff9900;">🎯 Called Shot: ${calledShot.label || calledShot.id}</span><br>`;
@@ -2493,7 +2521,15 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
         if (calledShot && calledShot.id && calledShot.id !== "none") {
             desc += `🎯 **Called Shot: ${calledShot.label || calledShot.id}**\n`;
         }
-        
+        if (currentAreaPlan) {
+            let _names = currentAreaPlan.targets.length
+                ? currentAreaPlan.targets.map(t => `**${t.name}** (Tgh ${t.tgh}${t.armor ? '+' + t.armor : ''})`).join(', ')
+                : '_none — blast placed at the point_';
+            desc += `⚠ **AREA EFFECT** — ${currentAreaPlan.templateLabel} placed at ${currentAreaPlan.rangeOrReachLabel}.
+Intended targets: ${_names}
+Called Shot: _disabled (area attack)_
+`;
+        }
         results.forEach(r => {
             if (r.isSingle) desc += `**Result: ${r.total}**\n${r.outcome}\n`;
             else desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
@@ -2508,7 +2544,9 @@ async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, 
         if (calledShot && calledShot.id && calledShot.id !== "none") {
             embed.fields.push({ name: "Called Shot", value: calledShot.label || calledShot.id, inline: true });
         }
-        
+        if (currentAreaPlan) {
+            embed.fields.push({ name: "Template / Range", value: `${currentAreaPlan.templateLabel} — ${currentAreaPlan.rangeOrReachLabel}`, inline: false });
+        }
         let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || "";
         if (imgUrl && !imgUrl.includes("Orange_lambda.svg")) {
             embed.thumbnail = { url: imgUrl };

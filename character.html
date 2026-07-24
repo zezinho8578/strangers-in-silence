@@ -1143,6 +1143,9 @@
         let defenderDisplay = "";
         // Area‑effect descriptor for the weapon currently being aimed (null = normal).
         let currentAreaInfo = null;
+        // Area‑effect attack plan snapshot for the current modal session (null = normal).
+        let currentAreaPlan = null;
+        let currentAreaPlanKey = null;
 
         function idxValid(x) { return x !== undefined && x !== null && x >= 0; }
         function effectiveActiveIndex(combat) {
@@ -2523,6 +2526,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 if (lastCombatRound !== null && globalState.combat.round !== lastCombatRound) {
                     clearAllPendingDamageBonuses();
                     clearAllAttackContexts();
+                    clearAllAreaPlans();
                 }
                 lastCombatRound = globalState.combat.round;
                 // B7: the character object owns wounds/fatigue. Do NOT overwrite the
@@ -4753,6 +4757,12 @@ window.onTargetChange = function () {
                 termLog += `&nbsp;&nbsp;-> Keeping <b>${rerollInfo.which}</b>.</span><br>`;
             }
             termLog += `> ${charData.name} rolled ${name.toUpperCase()} vs TN ${targetNumber}${modStrDisplay}<br>`;
+            // AREA EFFECT: annotate the terminal with template / range / intended targets.
+            if (currentAreaPlan) {
+                let _names = currentAreaPlan.targets.length ? currentAreaPlan.targets.map(t => t.name).join(', ') : 'none (point blast)';
+                termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">⚠ AREA EFFECT: ${currentAreaPlan.templateLabel} @ ${currentAreaPlan.rangeOrReachLabel}. Intended targets: ${_names}.</span><br>`;
+                termLog += `&nbsp;&nbsp;<span style="opacity:0.8;">Called Shot disabled (area attack targets a location).</span><br>`;
+            }
             // B8: show the selected target and defender modifier breakdown
             if (defenderDisplay) {
                 termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">${defenderDisplay}</span><br>`;
@@ -4799,6 +4809,15 @@ window.onTargetChange = function () {
                 if (defenderDisplay) {
                     desc += `🎯 **${defenderDisplay}**\n`;
                 }
+                if (currentAreaPlan) {
+                    let _names = currentAreaPlan.targets.length
+                        ? currentAreaPlan.targets.map(t => `**${t.name}** (Tgh ${t.tgh}${t.armor ? '+' + t.armor : ''})`).join(', ')
+                        : '_none — blast placed at the point_';
+                    desc += `⚠ **AREA EFFECT** — ${currentAreaPlan.templateLabel} placed at ${currentAreaPlan.rangeOrReachLabel}.
+Intended targets: ${_names}
+Called Shot: _disabled (area attack)_
+`;
+                }
                 results.forEach(r => {
                     if (r.isSingle) {
                         desc += `**Result: ${r.total}**\n${r.outcome}`;
@@ -4817,7 +4836,9 @@ window.onTargetChange = function () {
                     color = 0xff3333;
                 }
                 const embed = {
-                    title: `${charData.name} rolled ${name}${rerollInfo ? ' (REROLL)' : ''}`,
+                    title: currentAreaPlan
+                        ? `${charData.name} — AREA ATTACK: ${ctx.activeWeaponContext ? ctx.activeWeaponContext.name : name}${rerollInfo ? ' (REROLL)' : ''}`
+                        : `${charData.name} rolled ${name}${rerollInfo ? ' (REROLL)' : ''}`,
                     description: desc,
                     color: color,
                     fields: []
@@ -4839,6 +4860,9 @@ window.onTargetChange = function () {
                         name: "Weapon Specifications",
                         value: `Range: ${ctx.activeWeaponContext.range}\nDamage: ${ctx.activeWeaponContext.damage}\nAP: ${ctx.activeWeaponContext.ap}\nRoF: ${ctx.activeWeaponContext.rof}\nShots: ${ctx.activeWeaponContext.shots}\nMin Str: ${ctx.activeWeaponContext.minStr}`
                     });
+                }
+                if (currentAreaPlan) {
+                    embed.fields.push({ name: "Template / Range", value: `${currentAreaPlan.templateLabel} — ${currentAreaPlan.rangeOrReachLabel}`, inline: false });
                 }
                 // TEM: list every non-default tactical modifier on the embed (Cover,
                 // Gang Up, The Drop, Illumination, Defend, Running, Range, RoF, MAP,
@@ -4892,6 +4916,10 @@ window.onTargetChange = function () {
             activeWeaponContext = weaponObj;
             activeWeaponIndex = weaponIndex;
             currentAreaInfo = weaponObj ? getAreaEffectInfo(weaponObj) : null;
+            // Discard any unconsumed plan from a previous area attack.
+            if (currentAreaPlanKey) clearAreaAttackPlan(currentAreaPlanKey);
+            currentAreaPlan = null;
+            currentAreaPlanKey = null;
             document.getElementById('tn-input').value = "4";
             document.getElementById('mod-override-input').value = "0";
             document.getElementById('map-select').value = "0";
@@ -5134,6 +5162,19 @@ window.onTargetChange = function () {
         // ==========================================
         async function confirmRoll() {
             let tn = parseInt(document.getElementById('tn-input').value) || 4;
+            // AREA EFFECT: snapshot the attack plan BEFORE the roll so the embed and the
+            // later damage/deviation steps share one source of truth. null for normal shots.
+            if (currentAreaInfo) {
+                currentAreaPlan = buildAreaAttackPlan(
+                    currentAreaInfo, activeWeaponContext, charData.name || "Attacker",
+                    (globalState.combat && globalState.combat.participants) ? globalState.combat.participants : [],
+                    globalState.combat ? globalState.combat.round : null);
+                currentAreaPlanKey = getWeaponBonusKey(activeWeaponContext, activeWeaponIndex);
+                setAreaAttackPlan(currentAreaPlanKey, currentAreaPlan);
+            } else {
+                currentAreaPlan = null;
+                currentAreaPlanKey = null;
+            }
             let is3RB = false;
             let isSupp = false;
             let isDoubleTap = false;
@@ -5202,6 +5243,9 @@ window.onTargetChange = function () {
             pendingRoll = null;
             pendingMinStrPenalty = 0;
             currentAreaInfo = null;
+            if (currentAreaPlanKey) clearAreaAttackPlan(currentAreaPlanKey);
+            currentAreaPlan = null;
+            currentAreaPlanKey = null;
             // B8: clear defender state on cancel
             defenderModifier = 0;
             defenderDisplay = "";

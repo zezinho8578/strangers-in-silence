@@ -1257,6 +1257,17 @@ function applyAreaModeUI(isArea, areaInfo) {
     if (singleRow) singleRow.style.display = isArea ? 'none'  : 'flex';
     if (multiRow)  multiRow.style.display  = isArea ? 'flex'  : 'none';
     if (statusEl)  statusEl.style.display  = isArea ? 'none'  : '';
+    // Action Type (Test/Support) targets a PERSON, not a location. In AREA MODE
+    // a stray "Perform Test" would roll the weapon skill vs TN 4 and then
+    // silently discard the chosen effect (no single target) — a confusing no‑op.
+    // Hide the whole row + force Normal; non‑area restores it (onActionModeChange
+    // still owns the Test sub‑row once the user re‑enables it).
+    const actionRow = $('action-mode-row');
+    const actionSel = $('action-mode-select');
+    const testRow   = $('test-options-row');
+    if (actionRow) actionRow.style.display = isArea ? 'none' : '';
+    if (testRow)   testRow.style.display   = 'none';
+    if (actionSel) actionSel.value         = 'normal';
     // Preview is per‑target; always hidden on open (onTargetChange re‑shows it
     // for a chosen target when non‑area). Dodge is per‑target too.
     if (previewEl) previewEl.style.display = 'none';
@@ -1300,3 +1311,93 @@ window.AREA_DEVIATION = AREA_DEVIATION;
 window.getAreaEffectInfo = getAreaEffectInfo;
 window.getAreaTemplateChoice = getAreaTemplateChoice;
 window.applyAreaModeUI = applyAreaModeUI;
+
+// ==========================================
+// AREA ATTACK PLAN — built once at CONFIRM, read by the attack embed (Phase 2),
+// deviation (Phase 3) and per‑target damage (Phase 4). The ctrl‑click list's
+// only job is to populate this at Confirm; afterwards the live multi‑select is
+// irrelevant (no selection drift, no key collisions).
+// ==========================================
+// Parse the distance (in inches) to the aimed point for a chosen range bracket.
+// The weapon's range string holds Short/Medium/Long (e.g. "36/72/144", or
+// "Throw 6/12/18"); bracketIndex 0..3 = Short/Medium/Long/Extreme. Extreme has
+// no 4th number in the string, so we extrapolate 2× the longest listed bracket.
+// "Contact"/"Melee" have no numbers → 0 (deviation is N/A for those anyway).
+function parseAreaRangeDistance(rangeStr, bracketIndex) {
+    const nums = (String(rangeStr || '').match(/\d+/g) || [])
+        .map(n => parseInt(n, 10)).filter(n => !isNaN(n));
+    if (!nums.length) return 0;
+    if (nums[bracketIndex] !== undefined) return nums[bracketIndex];
+    return nums[nums.length - 1] * 2;   // Extreme / beyond‑listed extrapolation
+}
+// Build the plan from the live modal controls + the combatant list. Reads the
+// shared DOM ids (multi‑target‑select / range‑select / area‑template‑select),
+// which are identical on character.html and threats.html.
+function buildAreaAttackPlan(areaInfo, weaponObj, attackerName, participants, round) {
+    const $ = (id) => document.getElementById(id);
+    const kind = areaInfo ? areaInfo.kind : 'fired';
+    // Template choice (display + recorded; size drives no math).
+    const tSel = $('area-template-select');
+    let templateValue = null, templateLabel = '';
+    if (tSel) {
+        templateValue = tSel.value;
+        templateLabel = (tSel.options[tSel.selectedIndex] || {}).text || tSel.value;
+    }
+    // Range bracket + parsed distance (the distance is what Phase 3 needs).
+    const rSel = $('range-select');
+    const rangeBracketValue = rSel ? rSel.value : '0';
+    const rangeBracketLabel = (rSel && rSel.options[rSel.selectedIndex])
+        ? rSel.options[rSel.selectedIndex].text : 'Short Range (+0)';
+    const bracketIndex = rangeBracketValue === '-2' ? 1
+        : rangeBracketValue === '-4' ? 2 : rangeBracketValue === '-8' ? 3 : 0;
+    const distanceNumber = parseAreaRangeDistance(weaponObj ? weaponObj.range : '', bracketIndex);
+    // thrown/fired show the bracket + distance; cone/line/contact show fixed reach.
+    const rangeOrReachLabel = (kind === 'thrown' || kind === 'fired')
+        ? `${rangeBracketLabel} (~${distanceNumber}" to point)`
+        : `Reach ${weaponObj ? (weaponObj.range || '—') : '—'}`;
+    // Intended targets from the Ctrl‑click list (with read‑only Tgh/Armor).
+    const mSel = $('multi-target-select');
+    const targets = [];
+    if (mSel) {
+        Array.from(mSel.selectedOptions).forEach(o => {
+            const p = (participants || []).find(x => x.id === o.value);
+            targets.push({
+                id: o.value,
+                name: p ? p.name : (o.textContent || o.value),
+                tgh: p ? (parseInt(p.toughness) || 0) : 0,
+                armor: p ? (parseInt(p.armor) || 0) : 0
+            });
+        });
+    }
+    return {
+        attackerName: attackerName || 'Attacker',
+        weaponName: weaponObj ? (weaponObj.name || 'Weapon') : 'Weapon',
+        ap: weaponObj ? (weaponObj.ap ?? '0') : '0',
+        round: (round === undefined || round === null) ? null : round,
+        savedAt: Date.now(),
+        areaKind: kind,
+        templateValue: templateValue,
+        templateLabel: templateLabel || (areaInfo ? areaInfo.defaultTemplate : 'SBT'),
+        rangeBracketValue: rangeBracketValue,
+        rangeBracketLabel: rangeBracketLabel,
+        distanceNumber: distanceNumber,
+        rangeOrReachLabel: rangeOrReachLabel,
+        targets: targets,
+        calledShotDisabled: true
+    };
+}
+// sessionStorage mirror so a reload mid‑combat doesn't lose the plan (the page
+// also keeps it in a module var for the immediate embed/damage step).
+const AREA_PLAN_PREFIX = 'area_attack_plan_';
+function setAreaAttackPlan(key, plan) { if (key) sessionStorage.setItem(AREA_PLAN_PREFIX + key, JSON.stringify(plan)); }
+function getAreaAttackPlan(key) { if (!key) return null; try { return JSON.parse(sessionStorage.getItem(AREA_PLAN_PREFIX + key)) || null; } catch (e) { return null; } }
+function clearAreaAttackPlan(key) { if (key) sessionStorage.removeItem(AREA_PLAN_PREFIX + key); }
+function clearAllAreaPlans() {
+    Object.keys(sessionStorage).filter(k => k.startsWith(AREA_PLAN_PREFIX)).forEach(k => sessionStorage.removeItem(k));
+}
+window.parseAreaRangeDistance = parseAreaRangeDistance;
+window.buildAreaAttackPlan = buildAreaAttackPlan;
+window.setAreaAttackPlan = setAreaAttackPlan;
+window.getAreaAttackPlan = getAreaAttackPlan;
+window.clearAreaAttackPlan = clearAreaAttackPlan;
+window.clearAllAreaPlans = clearAllAreaPlans;
