@@ -1726,7 +1726,19 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             }
         }
 
-        function goldenHourRemaining(ts) {
+        function goldenHourRemaining(w) {
+            // Reads the live Golden Hour remaining for a wound (B7). When the GM has
+            // PAUSED this wound, the countdown is frozen at ghFrozenRemaining instead of
+            // tracking the wall clock — that single branch is what lets the timer stop on
+            // demand. A paused wound whose frozen remaining is still > 0 counts as "within
+            // the Golden Hour", so it stays healable (the rule is about elapsed treatment
+            // time, which we have deliberately suspended). Back-compat: if a raw timestamp
+            // is ever passed instead of the wound object, fall through to the old math.
+            let isObj = (w && typeof w === 'object');
+            let ts = isObj ? (w.ts || 0) : (w || 0);
+            if (isObj && w.ghPaused) {
+                return (typeof w.ghFrozenRemaining === 'number') ? w.ghFrozenRemaining : 0;
+            }
             return GOLDEN_HOUR_MS - (Date.now() - ts);
         }
         function fatigueHourRemaining(ts) {
@@ -1738,6 +1750,75 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             let m = Math.floor(totalSec / 60);
             let s = totalSec % 60;
             return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        // ---- ACCESSIBILITY: minute-granularity countdown text ----
+        // null == expired / ready (caller decides the wording); otherwise whole minutes,
+        // rounded UP so the readout never shows a deceptive "0 min left".
+        function formatMinutesLeft(ms) {
+            if (ms <= 0) return null;
+            return Math.ceil(ms / 60000);
+        }
+
+        // ---- GM-ONLY GOLDEN HOUR TRANSPORT CONTROLS ----
+        // Pause freezes a wound at ghFrozenRemaining; resume bakes that value back into
+        // w.ts so the live formula continues with no jump. Extend / shorten add or remove
+        // whole minutes from whatever the clock reads *right now* — paused or live —
+        // clamped to [0, GOLDEN_HOUR_MS] (you can't bank more than a full Golden Hour,
+        // and dropping below 0 simply reads as EXPIRED).
+        function _setGoldenHourRemaining(w, remainingMs) {
+            let clamped = Math.max(0, Math.min(GOLDEN_HOUR_MS, remainingMs));
+            if (w.ghPaused) {
+                w.ghFrozenRemaining = clamped;          // frozen clock: edit the snapshot
+            } else {
+                w.ts = Date.now() - (GOLDEN_HOUR_MS - clamped); // live clock: re-derive the anchor
+            }
+        }
+        function gmAdjustGoldenHour(woundIdx, addMinutes) {
+            if (!isAdmin) return;
+            let w = charData.woundLog && charData.woundLog[woundIdx];
+            if (!w) return;
+            let addMs = (parseInt(addMinutes) || 0) * 60000;
+            if (addMs === 0) return;
+            _setGoldenHourRemaining(w, goldenHourRemaining(w) + addMs);
+            saveCharacter();
+            renderDiagnostics();
+            let left = formatMinutesLeft(goldenHourRemaining(w));
+            logToTerminal(`> [GM] Golden Hour for ${w.name || ('Wound ' + (woundIdx + 1))} ${addMinutes > 0 ? 'extended' : 'shortened'} by ${Math.abs(addMinutes)} min → ${left === null ? 'EXPIRED' : left + ' min left'}${w.ghPaused ? ' (paused)' : ''}.`);
+        }
+        function gmToggleGoldenHourPause(woundIdx) {
+            if (!isAdmin) return;
+            let w = charData.woundLog && charData.woundLog[woundIdx];
+            if (!w) return;
+            if (w.ghPaused) {
+                let r = (typeof w.ghFrozenRemaining === 'number') ? w.ghFrozenRemaining : 0;
+                w.ts = Date.now() - (GOLDEN_HOUR_MS - Math.max(0, Math.min(GOLDEN_HOUR_MS, r)));
+                delete w.ghPaused;
+                delete w.ghFrozenRemaining;
+            } else {
+                w.ghFrozenRemaining = Math.max(0, goldenHourRemaining(w));
+                w.ghPaused = true;
+            }
+            saveCharacter();
+            renderDiagnostics();
+            logToTerminal(`> [GM] Golden Hour for ${w.name || ('Wound ' + (woundIdx + 1))} ${w.ghPaused ? 'PAUSED' : 'RESUMED'}.`);
+        }
+        function gmToggleAllGoldenHourPause() {
+            if (!isAdmin) return;
+            if (!Array.isArray(charData.woundLog) || charData.woundLog.length === 0) return;
+            let anyRunning = charData.woundLog.some(w => !w.ghPaused);
+            charData.woundLog.forEach(w => {
+                if (anyRunning) {
+                    if (!w.ghPaused) { w.ghFrozenRemaining = Math.max(0, goldenHourRemaining(w)); w.ghPaused = true; }
+                } else if (w.ghPaused) {
+                    let r = (typeof w.ghFrozenRemaining === 'number') ? w.ghFrozenRemaining : 0;
+                    w.ts = Date.now() - (GOLDEN_HOUR_MS - Math.max(0, Math.min(GOLDEN_HOUR_MS, r)));
+                    delete w.ghPaused; delete w.ghFrozenRemaining;
+                }
+            });
+            saveCharacter();
+            renderDiagnostics();
+            logToTerminal(`> [GM] All Golden Hour timers ${anyRunning ? 'PAUSED' : 'RESUMED'}.`);
         }
 
         // List every character who knows Healing (for the healer dropdown). Returns
@@ -1781,25 +1862,41 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 woundsHtml = `<div style="opacity:0.7; font-size:0.9em;">> NO WOUNDS RECORDED.</div>`;
             } else {
                 charData.woundLog.forEach((w, i) => {
-                    let remaining = goldenHourRemaining(w.ts);
+                    let remaining = goldenHourRemaining(w);
                     let expired = remaining <= 0;
+                    let paused = !!w.ghPaused;
                     let attemptedBy = Array.isArray(w.attemptedBy) ? w.attemptedBy : [];
                     let woundName = w.name || `Wound ${i + 1}`;
+                    let mins = formatMinutesLeft(remaining);
                     let label = expired
                         ? `<span class="diag-gh" style="color:#ff3333;">GOLDEN HOUR EXPIRED — natural healing only</span>`
-                        : `<span class="diag-gh" style="color:#ff9900;">GOLDEN HOUR: ${formatCountdown(remaining)} remaining</span>`;
+                        : (paused
+                            ? `<span class="diag-gh" style="color:#00ccff;">GOLDEN HOUR PAUSED: ${mins} min left</span>`
+                            : `<span class="diag-gh" style="color:#ff9900;">GOLDEN HOUR: ${mins} min left</span>`);
                     let taken = new Date(w.ts).toLocaleTimeString();
                     let attStr = attemptedBy.length
                         ? `<span style="opacity:0.7; font-size:0.85em;"> | attempted by: ${attemptedBy.map(id => (globalState.characters?.[id]?.name) || id).join(', ')}</span>`
                         : '';
+                    // GM transport deck for THIS wound's Golden Hour (pause / extend / shorten).
+                    let gmGhControls = '';
+                    if (isAdmin) {
+                        gmGhControls = `<div style="margin-top:3px; display:flex; gap:4px; flex-wrap:wrap;">`
+                            + `<button class="die-btn" style="padding:1px 6px; font-size:0.75em; border-color:#00ccff; color:#00ccff;" onclick="gmToggleGoldenHourPause(${i})">${paused ? 'RESUME' : 'PAUSE'}</button>`
+                            + `<button class="die-btn" style="padding:1px 6px; font-size:0.75em;" onclick="gmAdjustGoldenHour(${i}, 5)" title="Backtrack: add 5 minutes">+5m</button>`
+                            + `<button class="die-btn" style="padding:1px 6px; font-size:0.75em;" onclick="gmAdjustGoldenHour(${i}, -5)" title="Advance: remove 5 minutes">−5m</button>`
+                            + `<button class="die-btn" style="padding:1px 6px; font-size:0.75em;" onclick="gmAdjustGoldenHour(${i}, 15)" title="Backtrack: add 15 minutes">+15m</button>`
+                            + `<button class="die-btn" style="padding:1px 6px; font-size:0.75em;" onclick="gmAdjustGoldenHour(${i}, -15)" title="Advance: remove 15 minutes">−15m</button>`
+                            + `</div>`;
+                    }
                     // GM can rename the wound inline; players see a static name.
                     let safeName = woundName.replace(/</g, "&lt;").replace(/>/g, "&gt;");
                     let nameHtml = isAdmin
                         ? `<b class="diag-wound-name editable" contenteditable="true" data-wound-idx="${i}" style="border-bottom:1px dashed var(--theme-color); padding:0 3px;">${safeName}</b>`
                         : `<b>${safeName}</b>`;
-                    woundsHtml += `<div class="diag-wound" style="border-left:2px solid ${expired ? '#ff3333' : '#ff9900'}; padding-left:8px; margin-bottom:6px; font-size:0.92em;">`
+                    let borderColor = expired ? '#ff3333' : (paused ? '#00ccff' : '#ff9900');
+                    woundsHtml += `<div class="diag-wound" style="border-left:2px solid ${borderColor}; padding-left:8px; margin-bottom:6px; font-size:0.92em;">`
                         + `${nameHtml} <span style="opacity:0.7; font-size:0.85em;">(taken ${taken})</span><br>`
-                        + `${label}${attStr}</div>`;
+                        + `${label}${attStr}${gmGhControls}</div>`;
                 });
             }
 
@@ -1809,7 +1906,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 `<option value="${h.id}">${h.name} — Healing d${h.die}${h.hasHealerEdge ? ' (Healer +2)' : ''}</option>`
             ).join('');
             let noHealers = healers.length === 0;
-            let eligibleForHeal = wounds > 0 && charData.woundLog.some(w => goldenHourRemaining(w.ts) > 0);
+            let eligibleForHeal = wounds > 0 && charData.woundLog.some(w => goldenHourRemaining(w) > 0);
             let healDisabled = (noHealers || !eligibleForHeal) ? 'disabled' : '';
             let healControls = `
                 <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">
@@ -1848,7 +1945,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                     let ready = remaining <= 0;
                     let label = ready
                         ? `<span style="color:#00ff00;">≥1h elapsed — may recover 1 level</span>`
-                        : `<span style="color:#ff9900;">recovers in ${formatCountdown(remaining)}</span>`;
+                        : `<span style="color:#ff9900;">recovers in ${Math.ceil(remaining / 60000)} min</span>`;
                     fatigueHtml += `<div class="diag-fatigue" style="border-left:2px solid #ff9900; padding-left:8px; margin-bottom:4px; font-size:0.92em;"><b>Fatigue ${i + 1}</b> — ${label}</div>`;
                 });
             }
@@ -1895,14 +1992,20 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             let gmClearInjuries = isAdmin && injuries.length > 0
                 ? `<button class="die-btn" style="padding:2px 6px; font-size:0.8em; margin-top:4px;" onclick="clearInjuries()">GM: CLEAR ALL</button>`
                 : '';
-
+            // GM-only master transport for every Golden Hour timer at once (bio-breaks,
+            // long OOC pauses). One button: PAUSE while any timer runs, RESUME when all
+            // are frozen.
+            let anyGhRunning = (charData.woundLog || []).some(w => !w.ghPaused);
+            let gmGhGlobalBtn = isAdmin
+                ? `<button class="die-btn" style="padding:2px 8px; font-size:0.78em; border-color:#00ccff; color:#00ccff;" onclick="gmToggleAllGoldenHourPause()" title="Pause / resume every Golden Hour timer at once">${anyGhRunning ? 'GM: PAUSE ALL GOLDEN HOURS' : 'GM: RESUME ALL GOLDEN HOURS'}</button>`
+                : '';
             panel.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <h3 style="margin:0; border:none; padding:0;">CHARACTER HEALTH</h3>
                     <span style="font-size:0.85em; opacity:0.8;">Wounds: <b>${wounds}</b> | Fatigue: <b>${fatigue}</b>${injuries.length ? ` | Injuries: <b>${injuries.length}</b>` : ''}</span>
                 </div>
                 <div style="margin-top:10px; font-size:0.95em;">
-                    <div style="margin-bottom:4px; opacity:0.85;">WOUNDS:</div>
+                    <div style="margin-bottom:4px; opacity:0.85; display:flex; justify-content:space-between; align-items:center; gap:8px;"><span>WOUNDS:</span>${gmGhGlobalBtn}</div>
                     ${woundsHtml}
                     ${healControls}
                     ${natHtml}
@@ -1930,54 +2033,81 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 });
                 el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
             });
+            startDiagnosticsTicker(); // re-arm the per-minute scheduler against the just-drawn DOM
         }
 
-        // Live-tick the Golden Hour / fatigue countdowns once per second without a
-        // full re-render (avoids stealing focus from selects/inputs in the panel).
-        function startDiagnosticsTicker() {
-            if (diagnosticsTicker) return;
-            diagnosticsTicker = setInterval(() => {
-                if (!charData || !Array.isArray(charData.woundLog)) return;
-                let woundDivs = document.querySelectorAll('#diagnostics-panel .diag-wound');
-                charData.woundLog.forEach((w, i) => {
-                    let div = woundDivs[i];
-                    if (!div) return;
-                    let remaining = goldenHourRemaining(w.ts);
-                    let span = div.querySelector('.diag-gh');
-                    if (!span) return;
-                    if (remaining <= 0) {
-                        if (!span.textContent.includes('EXPIRED')) {
-                            span.style.color = '#ff3333';
-                            span.textContent = 'GOLDEN HOUR EXPIRED — natural healing only';
-                        }
-                    } else {
-                        span.style.color = '#ff9900';
-                        span.textContent = `GOLDEN HOUR: ${formatCountdown(remaining)} remaining`;
+        // Repaint ONLY the countdown text + heal-button state (never a full re-render, so
+        // we don't steal focus from an input the player is mid-typing in). Mirrors the
+        // three states renderDiagnostics draws: expired / paused / running.
+        function updateDiagnosticsCountdowns() {
+            if (!charData) return;
+            let woundDivs = document.querySelectorAll('#diagnostics-panel .diag-wound');
+            (charData.woundLog || []).forEach((w, i) => {
+                let div = woundDivs[i];
+                if (!div) return;
+                let span = div.querySelector('.diag-gh');
+                if (!span) return;
+                let remaining = goldenHourRemaining(w);
+                let mins = formatMinutesLeft(remaining);
+                if (mins === null) {
+                    if (!span.textContent.includes('EXPIRED')) {
+                        span.style.color = '#ff3333';
+                        span.textContent = 'GOLDEN HOUR EXPIRED — natural healing only';
                     }
-                });
-                let fatDivs = document.querySelectorAll('#diagnostics-panel .diag-fatigue');
-                charData.fatigueLog.forEach((f, i) => {
-                    let div = fatDivs[i];
-                    if (!div) return;
-                    let remaining = fatigueHourRemaining(f.ts);
-                    let span = div.querySelector('span');
-                    if (span) {
-                        if (remaining <= 0) {
-                            span.style.color = '#00ff00';
-                            span.textContent = '≥1h elapsed — may recover 1 level';
-                        } else {
-                            span.style.color = '#ff9900';
-                            span.textContent = `recovers in ${formatCountdown(remaining)}`;
-                        }
-                    }
-                });
-                // Refresh the Heal button's enabled state when the golden hour expires.
-                let healBtn = document.getElementById('diag-heal-btn');
-                if (healBtn) {
-                    let eligible = (charData.wounds || 0) > 0 && charData.woundLog.some(w => goldenHourRemaining(w.ts) > 0);
-                    healBtn.disabled = !eligible || getAvailableHealers().length === 0;
+                } else if (w.ghPaused) {
+                    span.style.color = '#00ccff';
+                    span.textContent = `GOLDEN HOUR PAUSED: ${mins} min left`;
+                } else {
+                    span.style.color = '#ff9900';
+                    span.textContent = `GOLDEN HOUR: ${mins} min left`;
                 }
-            }, 1000);
+            });
+            let fatDivs = document.querySelectorAll('#diagnostics-panel .diag-fatigue');
+            (charData.fatigueLog || []).forEach((f, i) => {
+                let div = fatDivs[i];
+                if (!div) return;
+                let span = div.querySelector('span');
+                if (!span) return;
+                let remaining = fatigueHourRemaining(f.ts);
+                if (remaining <= 0) {
+                    span.style.color = '#00ff00';
+                    span.textContent = '≥1h elapsed — may recover 1 level';
+                } else {
+                    span.style.color = '#ff9900';
+                    span.textContent = `recovers in ${Math.ceil(remaining / 60000)} min`;
+                }
+            });
+            let healBtn = document.getElementById('diag-heal-btn');
+            if (healBtn) {
+                let eligible = (charData.wounds || 0) > 0 && (charData.woundLog || []).some(w => goldenHourRemaining(w) > 0);
+                healBtn.disabled = !eligible || getAvailableHealers().length === 0;
+            }
+        }
+        // Sleep exactly until the soonest LIVE minute-boundary, so the displayed minute
+        // decrements precisely when it should and EXPIRED lands the instant the clock
+        // empties — with no 1Hz heartbeat. Paused wounds are skipped on purpose (see
+        // header comment). Nothing live => poll once a minute as a safety net.
+        function nextDiagnosticsDelayMs() {
+            let candidates = [];
+            (charData.woundLog || []).forEach(w => {
+                if (!w.ghPaused) { let r = goldenHourRemaining(w); if (r > 0) candidates.push(r); }
+            });
+            (charData.fatigueLog || []).forEach(f => { let r = fatigueHourRemaining(f.ts); if (r > 0) candidates.push(r); });
+            if (candidates.length === 0) return 60000;
+            let minRem = Math.min.apply(null, candidates);
+            let mod = minRem % 60000;
+            return mod === 0 ? 60000 : mod;
+        }
+        function scheduleDiagnosticsTick() {
+            if (diagnosticsTicker) clearTimeout(diagnosticsTicker);
+            diagnosticsTicker = setTimeout(() => {
+                updateDiagnosticsCountdowns();
+                scheduleDiagnosticsTick();
+            }, nextDiagnosticsDelayMs());
+        }
+        function startDiagnosticsTicker() {
+            updateDiagnosticsCountdowns();  // paint now so a fresh render is never blank
+            scheduleDiagnosticsTick();      // (re)arm the per-minute scheduler
         }
 
         // HEAL: roll the chosen healer's Healing skill + Wild Die vs TN 4 (−1 no kit,
@@ -2010,10 +2140,9 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
           }
 
           // Eligible wounds: within golden hour AND not already attempted by this healer.
-          let now = Date.now();
           let eligible = charData.woundLog
             .map((w, idx) => ({ idx, w }))
-            .filter(e => (now - e.w.ts) < GOLDEN_HOUR_MS && !(e.w.attemptedBy || []).includes(healerId));
+            .filter(e => goldenHourRemaining(e.w) > 0 && !(e.w.attemptedBy || []).includes(healerId));
           if (eligible.length === 0) {
             logToTerminal(`> [!] ${healer.name} cannot attempt healing here — no wounds are within the Golden Hour or already attempted by ${healer.name}.`);
             return;
@@ -5971,6 +6100,9 @@ ${charData.equippedArmorPenalty > 0 ? `<br><span style="color:#ff9900;">Min Str 
         window.removeInjury = removeInjury;
         window.adjustInjuryTimer = adjustInjuryTimer;
         window.toggleInjuryTimer = toggleInjuryTimer;
+        window.gmAdjustGoldenHour = gmAdjustGoldenHour;
+        window.gmToggleGoldenHourPause = gmToggleGoldenHourPause;
+        window.gmToggleAllGoldenHourPause = gmToggleAllGoldenHourPause;
         window.updateExtraModifiers = updateExtraModifiers;
         window.incapSoak = incapSoak;
         window.incapRoll = incapRoll;
