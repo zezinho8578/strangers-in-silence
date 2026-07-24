@@ -270,13 +270,16 @@
         opts = opts || {};
         const w = opts.weapon || {};
         const perTarget = opts.perTarget || [];
-        const descLines = [`**Damage: ${opts.total}** applied to ${perTarget.length} target(s)`];
+        const descLines = [perTarget.length > 0
+            ? `**Damage: ${opts.total}** applied to ${perTarget.length} target(s)`
+            : `**Damage rolled: ${opts.total}** (not auto-applied)`];
         if (opts.raiseRolls && opts.raiseRolls.length) descLines.push('*(Includes +1d6 Raise Bonus)*');
         if (opts.has3RB) descLines.push('*(Includes +1 Damage from 3-Round Burst)*');
         if (opts.hasDT && opts.dtVal) descLines.push(`*(Includes +${opts.dtVal} Damage from Double Tap)*`);
         if (opts.jokerBonus) descLines.push(`*(Includes +${opts.jokerBonus} Joker Bonus)*`);
         if (opts.wildAttackDmgBonus) descLines.push(`*(Includes +${opts.wildAttackDmgBonus} Wild Attack Bonus)*`);
         if (opts.calledDmg) descLines.push(`*(Includes +${opts.calledDmg} Called Shot damage)*`);
+        if (opts.note) descLines.push('', opts.note);
         const fields = [];
         fields.push({ name: "Dice", value: (opts.diceHistory && opts.diceHistory.length) ? opts.diceHistory.join(' + ') : '—', inline: true });
         if (opts.modifier) fields.push({ name: "Modifier", value: `${opts.modifier > 0 ? '+' : ''}${opts.modifier}`, inline: true });
@@ -297,7 +300,7 @@
             });
         });
         const embed = {
-            title: `${opts.attackerName || 'Attacker'} — Area Damage: ${w.name || 'Weapon'}`,
+            title: opts.title || `${opts.attackerName || 'Attacker'} — Area Damage: ${w.name || 'Weapon'}`,
             description: descLines.join('\n'),
             color: 0xff3333,
             fields: fields

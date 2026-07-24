@@ -2751,6 +2751,30 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
             } else {
                 application = await applyDamageToTracker(attackKey, wep, total);
             }
+            // AREA EFFECT (note cases): mirror of character.html — post a record embed on the
+            // first damage press for a missed blast or a zero-target hit, then mark resolved.
+            if (wepAreaInfo && areaPlanForWep && !areaPlanForWep.damageApplied
+            && (areaPlanForWep.attackHit === false
+            || (areaPlanForWep.attackHit === true && !(areaPlanForWep.targets && areaPlanForWep.targets.length > 0)))) {
+            let _noteTitle = (areaPlanForWep.attackHit === true)
+            ? `${activeThreat.name} — Area Blast: ${wep.name} (no targets selected)`
+            : `${activeThreat.name} — Area Blast: ${wep.name} (missed / deviated)`;
+            let _noteText = (areaPlanForWep.attackHit === true)
+            ? 'Blast on target at the intended point, but no targets were selected — GM adjudicates who (if anyone) is caught and applies manually.'
+            : (areaDamageApplicationNote(areaPlanForWep, true) || 'The area attack missed.');
+            if (globalState && globalState.webhook && window.Embeds && window.Embeds.areaDamage) {
+            await window.Embeds.post(globalState.webhook, window.Embeds.areaDamage({
+            attackerName: activeThreat.name, weapon: wep, total: total,
+            diceHistory: rolls, modifier: flatMod,
+            raiseRolls: addRaise ? bonusRolls : null,
+            has3RB: has3RBBonus, hasDT: false, dtVal: 0,
+            jokerBonus: jokerBonus, wildAttackDmgBonus: wildAttackDmgBonus, calledDmg: calledDmg,
+            plan: areaPlanForWep, perTarget: [], note: _noteText, title: _noteTitle
+            }));
+            }
+            areaPlanForWep.damageApplied = true;
+            if (currentAreaPlanKey) setAreaAttackPlan(currentAreaPlanKey, areaPlanForWep);
+            }
             // Store context for a Benny damage reroll (one reroll per damage roll).
             lastDamageContext = {
                 wepIndex,

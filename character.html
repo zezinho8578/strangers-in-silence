@@ -3790,7 +3790,13 @@ ${reloadBtn}
             let damageStr = weaponObj.damage;
             let storageKey = getWeaponBonusKey(weaponObj, index);
             let pendingBonus = getPendingDamageBonus(storageKey);
-            if (weaponObj) {
+            // AREA EFFECT: an area attack already consumed its ammo at attack time, so the
+            // empty-magazine guard must NOT block resolving its damage (cover popup / blast
+            // embed). Bypass the guard whenever a same-round area plan exists for this weapon.
+            let _wepAreaInfoGuard = getAreaEffectInfo(weaponObj);
+            let _areaPlanGuard = (_wepAreaInfoGuard && currentAreaPlan && currentAreaPlan.weaponName === weaponObj.name) ? currentAreaPlan : null;
+            let _areaResolvingGuard = !!(_areaPlanGuard && (_areaPlanGuard.round === null || _areaPlanGuard.round === (globalState.combat?.round ?? null)));
+            if (weaponObj && !_areaResolvingGuard) {
                 const ammoType = getAmmoType(weaponObj);
                 if (ammoType === 'ballistic' && weaponObj.ammoTier === 'Out') {
                     logToTerminal(`> [!] Cannot roll damage for ${weaponName.toUpperCase()} — OUT OF AMMO!`);
@@ -3973,6 +3979,31 @@ ${reloadBtn}
                 } else {
                     application = await applyDamageToTracker(storageKey, weaponObj, total);
                 }
+            // AREA EFFECT (note cases): on the FIRST damage press for a missed blast, or a
+            // blast-on-target with no targets selected, post a record embed (dice + note) so
+            // the rolled number isn't lost, then mark the plan resolved so a second press
+            // only logs to the terminal. A cancelled cover popup (hit + targets) is skipped.
+            if (wepAreaInfo && areaPlanForWep && !areaPlanForWep.damageApplied
+                && (areaPlanForWep.attackHit === false
+                    || (areaPlanForWep.attackHit === true && !(areaPlanForWep.targets && areaPlanForWep.targets.length > 0)))) {
+                let _noteTitle = (areaPlanForWep.attackHit === true)
+                    ? `${charData.name} — Area Blast: ${weaponObj.name} (no targets selected)`
+                    : `${charData.name} — Area Blast: ${weaponObj.name} (missed / deviated)`;
+                let _noteText = (areaPlanForWep.attackHit === true)
+                    ? 'Blast on target at the intended point, but no targets were selected — GM adjudicates who (if anyone) is caught and applies manually.'
+                    : (areaDamageApplicationNote(areaPlanForWep, false) || 'The area attack missed.');
+                if (globalState && globalState.webhook && window.Embeds && window.Embeds.areaDamage) {
+                    await window.Embeds.post(globalState.webhook, window.Embeds.areaDamage({
+                        attackerName: charData.name, weapon: weaponObj, total: total,
+                        diceHistory: rolls, modifier: parsed.modifier,
+                        raiseRolls: hasRaiseBonus ? bonusRolls : null,
+                        has3RB: has3RBBonus, hasDT: hasDTBonus, dtVal: dtBonusVal,
+                        jokerBonus: jokerBonus, wildAttackDmgBonus: wildAttackDmgBonus, calledDmg: calledDmg,
+                        plan: areaPlanForWep, perTarget: [], note: _noteText, title: _noteTitle
+                    }));
+                }
+                areaPlanForWep.damageApplied = true;
+                if (currentAreaPlanKey) setAreaAttackPlan(currentAreaPlanKey, areaPlanForWep);
             }
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
