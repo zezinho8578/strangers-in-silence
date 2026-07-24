@@ -964,8 +964,10 @@
         window.initializeCombat = async function () {
             let participants = [];
             let playerCount = 0;
+            const allowedCharIds = new Set(["katey-commons", "trombley-hicks", "vesa-novik"]);
             if (globalState.characters) {
                 for (const [id, rawData] of Object.entries(globalState.characters)) {
+                    if (!allowedCharIds.has(id)) continue;
                     const data = rawData || {};
                     const characterName = (typeof data.name === "string" && data.name.trim()) ? data.name.trim() : id;
                     let edgesNorm = (data.edges || "").toLowerCase().replace(/[^a-z]/g, "");
