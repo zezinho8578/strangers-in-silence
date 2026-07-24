@@ -1161,3 +1161,142 @@ function validateThreatTemplate(t) {
 
     return warnings;
 }
+
+// ==========================================
+// AREA EFFECT (blast / cone / line) — shared by character.html & threats.html
+// ==========================================
+// Canonical table consulted when a weapon carries no explicit areaEffect flag,
+// so existing Firebase presets / deployed threats work WITHOUT a destructive
+// migration. An explicit flag on the weapon object always wins, which is how a
+// GM will later tag custom weapons (editor UI for that is a small follow‑up,
+// not part of Phase 1).
+const AREA_EFFECT_TABLE = {           // keyed by weapon id
+    'grenade': { kind: 'thrown',  template: 'SBT' },
+    'mine':    { kind: 'contact', template: 'SBT' },
+    'rpg':     { kind: 'fired',   template: 'MBT' },
+    'ar2-orb': { kind: 'fired',   template: 'MBT' }
+};
+const AREA_EFFECT_BY_NAME = {         // keyed by lower‑cased weapon name
+    'frag grenade':   { kind: 'thrown',  template: 'SBT' },
+    'slam mine':      { kind: 'contact', template: 'SBT' },
+    'rpg launcher':   { kind: 'fired',   template: 'MBT' },
+    'ar2 energy orb': { kind: 'fired',   template: 'MBT' },
+    'warp cannon':    { kind: 'line',    template: 'Line' }
+};
+const AREA_KIND_DEFAULT_TEMPLATE = {
+    thrown: 'SBT', contact: 'SBT', fired: 'MBT', cone: 'Cone', line: 'Line'
+};
+// Deviation base dice per kind (documented + stored now; rolled in Phase 3).
+// null = this kind does NOT deviate (contact / cone / line, per Q‑H).
+const AREA_DEVIATION = {
+    thrown:  { dice: '1d6' },
+    fired:   { dice: '2d6' },
+    contact: { dice: null },
+    cone:    { dice: null },
+    line:    { dice: null }
+};
+// Resolve a weapon to its area‑effect descriptor, or null if it isn't one.
+function getAreaEffectInfo(weapon) {
+    if (!weapon) return null;
+    // 1) Explicit override on the weapon object.
+    if (weapon.areaEffect === true) {
+        const kind = weapon.areaKind || 'fired';
+        return {
+            isArea: true,
+            kind: kind,
+            defaultTemplate: weapon.areaTemplate || AREA_KIND_DEFAULT_TEMPLATE[kind] || 'SBT',
+            deviation: AREA_DEVIATION[kind] || null
+        };
+    }
+    if (weapon.areaEffect === false) return null;   // explicitly NOT area
+    // 2) Legacy / untagged: canonical table by id, then by name.
+    let entry = null;
+    if (weapon.id && AREA_EFFECT_TABLE[weapon.id]) entry = AREA_EFFECT_TABLE[weapon.id];
+    if (!entry && weapon.name) {
+        const nm = String(weapon.name).trim().toLowerCase();
+        if (AREA_EFFECT_BY_NAME[nm]) entry = AREA_EFFECT_BY_NAME[nm];
+    }
+    if (!entry) return null;
+    const kind = entry.kind;
+    return {
+        isArea: true,
+        kind: kind,
+        defaultTemplate: entry.template || AREA_KIND_DEFAULT_TEMPLATE[kind] || 'SBT',
+        deviation: AREA_DEVIATION[kind] || null
+    };
+}
+// Read the template size the player/GM picked in the area banner (Phase 2+).
+function getAreaTemplateChoice() {
+    const s = document.getElementById('area-template-select');
+    return s ? s.value : null;
+}
+// Re‑skin the attack modal for (or out of) AREA MODE. Owns ALL show/hide
+// decisions for area vs single‑target so the two modes can never leak into
+// each other across consecutive opens. `isArea` false fully restores the
+// single‑target layout (prepareRoll/prepareAttack own called‑shot / RoF /
+// wild‑attack visibility for the non‑area case, so we leave those alone then).
+function applyAreaModeUI(isArea, areaInfo) {
+    const $ = (id) => document.getElementById(id);
+    const banner   = $('area-effect-banner');
+    const singleRow = $('single-target-row');
+    const multiRow  = $('multi-target-row');
+    const statusEl  = $('target-status');
+    const previewEl = $('effective-toughness-preview');
+    const dodgeRow  = $('target-dodge-row');
+    const csRow     = $('called-shot-row');
+    const csStatus  = $('called-shot-status');
+    const csSel     = $('called-shot-select');
+    const rofCont   = $('rof-options-container');
+    const wildRow   = $('wild-attack-row');
+    const rangeRow  = $('range-select') ? $('range-select').closest('.setting-row') : null;
+    const tnInput   = $('tn-input');
+    const targetSel = $('target-select');
+
+    // Banner + target‑list swap.
+    if (banner)    banner.style.display    = isArea ? 'block' : 'none';
+    if (singleRow) singleRow.style.display = isArea ? 'none'  : 'flex';
+    if (multiRow)  multiRow.style.display  = isArea ? 'flex'  : 'none';
+    if (statusEl)  statusEl.style.display  = isArea ? 'none'  : '';
+    // Preview is per‑target; always hidden on open (onTargetChange re‑shows it
+    // for a chosen target when non‑area). Dodge is per‑target too.
+    if (previewEl) previewEl.style.display = 'none';
+    if (dodgeRow)  dodgeRow.style.display  = 'none';
+
+    // Area weapons never use Called Shots, RoF / fire‑modes, or Wild Attack.
+    if (isArea) {
+        if (csRow)    csRow.style.display    = 'none';
+        if (csStatus) csStatus.style.display = 'none';
+        if (csSel)    csSel.value = 'none';          // no stale called shot
+        if (rofCont)  rofCont.style.display  = 'none';
+        if (wildRow)  wildRow.style.display  = 'none';
+        if (targetSel) targetSel.value = '';         // no stale single target
+    }
+    // Range bracket only matters for thrown / fired (range penalty AND the
+    // Phase‑3 deviation multiplier). Cone / line have a fixed reach; contact
+    // is adjacent — for those we hide the bracket row but keep Aiming (Q‑C).
+    const kind = areaInfo ? areaInfo.kind : null;
+    const needsRangeBracket = isArea && (kind === 'thrown' || kind === 'fired');
+    if (rangeRow) rangeRow.style.display = (isArea && !needsRangeBracket) ? 'none' : '';
+
+    // Per‑target TEM rows (Cover / Gang Up / Defend) are meaningless vs a point.
+    // Illumination, The Drop and Running stay (attacker‑side, Q‑B).
+    ['sit-cover', 'sit-gangup', 'sit-defend'].forEach((sfx) => {
+        const ctrl = $('tn-' + sfx);
+        const row = ctrl ? ctrl.closest('.setting-row') : null;
+        if (row) row.style.display = isArea ? 'none' : '';
+    });
+
+    // Default the template dropdown + force the attack to TN 4 (a location).
+    if (isArea) {
+        const tSel = $('area-template-select');
+        if (tSel && areaInfo) tSel.value = areaInfo.defaultTemplate || 'SBT';
+        if (tnInput) tnInput.value = '4';
+    }
+}
+window.AREA_EFFECT_TABLE = AREA_EFFECT_TABLE;
+window.AREA_EFFECT_BY_NAME = AREA_EFFECT_BY_NAME;
+window.AREA_KIND_DEFAULT_TEMPLATE = AREA_KIND_DEFAULT_TEMPLATE;
+window.AREA_DEVIATION = AREA_DEVIATION;
+window.getAreaEffectInfo = getAreaEffectInfo;
+window.getAreaTemplateChoice = getAreaTemplateChoice;
+window.applyAreaModeUI = applyAreaModeUI;
