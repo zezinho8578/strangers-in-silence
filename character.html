@@ -3899,8 +3899,15 @@ ${reloadBtn}
                     } catch (e) {}
                 }
             } else {
-                let singleKey = getWeaponBonusKey(weaponObj, activeWeaponIndex);
-                application = await applyDamageToTracker(singleKey, weaponObj, total);
+                let wepAreaInfo = getAreaEffectInfo(weaponObj);
+                let areaPlanForWep = wepAreaInfo ? (currentAreaPlan && currentAreaPlan.weaponName === weaponObj.name ? currentAreaPlan : null) : null;
+                let areaNote = wepAreaInfo ? areaDamageApplicationNote(areaPlanForWep, false) : null;
+                if (areaNote) {
+                    application = { applied: false, message: `> <b style="color:#ff9900;">AREA:</b> ${areaNote}`, plainText: `AREA: ${areaNote}` };
+                } else {
+                    let singleKey = getWeaponBonusKey(weaponObj, activeWeaponIndex);
+                    application = await applyDamageToTracker(singleKey, weaponObj, total);
+                }
             }
 
             let modStr = parsed.modifier > 0 ? ` + ${parsed.modifier}` : (parsed.modifier < 0 ? ` - ${Math.abs(parsed.modifier)}` : "");
@@ -4260,7 +4267,7 @@ function updateDefenderModifierAndStatus() {
                     hit: true,
                     ap: weaponObj.ap || "0",
                     weaponName: weaponObj.name,
-                    round: globalState.combat?.round || 1,
+                    round: globalState.combat?.round ?? null,
                     savedAt: Date.now(),
                     calledShot: currentCalledShot
                 });
@@ -4652,6 +4659,10 @@ window.onTargetChange = function () {
                 : outcome.results.some(r => r.outcome.includes("SUCCESS"));
 
             storeAttackContext(ctx, attackHit, outcome.results);
+            if (currentAreaInfo && currentAreaPlan) {
+            computeAreaMissOutcome(currentAreaInfo, currentAreaPlan, attackHit, outcome.isCritFail);
+            if (currentAreaPlanKey) setAreaAttackPlan(currentAreaPlanKey, currentAreaPlan);
+            }
             applyDamageBonusSideEffects(outcome.results, ctx);
             if (ctx.isSupp) {
                 // Suppressive Fire does NOT apply Test/Support effects
@@ -4728,7 +4739,10 @@ window.onTargetChange = function () {
                 ? keptResults.some(r => r.hasRaise)
                 : keptResults.some(r => r.outcome.includes("SUCCESS"));
             storeAttackContext(ctx, attackHit, keptResults);
-
+            if (currentAreaInfo && currentAreaPlan) {
+            computeAreaMissOutcome(currentAreaInfo, currentAreaPlan, attackHit, keptIsCritFail);
+            if (currentAreaPlanKey) setAreaAttackPlan(currentAreaPlanKey, currentAreaPlan);
+            }
             ctx.usedReroll = true;
             lastRollContext = {
                 ...ctx,
@@ -4772,6 +4786,18 @@ window.onTargetChange = function () {
             if (currentAreaPlan) {
                 let _names = currentAreaPlan.targets.length ? currentAreaPlan.targets.map(t => t.name).join(', ') : 'none (point blast)';
                 termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">⚠ AREA EFFECT: ${currentAreaPlan.templateLabel} (${currentAreaPlan.rangeOrReachLabel}). Intended targets: ${_names}.</span><br>`;
+                if (currentAreaPlan.attackHit === false) {
+                if (currentAreaPlan.deviation) {
+                let d = currentAreaPlan.deviation;
+                termLog += `&nbsp;&nbsp;<span style="color:#ff3333;">✦ DEVIATION (miss): d12 = ${d.direction} → ${d.directionLabel}; distance ${d.rawRolls.join('+')} = ${d.rawDistance}" ×${d.multiplier} = ${d.multiplied}", capped at ${d.cap}" → <b>deviates ${d.finalDistance}"</b>.</span><br>`;
+                if (currentAreaPlan.critFail) termLog += `&nbsp;&nbsp;<span style="color:#ff3333;">⚠ CRITICAL FAILURE — GM may rule the explosive lands at the attacker's feet.</span><br>`;
+                termLog += `&nbsp;&nbsp;<span style="opacity:0.85;">No auto-application — GM adjudicates who is caught by the deviated blast.</span><br>`;
+                } else if (currentAreaPlan.missNote) {
+                termLog += `&nbsp;&nbsp;<span style="color:#ff9900;">✦ MISS: ${currentAreaPlan.missNote}</span><br>`;
+                }
+                } else if (currentAreaPlan.attackHit === true) {
+                termLog += `&nbsp;&nbsp;<span style="color:#00ff00;">✦ BLAST ON TARGET — the explosion lands on the intended point; all selected targets are in the zone.</span><br>`;
+                }
             }
             // B8: show the selected target and defender modifier breakdown
             if (defenderDisplay) {
@@ -4826,6 +4852,22 @@ window.onTargetChange = function () {
                     desc += `⚠ **AREA EFFECT** — ${currentAreaPlan.templateLabel} (${currentAreaPlan.rangeOrReachLabel}).
 Intended targets: ${_names}
 `;
+                    if (currentAreaPlan.attackHit === false) {
+                    if (currentAreaPlan.deviation) {
+                    let d = currentAreaPlan.deviation;
+                    desc += `✦ **DEVIATION (miss)** — d12 = **${d.direction}** → ${d.directionLabel}; distance ${d.rawRolls.join(' + ')} = **${d.rawDistance}"** ×${d.multiplier} = ${d.multiplied}", capped at ${d.cap}" → **deviates ${d.finalDistance}"**.
+_No auto-application — GM adjudicates who is caught._
+`;
+                    if (currentAreaPlan.critFail) desc += `⚠ **CRITICAL FAILURE** — GM may rule the explosive lands at the attacker's feet.
+`;
+                    } else if (currentAreaPlan.missNote) {
+                    desc += `✦ **MISS** — ${currentAreaPlan.missNote}
+`;
+                    }
+                    } else if (currentAreaPlan.attackHit === true) {
+                    desc += `✦ **BLAST ON TARGET** — the explosion lands on the intended point; all selected targets are in the zone.
+`;
+                    }
                 }
                 results.forEach(r => {
                     if (r.isSingle) {
@@ -4872,6 +4914,12 @@ Intended targets: ${_names}
                 }
                 if (currentAreaPlan) {
                     embed.fields.push({ name: "Template / Range", value: `${currentAreaPlan.templateLabel} — ${currentAreaPlan.rangeOrReachLabel}`, inline: false });
+                    if (currentAreaPlan.attackHit === false && currentAreaPlan.deviation) {
+                    let d = currentAreaPlan.deviation;
+                    embed.fields.push({ name: "Deviation (miss)", value: `Direction: ${d.directionLabel}
+Raw: ${d.rawRolls.join(' + ')} = ${d.rawDistance}" ×${d.multiplier} = ${d.multiplied}"
+Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
+                    }
                 }
                 // TEM: list every non-default tactical modifier on the embed (Cover,
                 // Gang Up, The Drop, Illumination, Defend, Running, Range, RoF, MAP,

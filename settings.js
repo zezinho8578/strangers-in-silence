@@ -1434,6 +1434,85 @@ function setupAreaTargetList() {
     });
 }
 window.setupAreaTargetList = setupAreaTargetList;
+// ==========================================
+// AREA EFFECT — PHASE 3: DEVIATION ON A MISS + ATTACK-OUTCOME RECORDING
+// ==========================================
+// Clock-face direction labels for the d12 deviation roll.
+const AREA_CLOCK_LABELS = {
+12: "12 o'clock (straight ahead)", 1: "1 o'clock", 2: "2 o'clock",
+3: "3 o'clock (right)", 4: "4 o'clock", 5: "5 o'clock",
+6: "6 o'clock (short of target)", 7: "7 o'clock", 8: "8 o'clock",
+9: "9 o'clock (left)", 10: "10 o'clock", 11: "11 o'clock"
+};
+// Roll deviation for a missed thrown/fired area attack. Straight dice only —
+// no aces, no wild die (deviation is not a trait roll). Distance = sum(d6) ×
+// range multiplier (Short ×1 … Extreme ×4), clamped to half the parsed distance
+// to the point so the blast can't land behind the attacker (Q-E). Returns null
+// for kinds that don't deviate (cone/line/contact, per Q-H).
+function rollAreaDeviation(plan) {
+let kind = (plan && plan.areaKind) || 'fired';
+if (kind !== 'thrown' && kind !== 'fired') return null;
+let diceCount = (kind === 'thrown') ? 1 : 2;
+let rawRolls = [];
+let rawDistance = 0;
+for (let i = 0; i < diceCount; i++) { let r = 1 + Math.floor(Math.random() * 6); rawRolls.push(r); rawDistance += r; }
+let multMap = { '0': 1, '-2': 2, '-4': 3, '-8': 4 };
+let multiplier = multMap[String(plan ? plan.rangeBracketValue : '0')] || 1;
+let multiplied = rawDistance * multiplier;
+let distNum = parseInt(plan ? plan.distanceNumber : 0) || 0;
+let cap = Math.floor(distNum / 2);
+let finalDistance = cap > 0 ? Math.min(multiplied, cap) : multiplied;
+let dir = 1 + Math.floor(Math.random() * 12);
+return {
+kind: kind, diceCount: diceCount, diceLabel: diceCount + 'd6',
+rawRolls: rawRolls, rawDistance: rawDistance,
+multiplier: multiplier, multiplied: multiplied,
+distanceNumber: distNum, cap: cap, finalDistance: finalDistance,
+direction: dir, directionLabel: AREA_CLOCK_LABELS[dir] || (dir + " o'clock")
+};
+}
+// Record the attack outcome into the plan: hit/miss, and on a miss either a
+// deviation result (thrown/fired) or a plain miss note (cone/line/contact).
+// Mutates `plan` in place and returns it; the caller persists it.
+function computeAreaMissOutcome(areaInfo, plan, attackHit, isCritFail) {
+if (!plan) return plan;
+plan.attackHit = !!attackHit;
+plan.critFail = !!isCritFail;
+plan.deviation = null;
+plan.missNote = null;
+if (!attackHit) {
+let kind = (areaInfo && areaInfo.kind) || plan.areaKind || 'fired';
+if (kind === 'thrown' || kind === 'fired') {
+plan.deviation = rollAreaDeviation(plan);
+} else if (kind === 'cone' || kind === 'line') {
+plan.missNote = "The attack goes over the targets' heads, hits the ground, or simply falters — no deviation for cone/line templates.";
+} else {
+plan.missNote = 'No detonation in the intended zone — the charge did not go off where placed.';
+}
+}
+return plan;
+}
+// Decide what the DAMAGE step should do for an area weapon. Returns a human
+// note (=> skip auto-apply and show this) or null (=> caller auto-applies).
+// `plan` is the matching area plan for THIS weapon, or null if none on record.
+function areaDamageApplicationNote(plan, autoApplySupported) {
+if (!plan) return 'No area attack on record for this weapon — roll the AREA ATTACK first, then apply damage.';
+if (plan.attackHit === false) {
+if (plan.deviation) {
+let d = plan.deviation;
+return 'The blast DEVIATED and missed the intended point — ' + d.finalDistance + '" toward ' + d.directionLabel + ' (rolled ' + d.rawDistance + ' on ' + d.diceLabel + ', ×' + d.multiplier + ' for range, capped at ' + d.cap + '"). Damage is NOT auto-applied. GM: adjudicate who is caught by the deviated blast and apply manually via the tracker.';
+}
+return (plan.missNote || 'The area attack missed.') + ' Damage is NOT auto-applied; the GM adjudicates and applies manually.';
+}
+if (!autoApplySupported) {
+return 'Blast on target. Apply this damage to each selected target via the tracker (cover / Evasion differ per target).';
+}
+return null;
+}
+window.AREA_CLOCK_LABELS = AREA_CLOCK_LABELS;
+window.rollAreaDeviation = rollAreaDeviation;
+window.computeAreaMissOutcome = computeAreaMissOutcome;
+window.areaDamageApplicationNote = areaDamageApplicationNote;
 // settings.js loads after the modal markup on every page that has the list; pages
 // without it no-op via the guard above (tracker, dashboard, etc.).
 setupAreaTargetList();
