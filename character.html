@@ -1984,76 +1984,133 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         // +2 Healer Edge). Success removes 1 in-golden-hour wound, raise removes 2.
         // Each healer may attempt each wound only once — track attemptedBy per wound.
         async function attemptHeal() {
-            reconcilePersistentWounds(charData);
-            let healerId = document.getElementById('diag-healer-select').value;
-            let noKit = document.getElementById('diag-no-kit').checked;
-            let healers = getAvailableHealers();
-            let healer = healers.find(h => h.id === healerId);
-            if (!healer) { logToTerminal("> [!] No healer selected."); return; }
-            // Eligible wounds: within golden hour AND not already attempted by this healer.
-            let now = Date.now();
-            let eligible = charData.woundLog
-                .map((w, idx) => ({ idx, w }))
-                .filter(e => (now - e.w.ts) < GOLDEN_HOUR_MS && !(e.w.attemptedBy || []).includes(healerId));
-            if (eligible.length === 0) {
-                logToTerminal(`> [!] ${healer.name} cannot attempt healing here — no wounds are within the Golden Hour or already attempted by ${healer.name}.`);
-                return;
-            }
-            let healerParticipant = globalState.combat?.participants?.find(p => p.id === healerId);
-            if (healerParticipant && (healerParticipant.incapacitated || healerParticipant.stunned || healerParticipant.shaken)) {
-                logToTerminal(`> <b style="color:#ff3333;">[!] ${healer.name} cannot perform Healing (they are Shaken, Stunned, or Incapacitated).</b>`);
-                return;
-            }
-            let kitMod = noKit ? -1 : 0;
-            let healerEdgeMod = healer.hasHealerEdge ? 2 : 0;
-            let totalMod = healer.mod + kitMod + healerEdgeMod;
-            let traitRoll = rollExploding(healer.die);
-            let wildRoll = rollExploding(6);
-            let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
-            const TN = 4;
-            let healed = 0;
-            if (bestTotal >= TN) healed = 1 + Math.floor((bestTotal - TN) / 4);
-            healed = Math.min(healed, eligible.length);
+          reconcilePersistentWounds(charData);
+          let healerId = document.getElementById('diag-healer-select').value;
+          let noKit = document.getElementById('diag-no-kit').checked;
+          let healers = getAvailableHealers();
+          let healer = healers.find(h => h.id === healerId);
+          if (!healer) { logToTerminal("> [!] No healer selected."); return; }
 
-            // Mark ONLY the wounds being healed as attempted
+          // ---- BUGFIX 1: a Shaken / Stunned / Incapacitated healer cannot take the
+          // Healing action (it is NOT a free action). Show a blocking popup and abort
+          // BEFORE rolling. Moved ahead of the eligible-wound check so the correct
+          // message always wins. Only applies in combat (healerParticipant exists);
+          // out of combat a character may heal freely. ----
+          let healerParticipant = globalState.combat?.participants?.find(p => p.id === healerId);
+          if (healerParticipant && (healerParticipant.incapacitated || healerParticipant.stunned || healerParticipant.shaken)) {
+            let why = healerParticipant.incapacitated ? "INCAPACITATED"
+                    : healerParticipant.stunned      ? "STUNNED"
+                    :                                  "SHAKEN";
+            let hint = (healerParticipant.shaken && !healerParticipant.stunned && !healerParticipant.incapacitated)
+              ? " They must recover from Shaken (Spirit roll or spend a Benny) before they can heal."
+              : " They cannot take actions until this condition ends.";
+            alert(`${healer.name} cannot perform Healing right now — they are ${why}.${hint}`);
+            logToTerminal(`> <b style="color:#ff3333;">[!] ${healer.name} cannot perform Healing (they are ${why}).</b>`);
+            return;
+          }
+
+          // Eligible wounds: within golden hour AND not already attempted by this healer.
+          let now = Date.now();
+          let eligible = charData.woundLog
+            .map((w, idx) => ({ idx, w }))
+            .filter(e => (now - e.w.ts) < GOLDEN_HOUR_MS && !(e.w.attemptedBy || []).includes(healerId));
+          if (eligible.length === 0) {
+            logToTerminal(`> [!] ${healer.name} cannot attempt healing here — no wounds are within the Golden Hour or already attempted by ${healer.name}.`);
+            return;
+          }
+
+          let kitMod = noKit ? -1 : 0;
+          let healerEdgeMod = healer.hasHealerEdge ? 2 : 0;
+          let totalMod = healer.mod + kitMod + healerEdgeMod;
+          let traitRoll = rollExploding(healer.die);
+          let wildRoll = rollExploding(6);
+          let bestTotal = Math.max(traitRoll.total, wildRoll.total) + totalMod;
+          const TN = 4;
+          let healed = 0;
+          if (bestTotal >= TN) healed = 1 + Math.floor((bestTotal - TN) / 4);
+          healed = Math.min(healed, eligible.length);
+
+          // ---- BUGFIX 2: capture the intended post-heal state in LOCALS. onValue
+          // reassigns `charData` (and orphans `combatParticipant`) whenever any write
+          // echoes, so neither reference can be trusted across an `await`. Locals are
+          // immune to the clobber. ----
+          let patientId = activeCharId;
+          let newWoundLog = charData.woundLog.slice();
+          if (healed > 0) {
             for (let i = 0; i < healed; i++) {
-                let w = charData.woundLog[eligible[i].idx];
-                if (!Array.isArray(w.attemptedBy)) w.attemptedBy = [];
-                if (!w.attemptedBy.includes(healerId)) w.attemptedBy.push(healerId);
+              let w = newWoundLog[eligible[i].idx];
+              if (!Array.isArray(w.attemptedBy)) w.attemptedBy = [];
+              if (!w.attemptedBy.includes(healerId)) w.attemptedBy.push(healerId);
+            }
+            let toRemove = new Set(eligible.slice(0, healed).map(e => e.idx));
+            newWoundLog = newWoundLog.filter((_, idx) => !toRemove.has(idx));
+          }
+          let newWounds = newWoundLog.length;
+          let remainAfter = newWounds;                 // what the embed / terminal MUST report
+          // Healer's effect on Shaken / Incap, read synchronously (pre-await snapshot).
+          let newShaken = combatParticipant ? combatParticipant.shaken : false;
+          let newIncap  = combatParticipant ? combatParticipant.incapacitated : false;
+          if (healed > 0 && combatParticipant) {
+            if (newWounds === 0 && newShaken) newShaken = false;
+            if (newIncap && newWounds < (combatParticipant.woundCap || 4) && (charData.fatigue || 0) < 3) newIncap = false;
+          }
+
+          // Instant in-memory update for the UI.
+          charData.woundLog = newWoundLog;
+          charData.wounds = newWounds;
+          if (combatParticipant) {
+            combatParticipant.wounds = newWounds;
+            combatParticipant.shaken = newShaken;
+            combatParticipant.incapacitated = newIncap;
+          }
+
+          if (healed > 0) {
+            // Write the live combat participant first (mirrors the existing Soak fix).
+            await syncCombatParticipants();
+
+            // ---- BUGFIX 2 (core): the await above lets the participant write echo.
+            // That echo's server snapshot still has the PRE-HEAL character wounds (the
+            // character write hasn't landed), and onValue/loadCharacter re-points
+            // `charData` at that stale object. Re-apply the healed values onto WHICHEVER
+            // objects charData / combatParticipant now reference, so saveCharacter()
+            // below persists the heal instead of the stale count. ----
+            charData.wounds = newWounds;
+            charData.woundLog = newWoundLog;
+            let livePatient = globalState.characters && globalState.characters[patientId];
+            if (livePatient) { livePatient.wounds = newWounds; livePatient.woundLog = newWoundLog; charData = livePatient; }
+            if (globalState.combat && globalState.combat.participants) {
+              let pp = globalState.combat.participants.find(p => p.id === patientId);
+              if (pp) { pp.wounds = newWounds; pp.shaken = newShaken; pp.incapacitated = newIncap; combatParticipant = pp; }
             }
 
-            // Remove the oldest eligible wounds first (the ones being treated).
-            if (healed > 0) {
-                let toRemove = new Set(eligible.slice(0, healed).map(e => e.idx));
-                charData.woundLog = charData.woundLog.filter((_, idx) => !toRemove.has(idx));
-                charData.wounds = charData.woundLog.length;
-                // Mirror onto the live combat participant if present.
-                if (combatParticipant) {
-                    combatParticipant.wounds = charData.wounds;
-                    if (charData.wounds === 0 && combatParticipant.shaken) combatParticipant.shaken = false;
-                    if (combatParticipant.incapacitated && charData.wounds < (combatParticipant.woundCap || 4) && (charData.fatigue || 0) < 3) combatParticipant.incapacitated = false;
-                }
-                await syncCombatParticipants();
-            }
             await saveCharacter();
-            renderDiagnostics();
-            refreshCombatHUD();
 
-            let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
-            let patientName = charData.name;
-            let termLog = `> <b style="color:#00ff00;">HEALING:</b> ${healer.name} treats ${patientName}'s wounds (Healing d${healer.die} vs TN 4${modStr})<br>`;
-            termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
-            termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> `;
-            if (healed > 0) {
-                termLog += `<b style="color:#00ff00;">HEALED ${healed} WOUND(S)</b>. ${charData.wounds} wound(s) remain.`;
-            } else {
-                termLog += `<b style="color:#ff3333;">FAILURE — no wounds healed.</b> ${healer.name} may not retry these wounds (a different healer still can).`;
-            }
-            logToTerminal(termLog);
-            if (globalState && globalState.webhook && window.Embeds) {
-                await window.Embeds.post(globalState.webhook,
-                    window.Embeds.heal(healer.name, patientName, healer.die, traitRoll.history, wildRoll.history, totalMod, bestTotal, healed, charData.wounds));
-            }
+            // The character-write echo may re-point charData once more; it now carries
+            // the healed count, but re-assert for determinism.
+            charData.wounds = newWounds;
+            charData.woundLog = newWoundLog;
+          } else {
+            await saveCharacter();   // no change to wounds; matches original behaviour
+          }
+
+          renderDiagnostics();
+          refreshCombatHUD();
+
+          let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
+          let patientName = charData.name;
+          let termLog = `> <b style="color:#00ff00;">HEALING:</b> ${healer.name} treats ${patientName}'s wounds (Healing d${healer.die} vs TN 4${modStr})<br>`;
+          termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
+          termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> `;
+          if (healed > 0) {
+            termLog += `<b style="color:#00ff00;">HEALED ${healed} WOUND(S)</b>. ${remainAfter} wound(s) remain.`;
+          } else {
+            termLog += `<b style="color:#ff3333;">FAILURE — no wounds healed.</b> ${healer.name} may not retry these wounds (a different healer still can).`;
+          }
+          logToTerminal(termLog);
+          if (globalState && globalState.webhook && window.Embeds) {
+            await window.Embeds.post(globalState.webhook,
+              window.Embeds.heal(healer.name, patientName, healer.die, traitRoll.history, wildRoll.history, totalMod, bestTotal, healed, remainAfter));
+          }
         }
 
         // NATURAL HEALING: Vigor roll, success = 1 wound, raise = 2 (p.98). Only
