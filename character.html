@@ -534,6 +534,7 @@
             <option value="katey-commons">View: Katey Commons</option>
             <option value="vesa-novik">View: Vesa Novik</option>
             <option value="trombley-hicks">View: Trombley Hicks</option>
+            <option value="arnold-rutherford">View: Arnold Rutherford</option>
         </select>
         <input type="text" id="discord-webhook" class="admin-input" placeholder="Paste Discord Webhook URL here...">
         <button id="save-webhook" class="die-btn" style="border:none;" onclick="saveWebhook()">SAVE URL
@@ -1119,6 +1120,14 @@
                 derived: { pace: "6", parryOverride: 0, toughnessOverride: 0 },
                 edges: "Hindrances:\n- Mute (Major)\n- Can't Swim (Minor)\n- Mild Mannered (Minor)\n- Quirk (Minor - tooth rattle)\nEdges:\n- Dodge\n- Extraction\n- Thief",
                 gear: "Special Notes:\n- Mute: Cannot speak.\n- Thief: +1 Athletics climb urban, +1 Stealth urban, +1 Thievery.\n- Extraction: One opponent doesn't get free attack on move.\n- Dodge: Ranged attacks suffer -2."
+            },
+            "arnold-rutherford": {
+                name: "Arnold Rutherford", bennies: 3, weapons: [],
+                attributes: { Agility: { die: "6", mod: "+0" }, Smarts: { die: "10", mod: "+0" }, Spirit: { die: "4", mod: "+0" }, Strength: { die: "4", mod: "+0" }, Vigor: { die: "6", mod: "+0" } },
+                skills: { Athletics: { die: "4", mod: "+0" }, "Common Knowledge": { die: "4", mod: "+0" }, Persuasion: { die: "4", mod: "+0" }, Stealth: { die: "4", mod: "+0" }, Academics: { die: "6", mod: "+0" }, Electronics: { die: "6", mod: "+0" }, Research: { die: "6", mod: "+0" }, Repair: { die: "4", mod: "+0" }, Science: { die: "8", mod: "+0" }, Shooting: { die: "6", mod: "+0" }, "Weird Science": { die: "6", mod: "+0" } },
+                derived: { pace: "6", parryOverride: 0, toughnessOverride: 0 },
+                edges: "Hindrances:\n- Secret (Major)\n- Cautious (Minor)\n- Bad Eyes (Minor)",
+                gear: "Special Notes:\n- Parry: 2\n- Toughness: 5"
             }
         };
         const isAdmin = (currentUser === "Administrator");

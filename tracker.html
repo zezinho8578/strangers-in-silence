@@ -964,7 +964,7 @@
         window.initializeCombat = async function () {
             let participants = [];
             let playerCount = 0;
-            const allowedCharIds = new Set(["katey-commons", "trombley-hicks", "vesa-novik"]);
+            const allowedCharIds = new Set(["katey-commons", "trombley-hicks", "vesa-novik", "arnold-rutherford"]);
             if (globalState.characters) {
                 for (const [id, rawData] of Object.entries(globalState.characters)) {
                     if (!allowedCharIds.has(id)) continue;
