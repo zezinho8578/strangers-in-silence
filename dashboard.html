@@ -32,8 +32,16 @@
             <a href="#" id="link-character" class="panel">MY CHARACTER SHEET</a>
             <a href="tracker.html" class="panel">COMBAT TRACKER</a>
             <a href="/clocks.html" class="panel">DRAMATIC CLOCKS</a>
+            <a href="#" id="link-minigames" class="panel">MINIGAMES</a>
             <div class="panel locked">SETTLEMENT LEDGER</div>
         </div>
+    </div>
+
+    <!-- Minigames Menu Modal -->
+    <div id="minigames-modal">
+        <h2>MINIGAMES_TERMINAL</h2>
+        <div id="minigames-list"></div>
+        <button id="close-minigames">[ CLOSE ]</button>
     </div>
 
     <!-- Include universal settings and modal logic -->
@@ -73,6 +81,40 @@
             threatBtn.innerHTML = "OVERWATCH THREAT REGISTRY [ADMIN]";
             grid.appendChild(threatBtn);
         }
+
+        // Minigames menu
+        const minigamesAvailable = [
+            { name: "BREACH SYSTEM", file: "minigames/breach_system.html" }
+        ];
+
+        const linkMinigames = document.getElementById('link-minigames');
+        const minigamesModal = document.getElementById('minigames-modal');
+        const minigamesList = document.getElementById('minigames-list');
+        const closeMinigames = document.getElementById('close-minigames');
+
+        function openMinigames(e) {
+            e.preventDefault();
+            minigamesList.innerHTML = '';
+            minigamesAvailable.forEach(g => {
+                const item = document.createElement('a');
+                item.href = g.file;
+                item.className = "minigame-item";
+                item.innerHTML = g.name;
+                item.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    minigamesModal.style.display = 'none';
+                    window.location.href = g.file;
+                });
+                minigamesList.appendChild(item);
+            });
+            minigamesModal.style.display = 'block';
+        }
+
+        linkMinigames.addEventListener('click', openMinigames);
+        closeMinigames.addEventListener('click', () => minigamesModal.style.display = 'none');
+        window.addEventListener('click', (e) => {
+            if (e.target === minigamesModal) minigamesModal.style.display = 'none';
+        });
 
         let awaitingInput = false;
 
