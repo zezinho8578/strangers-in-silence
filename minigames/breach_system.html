@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COMPUTER NETWORK BREACH</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --primary: #00ff41;
+            --primary-dim: #006622;
+            --primary-glow: #00ff41;
+            --bg: #0a0a0a;
+            --bg-panel: rgba(0, 10, 0, 0.9);
+            --source: #00ffff;
+            --source-glow: #00ffff;
+            --target: #ff0040;
+            --target-glow: #ff0040;
+            --warning: #ffaa00;
+            --node-bg: #0d1a0d;
+            --node-border: #004411;
+            --node-active: #00ff41;
+            --arm-inactive: #1a3322;
+            --arm-active: #00ff41;
+        }
+
+        body {
+            background: var(--bg);
+            background-image: 
+                radial-gradient(ellipse at 20% 50%, rgba(0, 40, 0, 0.3) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(0, 20, 40, 0.2) 0%, transparent 50%);
+            color: var(--primary);
+            font-family: 'Courier New', 'Lucida Console', monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* CRT Scanlines */
+        #crt_overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.12) 0px,
+                rgba(0, 0, 0, 0.12) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            92% { opacity: 1; }
+            93% { opacity: 0.97; }
+            94% { opacity: 1; }
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        #scanline {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            height: 80px;
+            background: linear-gradient(
+                transparent 0%,
+                rgba(0, 255, 65, 0.03) 50%,
+                transparent 100%
+            );
+            animation: scanline 6s linear infinite;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #game-container {
+            animation: flicker 5s infinite;
+            border: 1px solid var(--primary);
+            padding: 25px;
+            background: var(--bg-panel);
+            width: 95%;
+            max-width: 850px;
+            position: relative;
+            box-shadow: 
+                0 0 40px rgba(0, 255, 65, 0.15),
+                inset 0 0 40px rgba(0, 255, 65, 0.03),
+                inset 0 1px 0 rgba(0, 255, 65, 0.2);
+        }
+
+        /* Corner brackets */
+        #game-container::before,
+        #game-container::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: var(--primary);
+            border-style: solid;
+        }
+        #game-container::before {
+            top: -1px; left: -1px;
+            border-width: 2px 0 0 2px;
+        }
+        #game-container::after {
+            bottom: -1px; right: -1px;
+            border-width: 0 2px 2px 0;
+        }
+
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        /* Boot Screen */
+        #boot-screen { 
+            text-align: left; 
+            min-height: 380px; 
+            padding: 20px;
+            font-size: 13px;
+        }
+        .boot-line { 
+            opacity: 0; 
+            margin-bottom: 6px; 
+            transition: opacity 0.08s;
+            line-height: 1.6;
+        }
+        .boot-line.visible { opacity: 1; }
+        .boot-line .highlight { color: var(--source); }
+
+        @keyframes blink { 
+            0%, 50% { opacity: 1; } 
+            51%, 100% { opacity: 0; } 
+        }
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 14px;
+            background: var(--primary);
+            animation: blink 1s infinite;
+            vertical-align: middle;
+            margin-left: 4px;
+        }
+
+        /* Roll Screen */
+        #roll-screen { text-align: center; padding: 30px 20px; }
+        #roll-screen h1 { 
+            font-size: 22px; 
+            margin-bottom: 25px; 
+            text-shadow: 0 0 10px var(--primary-glow);
+            letter-spacing: 3px;
+            font-weight: normal;
+        }
+        #roll-screen p { 
+            font-size: 13px; 
+            margin-bottom: 18px; 
+            color: var(--primary-dim);
+        }
+
+        #roll-input {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 22px;
+            padding: 12px 25px;
+            text-align: center;
+            width: 100px;
+            outline: none;
+            margin-bottom: 10px;
+        }
+        #roll-input:focus { 
+            box-shadow: 0 0 15px var(--primary-glow), inset 0 0 10px rgba(0, 255, 65, 0.1); 
+        }
+
+        .btn {
+            display: inline-block;
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 13px;
+            padding: 12px 35px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .btn:hover { 
+            background: var(--primary); 
+            color: var(--bg); 
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        /* Game Screen */
+        #game-screen { text-align: center; }
+
+        #game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--primary-dim);
+        }
+
+        #difficulty-display { 
+            font-size: 11px; 
+            color: var(--warning);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #timer-display { 
+            font-size: 28px; 
+            font-weight: bold;
+            text-shadow: 0 0 10px currentColor;
+            font-variant-numeric: tabular-nums;
+        }
+        #timer-display.warning { 
+            color: var(--target); 
+            animation: blink 0.5s infinite; 
+        }
+
+        #network-container {
+            position: relative;
+            margin: 0 auto;
+            max-width: 650px;
+            aspect-ratio: 1;
+            background: 
+                radial-gradient(circle at center, rgba(0, 50, 0, 0.08) 0%, transparent 70%),
+                linear-gradient(rgba(0, 255, 65, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 65, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            border: 1px solid var(--primary-dim);
+            overflow: hidden;
+        }
+
+        #connections-svg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .connection-line {
+            stroke: var(--arm-inactive);
+            stroke-width: 4;
+            fill: none;
+            transition: stroke 0.3s, stroke-width 0.3s;
+            stroke-linecap: round;
+        }
+        .connection-line.active {
+            stroke: var(--arm-active);
+            stroke-width: 5;
+            filter: drop-shadow(0 0 6px var(--primary-glow));
+        }
+
+        .node {
+            position: absolute;
+            z-index: 2;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: filter 0.2s;
+        }
+        .node:hover:not(.locked) .node-core {
+            filter: brightness(1.3);
+        }
+        .node.locked {
+            cursor: not-allowed;
+            opacity: 0.4;
+        }
+
+        .node-core {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--node-bg);
+            border: 2px solid var(--node-border);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.25s;
+        }
+
+        .node.source .node-core {
+            background: radial-gradient(circle, var(--source) 30%, transparent 70%);
+            border-color: var(--source);
+            box-shadow: 0 0 15px var(--source-glow), 0 0 30px var(--source-glow);
+            animation: pulse-source 2s infinite;
+        }
+
+        .node.target .node-core {
+            background: radial-gradient(circle, var(--target) 30%, transparent 70%);
+            border-color: var(--target);
+            box-shadow: 0 0 15px var(--target-glow), 0 0 30px var(--target-glow);
+            animation: pulse-target 2s infinite;
+        }
+
+        .node.connected .node-core {
+            border-color: var(--node-active);
+            background: radial-gradient(circle, var(--primary) 40%, var(--node-bg) 80%);
+            box-shadow: 0 0 12px var(--primary-glow);
+        }
+
+        @keyframes pulse-source {
+            0%, 100% { box-shadow: 0 0 15px var(--source-glow), 0 0 30px var(--source-glow); }
+            50% { box-shadow: 0 0 20px var(--source-glow), 0 0 40px var(--source-glow); }
+        }
+
+        @keyframes pulse-target {
+            0%, 100% { box-shadow: 0 0 15px var(--target-glow), 0 0 30px var(--target-glow); }
+            50% { box-shadow: 0 0 20px var(--target-glow), 0 0 40px var(--target-glow); }
+        }
+
+        .node-arm {
+            position: absolute;
+            background: var(--arm-inactive);
+            transition: background 0.3s;
+        }
+        .node.connected .node-arm {
+            background: var(--arm-active);
+            filter: drop-shadow(0 0 4px var(--primary-glow));
+        }
+        .node.source .node-arm {
+            background: var(--source);
+            filter: drop-shadow(0 0 4px var(--source-glow));
+        }
+        .node.target .node-arm {
+            background: var(--target);
+            filter: drop-shadow(0 0 4px var(--target-glow));
+        }
+
+        .node-arm.north {
+            width: 4px;
+            height: calc(50% + 2px);
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .node-arm.south {
+            width: 4px;
+            height: calc(50% + 2px);
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .node-arm.east {
+            width: calc(50% + 2px);
+            height: 4px;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .node-arm.west {
+            width: calc(50% + 2px);
+            height: 4px;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .node-label {
+            position: absolute;
+            font-size: 9px;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 3;
+            text-shadow: 0 0 5px currentColor;
+        }
+        .node.source .node-label { 
+            color: var(--source); 
+            top: -18px; 
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .node.target .node-label { 
+            color: var(--target); 
+            bottom: -18px; 
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #game-footer { 
+            margin-top: 15px; 
+            font-size: 10px; 
+            color: var(--primary-dim);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* Result Screen */
+        #result-screen { text-align: center; padding: 30px 20px; }
+        #result-screen h1 { 
+            font-size: 26px; 
+            margin-bottom: 25px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        #result-screen.success h1 { 
+            color: var(--primary); 
+            text-shadow: 0 0 20px var(--primary-glow); 
+        }
+        #result-screen.failure h1 { 
+            color: var(--target); 
+            text-shadow: 0 0 20px var(--target-glow); 
+        }
+
+        .result-stats {
+            text-align: left;
+            margin: 25px auto;
+            max-width: 320px;
+            font-size: 13px;
+        }
+        .result-stats div {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--primary-dim);
+        }
+        .result-stats span:first-child {
+            color: var(--primary-dim);
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div id="crt_overlay"></div>
+    <div id="scanline"></div>
+
+    <div id="game-container">
+        <div id="boot-screen" class="screen active">
+            <div class="boot-line">> BREACH SYSTEM</div>
+            <div class="boot-line">> NEURAL LINK ESTABLISHED</div>
+            <div class="boot-line">> SCANNING TARGET NETWORK TOPOLOGY...</div>
+            <div class="boot-line">> <span class="highlight">FIREWALL DETECTED:</span> ROUTING ENCRYPTION LVL-3</div>
+            <div class="boot-line">> INITIATING PACKET INJECTION...</div>
+            <div class="boot-line">> CALIBRATING NODE ROTATION INTERFACE...</div>
+            <div class="boot-line">> TRACE DETECTION ACTIVE // TIME CONSTRAINT ENGAGED</div>
+            <div class="boot-line">> <span class="highlight">STATUS: AWAITING OPERATOR INPUT</span><span class="cursor"></span></div>
+        </div>
+
+        <div id="roll-screen" class="screen">
+            <h1>NETWORK BREACH</h1>
+            <p>INPUT ELECTRONICS SKILL CHECK (1–20)</p>
+            <p style="font-size: 10px; letter-spacing: 1px;">
+                FAILED [1-3] = HARD &nbsp;&nbsp;│&nbsp;&nbsp; SUCCESS [4-7] = NORMAL &nbsp;&nbsp;│&nbsp;&nbsp; RAISE [8+] = EASY
+            </p>
+            <input type="number" id="roll-input" min="1" max="20" placeholder="?">
+            <br>
+            <button class="btn" id="roll-submit">INITIATE BREACH</button>
+        </div>
+
+        <div id="game-screen" class="screen">
+            <div id="game-header">
+                <div id="difficulty-display">THREAT LVL: <span id="diff-text">NORMAL</span></div>
+                <div id="timer-display">45</div>
+            </div>
+            <div id="network-container">
+                <svg id="connections-svg"></svg>
+            </div>
+            <div id="game-footer">
+                CLICK NODES TO ROTATE CONNECTIONS // ESTABLISH PATH: <span style="color:var(--source)">SOURCE</span> → <span style="color:var(--target)">TARGET</span>
+            </div>
+        </div>
+
+        <div id="result-screen" class="screen">
+            <h1 id="result-title">BREACH SUCCESSFUL</h1>
+            <div class="result-stats">
+                <div><span>Threat Level</span><span id="result-diff">NORMAL</span></div>
+                <div><span>Electronics Roll</span><span id="result-roll">5</span></div>
+                <div><span>Time Remaining</span><span id="result-time">12s</span></div>
+                <div><span>Rotations</span><span id="result-rotations">23</span></div>
+                <div><span>Status</span><span id="result-status">ACCESS GRANTED</span></div>
+            </div>
+            <button class="btn" id="play-again">ATTEMPT ANOTHER BREACH</button>
+        </div>
+    </div>
+
+    <script>
+        const AudioEngine = {
+            ctx: null,
+            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            beep(freq = 440, dur = 0.1, vol = 0.08, type = 'square') {
+                if (!this.ctx) return;
+                const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+                o.type = type;
+                o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                g.gain.setValueAtTime(vol, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + dur);
+            },
+            click() { this.beep(800, 0.04, 0.04); },
+            rotate() { this.beep(500, 0.06, 0.06, 'triangle'); },
+            error() { this.beep(180, 0.15, 0.08, 'sawtooth'); },
+            win() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.beep(f, 0.18, 0.12), i * 120)); },
+            lose() { [350, 300, 250, 180].forEach((f, i) => setTimeout(() => this.beep(f, 0.2, 0.1, 'sawtooth'), i * 120)); }
+        };
+
+        const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
+
+        const DIFF = {
+            HARD:   { name: 'HARD',   grid: 6, time: 30, locked: 0.15, preSolved: 0   },
+            NORMAL: { name: 'NORMAL', grid: 5, time: 45, locked: 0,    preSolved: 0   },
+            EASY:   { name: 'EASY',   grid: 4, time: 60, locked: 0,    preSolved: 0.3 }
+        };
+
+        const BASE_CONN = {
+            straight: [0, 2],
+            corner:   [0, 1],
+            tee:      [0, 1, 2],
+            cross:    [0, 1, 2, 3]
+        };
+        const DIR_VEC = [[-1,0],[0,1],[1,0],[0,-1]];
+        const DIR_NAME = ['north','east','south','west'];
+
+        let state = {
+            diff: null, grid: [], size: 0,
+            timeLeft: 0, timer: null,
+            rotations: 0, roll: 0, active: false
+        };
+
+        function getConns(type, rot) {
+            return BASE_CONN[type].map(d => (d + rot) % 4);
+        }
+        function oppDir(d) { return (d + 2) % 4; }
+        function shuffle(a) {
+            for (let i = a.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [a[i], a[j]] = [a[j], a[i]];
+            }
+            return a;
+        }
+
+        function genPath(rows, cols) {
+            const path = [{r:0,c:0}];
+            const visited = new Set(['0,0']);
+            const tR = rows-1, tC = cols-1;
+            let iter = 0;
+            while (path.length && iter++ < 15000) {
+                const cur = path[path.length-1];
+                if (cur.r === tR && cur.c === tC) break;
+                const dirs = shuffle([
+                    {dr:-1,dc:0,dir:0},{dr:0,dc:1,dir:1},
+                    {dr:1,dc:0,dir:2},{dr:0,dc:-1,dir:3}
+                ]);
+                const nbrs = [];
+                for (const {dr,dc} of dirs) {
+                    const nr = cur.r+dr, nc = cur.c+dc;
+                    if (nr>=0 && nr<rows && nc>=0 && nc<cols && !visited.has(nr+','+nc))
+                        nbrs.push({r:nr,c:nc});
+                }
+                if (nbrs.length) {
+                    nbrs.sort((a,b) => {
+                        const dA = Math.abs(a.r-tR)+Math.abs(a.c-tC);
+                        const dB = Math.abs(b.r-tR)+Math.abs(b.c-tC);
+                        return dA-dB + (Math.random()-0.5)*2;
+                    });
+                    path.push(nbrs[0]);
+                    visited.add(nbrs[0].r+','+nbrs[0].c);
+                } else path.pop();
+            }
+            return path;
+        }
+
+        function genPuzzle(diff) {
+            const {grid: sz, locked, preSolved} = diff;
+            const path = genPath(sz, sz);
+            const pathSet = new Set(path.map(p => p.r+','+p.c));
+            const grid = [];
+            for (let r = 0; r < sz; r++) {
+                grid[r] = [];
+                for (let c = 0; c < sz; c++) {
+                    grid[r][c] = {
+                        type: 'straight', rot: 0, locked: false,
+                        isSrc: r===0&&c===0, isTgt: r===sz-1&&c===sz-1,
+                        connected: false
+                    };
+                }
+            }
+            for (let i = 0; i < path.length; i++) {
+                const cell = path[i], piece = grid[cell.r][cell.c];
+                let eD = null, xD = null;
+                if (i > 0) {
+                    const p = path[i-1];
+                    eD = p.r<cell.r?0 : p.r>cell.r?2 : p.c<cell.c?3 : 1;
+                }
+                if (i < path.length-1) {
+                    const n = path[i+1];
+                    xD = n.r<cell.r?0 : n.r>cell.r?2 : n.c<cell.c?3 : 1;
+                }
+                const dirs = [];
+                if (eD !== null) dirs.push(eD);
+                if (xD !== null) dirs.push(xD);
+                dirs.sort();
+                if (dirs.length >= 2) {
+                    const d1=dirs[0], d2=dirs[1];
+                    if ((d1+2)%4 === d2) { piece.type='straight'; piece.solRot=d1; }
+                    else { piece.type='corner'; piece.solRot=(d1===0&&d2===3)?3:Math.min(d1,d2); }
+                } else if (dirs.length === 1) {
+                    piece.type='corner'; piece.solRot=dirs[0];
+                }
+                piece.rot = Math.floor(Math.random()*4);
+            }
+            for (let r = 0; r < sz; r++)
+                for (let c = 0; c < sz; c++)
+                    if (!pathSet.has(r+','+c)) {
+                        const types = ['straight','corner','tee','cross'];
+                        grid[r][c].type = types[Math.floor(Math.random()*types.length)];
+                        grid[r][c].rot = Math.floor(Math.random()*4);
+                    }
+            if (locked > 0) {
+                const nonP = [];
+                for (let r=0;r<sz;r++) for(let c=0;c<sz;c++)
+                    if (!pathSet.has(r+','+c) && !grid[r][c].isSrc && !grid[r][c].isTgt)
+                        nonP.push({r,c});
+                shuffle(nonP);
+                for (let i=0; i<Math.floor(nonP.length*locked); i++)
+                    grid[nonP[i].r][nonP[i].c].locked = true;
+            }
+            if (preSolved > 0) {
+                const mid = path.filter((_,i)=>i>0&&i<path.length-1);
+                shuffle(mid);
+                const n = Math.max(1, Math.floor(mid.length*preSolved));
+                for (let i=0;i<n;i++) {
+                    const p = mid[i];
+                    if (grid[p.r][p.c].solRot !== undefined)
+                        grid[p.r][p.c].rot = grid[p.r][p.c].solRot;
+                }
+            }
+            return grid;
+        }
+
+        function checkConn() {
+            const {grid, size} = state;
+            const vis = new Set(), queue = [{r:0,c:0}];
+            vis.add('0,0');
+            const conn = new Set(['0,0']);
+            while (queue.length) {
+                const cur = queue.shift();
+                const cc = getConns(grid[cur.r][cur.c].type, grid[cur.r][cur.c].rot);
+                for (const dir of cc) {
+                    const [dr,dc] = DIR_VEC[dir];
+                    const nr=cur.r+dr, nc=cur.c+dc, key=nr+','+nc;
+                    if (nr>=0&&nr<size&&nc>=0&&nc<size&&!vis.has(key)) {
+                        const nc2 = getConns(grid[nr][nc].type, grid[nr][nc].rot);
+                        if (nc2.includes(oppDir(dir))) {
+                            vis.add(key); conn.add(key); queue.push({r:nr,c:nc});
+                        }
+                    }
+                }
+            }
+            for (let r=0;r<size;r++) for(let c=0;c<size;c++)
+                grid[r][c].connected = conn.has(r+','+c);
+            return conn.has((size-1)+','+(size-1));
+        }
+
+        function render() {
+            const cont = document.getElementById('network-container');
+            const svg = document.getElementById('connections-svg');
+            const rect = cont.getBoundingClientRect();
+            
+            svg.innerHTML = '';
+            cont.querySelectorAll('.node').forEach(el => el.remove());
+
+            const spacing = Math.min(rect.width, rect.height) / state.size;
+            const offsetX = (rect.width - spacing * (state.size - 1)) / 2;
+            const offsetY = (rect.height - spacing * (state.size - 1)) / 2;
+            const armLen = spacing / 2 - 4;
+            const nodeSize = Math.min(60, spacing - 10);
+
+            const positions = [];
+            
+            for (let r = 0; r < state.size; r++) {
+                positions[r] = [];
+                for (let c = 0; c < state.size; c++) {
+                    const x = offsetX + c * spacing;
+                    const y = offsetY + r * spacing;
+                    positions[r][c] = {x, y};
+
+                    const cell = state.grid[r][c];
+                    const node = document.createElement('div');
+                    node.className = 'node';
+                    node.style.left = x + 'px';
+                    node.style.top = y + 'px';
+                    node.style.width = nodeSize + 'px';
+                    node.style.height = nodeSize + 'px';
+
+                    if (cell.isSrc) node.classList.add('source');
+                    if (cell.isTgt) node.classList.add('target');
+                    if (cell.locked) node.classList.add('locked');
+                    if (cell.connected) node.classList.add('connected');
+
+                    const core = document.createElement('div');
+                    core.className = 'node-core';
+                    node.appendChild(core);
+
+                    const conns = getConns(cell.type, cell.rot);
+                    conns.forEach(dir => {
+                        const arm = document.createElement('div');
+                        arm.className = 'node-arm ' + DIR_NAME[dir];
+                        node.appendChild(arm);
+                    });
+
+                    const label = document.createElement('div');
+                    label.className = 'node-label';
+                    if (cell.isSrc) label.textContent = 'SOURCE';
+                    else if (cell.isTgt) label.textContent = 'TARGET';
+                    node.appendChild(label);
+
+                    node.addEventListener('click', () => handleClick(r, c));
+                    cont.appendChild(node);
+                }
+            }
+
+            for (let r = 0; r < state.size; r++) {
+                for (let c = 0; c < state.size; c++) {
+                    const cell = state.grid[r][c];
+                    const conns = getConns(cell.type, cell.rot);
+                    const pos1 = positions[r][c];
+
+                    conns.forEach(dir => {
+                        const [dr, dc] = DIR_VEC[dir];
+                        const nr = r + dr, nc = c + dc;
+                        if (nr >= 0 && nr < state.size && nc >= 0 && nc < state.size) {
+                            const nbr = state.grid[nr][nc];
+                            const nbrConns = getConns(nbr.type, nbr.rot);
+                            if (nbrConns.includes(oppDir(dir))) {
+                                const pos2 = positions[nr][nc];
+                                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                                line.setAttribute('x1', pos1.x);
+                                line.setAttribute('y1', pos1.y);
+                                line.setAttribute('x2', pos2.x);
+                                line.setAttribute('y2', pos2.y);
+                                line.setAttribute('class', 'connection-line');
+                                if (cell.connected && nbr.connected) line.classList.add('active');
+                                svg.appendChild(line);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        function handleClick(r, c) {
+            if (!state.active) return;
+            const cell = state.grid[r][c];
+            if (cell.locked) { AudioEngine.error(); return; }
+            AudioEngine.rotate();
+            cell.rot = (cell.rot + 1) % 4;
+            state.rotations++;
+            if (checkConn()) {
+                render();
+                endGame(true);
+            } else {
+                render();
+            }
+        }
+
+        function startTimer() {
+            state.timeLeft = state.diff.time;
+            updTimer();
+            state.timer = setInterval(() => {
+                state.timeLeft--;
+                updTimer();
+                if (state.timeLeft <= 10 && state.timeLeft > 0) AudioEngine.beep(900, 0.04, 0.06);
+                if (state.timeLeft <= 0) endGame(false);
+            }, 1000);
+        }
+
+        function updTimer() {
+            const el = document.getElementById('timer-display');
+            el.textContent = state.timeLeft;
+            el.classList.toggle('warning', state.timeLeft <= 10);
+        }
+
+        function startGame(diff) {
+            state.diff = diff;
+            state.size = diff.grid;
+            state.rotations = 0;
+            state.active = true;
+            state.grid = genPuzzle(diff);
+            let safe = 0;
+            while (checkConn() && safe++ < 10) state.grid = genPuzzle(diff);
+            checkConn();
+            render();
+            showScreen('game-screen');
+            startTimer();
+            document.getElementById('diff-text').textContent = diff.name;
+        }
+
+        function endGame(won) {
+            state.active = false;
+            clearInterval(state.timer);
+            won ? AudioEngine.win() : AudioEngine.lose();
+            const rs = document.getElementById('result-screen');
+            rs.className = 'screen active ' + (won ? 'success' : 'failure');
+            document.getElementById('result-title').textContent = won ? 'BREACH SUCCESSFUL' : 'BREACH FAILED';
+            document.getElementById('result-diff').textContent = state.diff.name;
+            document.getElementById('result-roll').textContent = state.roll;
+            document.getElementById('result-time').textContent = won ? state.timeLeft+'s' : 'EXPIRED';
+            document.getElementById('result-rotations').textContent = state.rotations;
+            document.getElementById('result-status').textContent = won ? 'ACCESS GRANTED' : 'TRACE DETECTED';
+            showScreen('result-screen');
+            sendWebhook(won);
+        }
+
+        async function sendWebhook(won) {
+            const embed = {
+                title: '\u{1F50C} NETWORK BREACH RESULT',
+                color: won ? 0x00ff41 : 0xff0040,
+                fields: [
+                    {name: 'Outcome', value: won ? '\u2705 SUCCESS' : '\u274C FAILED', inline: true},
+                    {name: 'Threat Level', value: state.diff.name, inline: true},
+                    {name: 'Electronics Roll', value: String(state.roll), inline: true},
+                    {name: 'Time Remaining', value: won ? state.timeLeft+'s' : 'Expired', inline: true},
+                    {name: 'Rotations', value: String(state.rotations), inline: true},
+                    {name: 'Network Size', value: state.size+'x'+state.size, inline: true}
+                ],
+                footer: {text: 'Breach System'},
+                timestamp: new Date().toISOString()
+            };
+            try {
+                await fetch(WEBHOOK, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({embeds: [embed]})
+                });
+            } catch (e) { console.error('Webhook error:', e); }
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function runBoot() {
+            const lines = document.querySelectorAll('#boot-screen .boot-line');
+            let delay = 0;
+            lines.forEach(line => {
+                setTimeout(() => { line.classList.add('visible'); AudioEngine.click(); }, delay);
+                delay += 300 + Math.random() * 120;
+            });
+            setTimeout(() => {
+                showScreen('roll-screen');
+                document.getElementById('roll-input').focus();
+            }, delay + 350);
+        }
+
+        function submitRoll() {
+            const v = parseInt(document.getElementById('roll-input').value);
+            if (isNaN(v) || v < 1 || v > 20) {
+                document.getElementById('roll-input').style.borderColor = '#ff0040';
+                AudioEngine.error();
+                return;
+            }
+            state.roll = v;
+            const diff = v <= 3 ? DIFF.HARD : v <= 7 ? DIFF.NORMAL : DIFF.EASY;
+            startGame(diff);
+        }
+
+        document.getElementById('roll-submit').addEventListener('click', submitRoll);
+        document.getElementById('roll-input').addEventListener('keypress', e => { if (e.key==='Enter') submitRoll(); });
+        document.getElementById('play-again').addEventListener('click', () => {
+            document.getElementById('roll-input').value = '';
+            document.getElementById('roll-input').style.borderColor = '';
+            showScreen('roll-screen');
+            document.getElementById('roll-input').focus();
+        });
+        document.addEventListener('click', () => AudioEngine.init(), {once: true});
+        window.addEventListener('resize', () => { if (state.active) render(); });
+
+        runBoot();
+    </script>
+</body>
+</html>
