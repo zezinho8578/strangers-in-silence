@@ -3,77 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LambdaOS - Breach System</title>
-    <link rel="stylesheet" href="/style.css">
-    <script>
-    let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
-    if (!currentUser) window.location.replace("/");
-    </script>
+    <title>COMPUTER NETWORK BREACH</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --primary: var(--theme-color);
-            --primary-dim: rgba(128, 128, 128, 0.45);
-            --primary-dim: color-mix(in srgb, var(--theme-color) 45%, var(--bg-color));
-            --primary-glow: var(--theme-color);
-            --bg: var(--bg-color);
-            --bg-panel: rgba(0, 0, 0, 0.9);
-            --bg-panel: color-mix(in srgb, var(--bg-color) 95%, var(--theme-color));
+            --primary: #00ff41;
+            --primary-dim: #006622;
+            --primary-glow: #00ff41;
+            --bg: #0a0a0a;
+            --bg-panel: rgba(0, 10, 0, 0.9);
             --source: #00ffff;
             --source-glow: #00ffff;
             --target: #ff0040;
             --target-glow: #ff0040;
             --warning: #ffaa00;
-            --node-bg: #0a0a0a;
-            --node-bg: color-mix(in srgb, var(--bg-color) 90%, var(--theme-color));
-            --node-border: rgba(128, 128, 128, 0.45);
-            --node-border: color-mix(in srgb, var(--theme-color) 45%, var(--bg-color));
-            --node-active: var(--theme-color);
-            --arm-inactive: rgba(128, 128, 128, 0.25);
-            --arm-inactive: color-mix(in srgb, var(--theme-color) 25%, var(--bg-color));
-            --arm-active: var(--theme-color);
+            --node-bg: #0d1a0d;
+            --node-border: #004411;
+            --node-active: #00ff41;
+            --arm-inactive: #1a3322;
+            --arm-active: #00ff41;
         }
 
         body {
             background: var(--bg);
-            background-image:
-                radial-gradient(ellipse at 20% 50%, rgba(128, 128, 128, 0.12) 0%, transparent 50%),
+            background-image: 
+                radial-gradient(ellipse at 20% 50%, rgba(0, 40, 0, 0.3) 0%, transparent 50%),
                 radial-gradient(ellipse at 80% 50%, rgba(0, 20, 40, 0.2) 0%, transparent 50%);
             color: var(--primary);
-            font-family: var(--font-family);
+            font-family: 'Courier New', 'Lucida Console', monospace;
             min-height: 100vh;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
             overflow: hidden;
-        }
-
-        /* Top navigation matching the rest of the site */
-        #top-nav {
-            position: fixed;
-            top: 15px;
-            left: 15px;
-            right: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--theme-color);
-            padding-bottom: 10px;
-            margin-right: 180px;
-            z-index: 20;
-        }
-        .nav-link {
-            color: var(--theme-color);
-            text-decoration: none;
-            padding: 2px 6px;
-            cursor: pointer;
-        }
-        .nav-link:hover {
-            background: var(--theme-color);
-            color: var(--bg-color);
-            text-shadow: none;
+            user-select: none;
         }
 
         /* CRT Scanlines */
@@ -111,7 +75,7 @@
             height: 80px;
             background: linear-gradient(
                 transparent 0%,
-                rgba(128, 128, 128, 0.04) 50%,
+                rgba(0, 255, 65, 0.03) 50%,
                 transparent 100%
             );
             animation: scanline 6s linear infinite;
@@ -128,9 +92,9 @@
             max-width: 850px;
             position: relative;
             box-shadow: 
-                0 0 40px color-mix(in srgb, var(--theme-color) 15%, transparent),
-                inset 0 0 40px color-mix(in srgb, var(--theme-color) 3%, transparent),
-                inset 0 1px 0 color-mix(in srgb, var(--theme-color) 20%, transparent);
+                0 0 40px rgba(0, 255, 65, 0.15),
+                inset 0 0 40px rgba(0, 255, 65, 0.03),
+                inset 0 1px 0 rgba(0, 255, 65, 0.2);
         }
 
         /* Corner brackets */
@@ -213,7 +177,7 @@
             margin-bottom: 10px;
         }
         #roll-input:focus { 
-            box-shadow: 0 0 15px var(--primary-glow), inset 0 0 10px color-mix(in srgb, var(--theme-color) 10%, transparent); 
+            box-shadow: 0 0 15px var(--primary-glow), inset 0 0 10px rgba(0, 255, 65, 0.1); 
         }
 
         .btn {
@@ -272,12 +236,12 @@
             max-width: 650px;
             aspect-ratio: 1;
             background: 
-                radial-gradient(circle at center, rgba(128, 128, 128, 0.08) 0%, transparent 70%),
-                linear-gradient(color-mix(in srgb, var(--theme-color) 4%, transparent) 1px, transparent 1px),
-                linear-gradient(90deg, color-mix(in srgb, var(--theme-color) 4%, transparent) 1px, transparent 1px);
+                radial-gradient(circle at center, rgba(0, 50, 0, 0.08) 0%, transparent 70%),
+                linear-gradient(rgba(0, 255, 65, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 65, 0.02) 1px, transparent 1px);
             background-size: 100% 100%, 40px 40px, 40px 40px;
             border: 1px solid var(--primary-dim);
-            overflow: hidden;
+            padding: 30px;
         }
 
         #connections-svg {
@@ -314,7 +278,24 @@
         }
         .node.locked {
             cursor: not-allowed;
-            opacity: 0.4;
+        }
+        .node.locked .node-core {
+            background: #2a0000;
+            border-color: #550000;
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+        }
+        .node.locked .node-arm {
+            background: #441111;
+            opacity: 0.6;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translate(-50%, -50%) translateX(0); }
+            25% { transform: translate(-50%, -50%) translateX(-5px); }
+            75% { transform: translate(-50%, -50%) translateX(5px); }
+        }
+        .node.locked.shake {
+            animation: shake 0.3s ease-in-out;
         }
 
         .node-core {
@@ -328,42 +309,45 @@
             left: 50%;
             transform: translate(-50%, -50%);
             transition: all 0.25s;
+            z-index: 3;
         }
 
         .node.source .node-core {
-            background: radial-gradient(circle, var(--source) 30%, transparent 70%);
+            background: var(--source);
             border-color: var(--source);
-            box-shadow: 0 0 15px var(--source-glow), 0 0 30px var(--source-glow);
+            box-shadow: 0 0 15px var(--source-glow), 0 0 30px var(--source-glow), inset 0 0 10px rgba(255,255,255,0.5);
             animation: pulse-source 2s infinite;
         }
 
         .node.target .node-core {
-            background: radial-gradient(circle, var(--target) 30%, transparent 70%);
+            background: var(--target);
             border-color: var(--target);
-            box-shadow: 0 0 15px var(--target-glow), 0 0 30px var(--target-glow);
+            box-shadow: 0 0 15px var(--target-glow), 0 0 30px var(--target-glow), inset 0 0 10px rgba(255,255,255,0.5);
             animation: pulse-target 2s infinite;
         }
 
         .node.connected .node-core {
             border-color: var(--node-active);
-            background: radial-gradient(circle, var(--primary) 40%, var(--node-bg) 80%);
-            box-shadow: 0 0 12px var(--primary-glow);
+            background: var(--primary);
+            box-shadow: 0 0 12px var(--primary-glow), inset 0 0 8px rgba(255,255,255,0.3);
         }
 
         @keyframes pulse-source {
-            0%, 100% { box-shadow: 0 0 15px var(--source-glow), 0 0 30px var(--source-glow); }
-            50% { box-shadow: 0 0 20px var(--source-glow), 0 0 40px var(--source-glow); }
+            0%, 100% { box-shadow: 0 0 15px var(--source-glow), 0 0 30px var(--source-glow), inset 0 0 10px rgba(255,255,255,0.5); }
+            50% { box-shadow: 0 0 20px var(--source-glow), 0 0 40px var(--source-glow), inset 0 0 15px rgba(255,255,255,0.7); }
         }
 
         @keyframes pulse-target {
-            0%, 100% { box-shadow: 0 0 15px var(--target-glow), 0 0 30px var(--target-glow); }
-            50% { box-shadow: 0 0 20px var(--target-glow), 0 0 40px var(--target-glow); }
+            0%, 100% { box-shadow: 0 0 15px var(--target-glow), 0 0 30px var(--target-glow), inset 0 0 10px rgba(255,255,255,0.5); }
+            50% { box-shadow: 0 0 20px var(--target-glow), 0 0 40px var(--target-glow), inset 0 0 15px rgba(255,255,255,0.7); }
         }
 
         .node-arm {
             position: absolute;
             background: var(--arm-inactive);
-            transition: background 0.3s;
+            transition: opacity 0.15s ease-out, background 0.3s, filter 0.3s;
+            opacity: 0;
+            z-index: 2;
         }
         .node.connected .node-arm {
             background: var(--arm-active);
@@ -412,8 +396,9 @@
             font-size: 9px;
             white-space: nowrap;
             pointer-events: none;
-            z-index: 3;
+            z-index: 4;
             text-shadow: 0 0 5px currentColor;
+            font-weight: bold;
         }
         .node.source .node-label { 
             color: var(--source); 
@@ -475,13 +460,6 @@
     </style>
 </head>
 <body>
-    <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
-
-    <div id="top-nav">
-        <a href="/dashboard.html" class="nav-link">&lt; RETURN TO DASHBOARD</a>
-        <span>BREACH SYSTEM</span>
-    </div>
-
     <div id="crt_overlay"></div>
     <div id="scanline"></div>
 
@@ -533,8 +511,6 @@
             <button class="btn" id="play-again">ATTEMPT ANOTHER BREACH</button>
         </div>
     </div>
-
-    <script src="/settings.js"></script>
 
     <script>
         const AudioEngine = {
@@ -601,24 +577,20 @@
                 const cur = path[path.length-1];
                 if (cur.r === tR && cur.c === tC) break;
                 const dirs = shuffle([
-                    {dr:-1,dc:0,dir:0},{dr:0,dc:1,dir:1},
-                    {dr:1,dc:0,dir:2},{dr:0,dc:-1,dir:3}
+                    {dr:-1,dc:0},{dr:0,dc:1},
+                    {dr:1,dc:0},{dr:0,dc:-1}
                 ]);
-                const nbrs = [];
+                let moved = false;
                 for (const {dr,dc} of dirs) {
                     const nr = cur.r+dr, nc = cur.c+dc;
-                    if (nr>=0 && nr<rows && nc>=0 && nc<cols && !visited.has(nr+','+nc))
-                        nbrs.push({r:nr,c:nc});
+                    if (nr>=0 && nr<rows && nc>=0 && nc<cols && !visited.has(nr+','+nc)) {
+                        path.push({r:nr,c:nc});
+                        visited.add(nr+','+nc);
+                        moved = true;
+                        break;
+                    }
                 }
-                if (nbrs.length) {
-                    nbrs.sort((a,b) => {
-                        const dA = Math.abs(a.r-tR)+Math.abs(a.c-tC);
-                        const dB = Math.abs(b.r-tR)+Math.abs(b.c-tC);
-                        return dA-dB + (Math.random()-0.5)*2;
-                    });
-                    path.push(nbrs[0]);
-                    visited.add(nbrs[0].r+','+nbrs[0].c);
-                } else path.pop();
+                if (!moved) path.pop();
             }
             return path;
         }
@@ -653,14 +625,34 @@
                 if (eD !== null) dirs.push(eD);
                 if (xD !== null) dirs.push(xD);
                 dirs.sort();
-                if (dirs.length >= 2) {
+                
+                if (dirs.length === 2) {
                     const d1=dirs[0], d2=dirs[1];
-                    if ((d1+2)%4 === d2) { piece.type='straight'; piece.solRot=d1; }
-                    else { piece.type='corner'; piece.solRot=(d1===0&&d2===3)?3:Math.min(d1,d2); }
+                    if ((d1+2)%4 === d2) { 
+                        piece.type='straight'; 
+                        piece.solRot=d1; 
+                    } else { 
+                        piece.type='corner'; 
+                        piece.solRot=(d1===0&&d2===3)?3:Math.min(d1,d2); 
+                    }
                 } else if (dirs.length === 1) {
-                    piece.type='corner'; piece.solRot=dirs[0];
+                    piece.type = 'straight';
+                    piece.solRot = (dirs[0] % 2 === 0) ? 0 : 1;
                 }
-                piece.rot = Math.floor(Math.random()*4);
+                
+                if (piece.type === 'straight') {
+                    let randRot;
+                    do {
+                        randRot = Math.floor(Math.random() * 4);
+                    } while (randRot === piece.solRot || randRot === (piece.solRot + 2) % 4);
+                    piece.rot = randRot;
+                } else if (piece.type === 'corner') {
+                    let randRot;
+                    do {
+                        randRot = Math.floor(Math.random() * 4);
+                    } while (randRot === piece.solRot);
+                    piece.rot = randRot;
+                }
             }
             for (let r = 0; r < sz; r++)
                 for (let c = 0; c < sz; c++)
@@ -720,13 +712,12 @@
             const svg = document.getElementById('connections-svg');
             const rect = cont.getBoundingClientRect();
             
-            svg.innerHTML = '';
-            cont.querySelectorAll('.node').forEach(el => el.remove());
-
-            const spacing = Math.min(rect.width, rect.height) / state.size;
-            const offsetX = (rect.width - spacing * (state.size - 1)) / 2;
-            const offsetY = (rect.height - spacing * (state.size - 1)) / 2;
-            const armLen = spacing / 2 - 4;
+            const pad = 30;
+            const drawW = rect.width - pad * 2;
+            const drawH = rect.height - pad * 2;
+            const spacing = Math.min(drawW, drawH) / state.size;
+            const offsetX = pad + (drawW - spacing * (state.size - 1)) / 2;
+            const offsetY = pad + (drawH - spacing * (state.size - 1)) / 2;
             const nodeSize = Math.min(60, spacing - 10);
 
             const positions = [];
@@ -739,39 +730,56 @@
                     positions[r][c] = {x, y};
 
                     const cell = state.grid[r][c];
-                    const node = document.createElement('div');
-                    node.className = 'node';
+                    let node = cont.querySelector(`.node[data-r="${r}"][data-c="${c}"]`);
+                    
+                    if (!node) {
+                        node = document.createElement('div');
+                        node.className = 'node';
+                        node.dataset.r = r;
+                        node.dataset.c = c;
+                        node.style.width = nodeSize + 'px';
+                        node.style.height = nodeSize + 'px';
+                        node.addEventListener('click', () => handleClick(r, c));
+                        
+                        const core = document.createElement('div');
+                        core.className = 'node-core';
+                        node.appendChild(core);
+
+                        for(let i=0; i<4; i++) {
+                            const arm = document.createElement('div');
+                            arm.className = 'node-arm ' + DIR_NAME[i];
+                            node.appendChild(arm);
+                        }
+
+                        const label = document.createElement('div');
+                        label.className = 'node-label';
+                        node.appendChild(label);
+                        
+                        cont.appendChild(node);
+                    }
+
                     node.style.left = x + 'px';
                     node.style.top = y + 'px';
-                    node.style.width = nodeSize + 'px';
-                    node.style.height = nodeSize + 'px';
 
-                    if (cell.isSrc) node.classList.add('source');
-                    if (cell.isTgt) node.classList.add('target');
-                    if (cell.locked) node.classList.add('locked');
-                    if (cell.connected) node.classList.add('connected');
-
-                    const core = document.createElement('div');
-                    core.className = 'node-core';
-                    node.appendChild(core);
+                    node.classList.toggle('source', cell.isSrc);
+                    node.classList.toggle('target', cell.isTgt);
+                    node.classList.toggle('locked', cell.locked);
+                    node.classList.toggle('connected', cell.connected);
 
                     const conns = getConns(cell.type, cell.rot);
-                    conns.forEach(dir => {
-                        const arm = document.createElement('div');
-                        arm.className = 'node-arm ' + DIR_NAME[dir];
-                        node.appendChild(arm);
+                    const arms = node.querySelectorAll('.node-arm');
+                    arms.forEach((arm, i) => {
+                        arm.style.opacity = conns.includes(i) ? '1' : '0';
                     });
 
-                    const label = document.createElement('div');
-                    label.className = 'node-label';
-                    if (cell.isSrc) label.textContent = 'SOURCE';
-                    else if (cell.isTgt) label.textContent = 'TARGET';
-                    node.appendChild(label);
-
-                    node.addEventListener('click', () => handleClick(r, c));
-                    cont.appendChild(node);
+                    const label = node.querySelector('.node-label');
+                    if (cell.isSrc) { label.textContent = 'SOURCE'; label.style.display = 'block'; }
+                    else if (cell.isTgt) { label.textContent = 'TARGET'; label.style.display = 'block'; }
+                    else { label.style.display = 'none'; }
                 }
             }
+
+            while (svg.firstChild) svg.removeChild(svg.firstChild);
 
             for (let r = 0; r < state.size; r++) {
                 for (let c = 0; c < state.size; c++) {
@@ -786,15 +794,17 @@
                             const nbr = state.grid[nr][nc];
                             const nbrConns = getConns(nbr.type, nbr.rot);
                             if (nbrConns.includes(oppDir(dir))) {
-                                const pos2 = positions[nr][nc];
-                                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                                line.setAttribute('x1', pos1.x);
-                                line.setAttribute('y1', pos1.y);
-                                line.setAttribute('x2', pos2.x);
-                                line.setAttribute('y2', pos2.y);
-                                line.setAttribute('class', 'connection-line');
-                                if (cell.connected && nbr.connected) line.classList.add('active');
-                                svg.appendChild(line);
+                                if (dir < oppDir(dir)) {
+                                    const pos2 = positions[nr][nc];
+                                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                                    line.setAttribute('x1', pos1.x);
+                                    line.setAttribute('y1', pos1.y);
+                                    line.setAttribute('x2', pos2.x);
+                                    line.setAttribute('y2', pos2.y);
+                                    line.setAttribute('class', 'connection-line');
+                                    if (cell.connected && nbr.connected) line.classList.add('active');
+                                    svg.appendChild(line);
+                                }
                             }
                         }
                     });
@@ -805,13 +815,25 @@
         function handleClick(r, c) {
             if (!state.active) return;
             const cell = state.grid[r][c];
-            if (cell.locked) { AudioEngine.error(); return; }
+            const nodeEl = document.querySelector(`.node[data-r="${r}"][data-c="${c}"]`);
+            
+            if (cell.locked) { 
+                AudioEngine.error(); 
+                if (nodeEl) {
+                    nodeEl.classList.remove('shake');
+                    void nodeEl.offsetWidth;
+                    nodeEl.classList.add('shake');
+                }
+                return; 
+            }
+            
             AudioEngine.rotate();
             cell.rot = (cell.rot + 1) % 4;
             state.rotations++;
+            
             if (checkConn()) {
                 render();
-                endGame(true);
+                setTimeout(() => endGame(true), 200);
             } else {
                 render();
             }
@@ -908,6 +930,7 @@
         }
 
         function submitRoll() {
+            AudioEngine.init();
             const v = parseInt(document.getElementById('roll-input').value);
             if (isNaN(v) || v < 1 || v > 20) {
                 document.getElementById('roll-input').style.borderColor = '#ff0040';
