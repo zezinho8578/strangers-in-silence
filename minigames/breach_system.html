@@ -200,6 +200,29 @@
             box-shadow: 0 0 20px var(--primary-glow);
         }
 
+        .btn-mini {
+            display: inline-block;
+            background: transparent;
+            border: 1px solid var(--primary-dim);
+            color: var(--primary-dim);
+            font-family: inherit;
+            font-size: 10px;
+            padding: 4px 9px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            margin-left: 6px;
+        }
+        .btn-mini:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .btn-mini.muted {
+            color: var(--warning);
+            border-color: var(--warning);
+        }
+
         /* Game Screen */
         #game-screen { text-align: center; }
 
@@ -233,6 +256,7 @@
         #network-container {
             position: relative;
             margin: 0 auto;
+            width: min(650px, 100%, calc(100vh - 240px));
             max-width: 650px;
             aspect-ratio: 1;
             background: 
@@ -272,6 +296,16 @@
             transform: translate(-50%, -50%);
             cursor: pointer;
             transition: filter 0.2s;
+        }
+        .node-rotator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            transform: translate(-50%, -50%);
+            transition: transform 0.15s;
+            z-index: 1;
         }
         .node:hover:not(.locked) .node-core {
             filter: brightness(1.3);
@@ -489,7 +523,11 @@
         <div id="game-screen" class="screen">
             <div id="game-header">
                 <div id="difficulty-display">THREAT LVL: <span id="diff-text">NORMAL</span></div>
-                <div id="timer-display">45</div>
+                <div id="timer-display">40</div>
+                <div>
+                    <button class="btn-mini" id="mute-btn" type="button">SOUND: ON</button>
+                    <button class="btn-mini" id="abort-btn" type="button">ABORT</button>
+                </div>
             </div>
             <div id="network-container">
                 <svg id="connections-svg"></svg>
@@ -507,6 +545,8 @@
                 <div><span>Time Remaining</span><span id="result-time">12s</span></div>
                 <div><span>Rotations</span><span id="result-rotations">23</span></div>
                 <div><span>Status</span><span id="result-status">ACCESS GRANTED</span></div>
+                <div><span>Best Time</span><span id="result-best-time">—</span></div>
+                <div><span>Best Rotations</span><span id="result-best-rot">—</span></div>
             </div>
             <button class="btn" id="play-again">ATTEMPT ANOTHER BREACH</button>
         </div>
@@ -515,9 +555,10 @@
     <script>
         const AudioEngine = {
             ctx: null,
+            muted: false,
             init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
             beep(freq = 440, dur = 0.1, vol = 0.08, type = 'square') {
-                if (!this.ctx) return;
+                if (!this.ctx || this.muted) return;
                 const o = this.ctx.createOscillator(), g = this.ctx.createGain();
                 o.type = type;
                 o.frequency.setValueAtTime(freq, this.ctx.currentTime);
@@ -536,12 +577,13 @@
         const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
 
         const DIFF = {
-            HARD:   { name: 'HARD',   grid: 6, time: 30, locked: 0.15, preSolved: 0   },
+            HARD:   { name: 'HARD',   grid: 6, time: 40, locked: 0.15, preSolved: 0   },
             NORMAL: { name: 'NORMAL', grid: 5, time: 45, locked: 0,    preSolved: 0   },
             EASY:   { name: 'EASY',   grid: 4, time: 60, locked: 0,    preSolved: 0.3 }
         };
 
         const BASE_CONN = {
+            endpoint: [0],
             straight: [0, 2],
             corner:   [0, 1],
             tee:      [0, 1, 2],
@@ -552,8 +594,8 @@
 
         let state = {
             diff: null, grid: [], size: 0,
-            timeLeft: 0, timer: null,
-            rotations: 0, roll: 0, active: false
+            timeLeft: 0, endTime: 0, timer: null,
+            rotations: 0, roll: 0, active: false, angles: []
         };
 
         function getConns(type, rot) {
@@ -597,7 +639,13 @@
 
         function genPuzzle(diff) {
             const {grid: sz, locked, preSolved} = diff;
-            const path = genPath(sz, sz);
+            const tR = sz - 1, tC = sz - 1;
+            let path = genPath(sz, sz);
+            let last = path[path.length - 1];
+            for (let retry = 0; retry < 8 && (!last || last.r !== tR || last.c !== tC); retry++) {
+                path = genPath(sz, sz);
+                last = path[path.length - 1];
+            }
             const pathSet = new Set(path.map(p => p.r+','+p.c));
             const grid = [];
             for (let r = 0; r < sz; r++) {
@@ -636,8 +684,8 @@
                         piece.solRot=(d1===0&&d2===3)?3:Math.min(d1,d2); 
                     }
                 } else if (dirs.length === 1) {
-                    piece.type = 'straight';
-                    piece.solRot = (dirs[0] % 2 === 0) ? 0 : 1;
+                    piece.type = 'endpoint';
+                    piece.solRot = dirs[0];
                 }
                 
                 if (piece.type === 'straight') {
@@ -652,12 +700,15 @@
                         randRot = Math.floor(Math.random() * 4);
                     } while (randRot === piece.solRot);
                     piece.rot = randRot;
+                } else if (piece.type === 'endpoint') {
+                    piece.rot = piece.solRot;
+                    piece.locked = true;
                 }
             }
             for (let r = 0; r < sz; r++)
                 for (let c = 0; c < sz; c++)
                     if (!pathSet.has(r+','+c)) {
-                        const types = ['straight','corner','tee','cross'];
+                        const types = ['straight','corner','tee'];
                         grid[r][c].type = types[Math.floor(Math.random()*types.length)];
                         grid[r][c].rot = Math.floor(Math.random()*4);
                     }
@@ -737,19 +788,21 @@
                         node.className = 'node';
                         node.dataset.r = r;
                         node.dataset.c = c;
-                        node.style.width = nodeSize + 'px';
-                        node.style.height = nodeSize + 'px';
                         node.addEventListener('click', () => handleClick(r, c));
                         
-                        const core = document.createElement('div');
-                        core.className = 'node-core';
-                        node.appendChild(core);
+                        const rotator = document.createElement('div');
+                        rotator.className = 'node-rotator';
 
                         for(let i=0; i<4; i++) {
                             const arm = document.createElement('div');
                             arm.className = 'node-arm ' + DIR_NAME[i];
-                            node.appendChild(arm);
+                            rotator.appendChild(arm);
                         }
+                        node.appendChild(rotator);
+
+                        const core = document.createElement('div');
+                        core.className = 'node-core';
+                        node.appendChild(core);
 
                         const label = document.createElement('div');
                         label.className = 'node-label';
@@ -758,6 +811,8 @@
                         cont.appendChild(node);
                     }
 
+                    node.style.width = nodeSize + 'px';
+                    node.style.height = nodeSize + 'px';
                     node.style.left = x + 'px';
                     node.style.top = y + 'px';
 
@@ -766,10 +821,12 @@
                     node.classList.toggle('locked', cell.locked);
                     node.classList.toggle('connected', cell.connected);
 
-                    const conns = getConns(cell.type, cell.rot);
+                    const baseSection = BASE_CONN[cell.type];
+                    const rotator = node.querySelector('.node-rotator');
+                    rotator.style.transform = 'translate(-50%, -50%) rotate(' + state.angles[r][c] + 'deg)';
                     const arms = node.querySelectorAll('.node-arm');
                     arms.forEach((arm, i) => {
-                        arm.style.opacity = conns.includes(i) ? '1' : '0';
+                        arm.style.opacity = baseSection.includes(i) ? '1' : '0';
                     });
 
                     const label = node.querySelector('.node-label');
@@ -830,8 +887,10 @@
             AudioEngine.rotate();
             cell.rot = (cell.rot + 1) % 4;
             state.rotations++;
+            state.angles[r][c] = (state.angles[r][c] || cell.rot * 90) + 90;
             
             if (checkConn()) {
+                state.active = false;
                 render();
                 setTimeout(() => endGame(true), 200);
             } else {
@@ -840,14 +899,21 @@
         }
 
         function startTimer() {
+            state.endTime = Date.now() + state.diff.time * 1000;
             state.timeLeft = state.diff.time;
             updTimer();
-            state.timer = setInterval(() => {
-                state.timeLeft--;
+            state.timer = setInterval(tickTimer, 250);
+        }
+
+        function tickTimer() {
+            if (!state.active || state.timer === null) return;
+            const remain = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
+            if (remain !== state.timeLeft) {
+                state.timeLeft = remain;
                 updTimer();
                 if (state.timeLeft <= 10 && state.timeLeft > 0) AudioEngine.beep(900, 0.04, 0.06);
-                if (state.timeLeft <= 0) endGame(false);
-            }, 1000);
+            }
+            if (state.timeLeft <= 0) endGame(false);
         }
 
         function updTimer() {
@@ -857,6 +923,8 @@
         }
 
         function startGame(diff) {
+            document.querySelectorAll('#network-container .node').forEach(n => n.remove());
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
             state.diff = diff;
             state.size = diff.grid;
             state.rotations = 0;
@@ -865,8 +933,10 @@
             let safe = 0;
             while (checkConn() && safe++ < 10) state.grid = genPuzzle(diff);
             checkConn();
-            render();
+state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
             showScreen('game-screen');
+            checkConn();
+            render();
             startTimer();
             document.getElementById('diff-text').textContent = diff.name;
         }
@@ -874,6 +944,7 @@
         function endGame(won) {
             state.active = false;
             clearInterval(state.timer);
+            state.timer = null;
             won ? AudioEngine.win() : AudioEngine.lose();
             const rs = document.getElementById('result-screen');
             rs.className = 'screen active ' + (won ? 'success' : 'failure');
@@ -883,8 +954,30 @@
             document.getElementById('result-time').textContent = won ? state.timeLeft+'s' : 'EXPIRED';
             document.getElementById('result-rotations').textContent = state.rotations;
             document.getElementById('result-status').textContent = won ? 'ACCESS GRANTED' : 'TRACE DETECTED';
+            if (won) saveStats(state.diff, state.timeLeft, state.rotations);
+            showStats();
             showScreen('result-screen');
             sendWebhook(won);
+        }
+
+        const STATS_PREFIX = 'breach_stats_';
+        function loadStats(name) {
+            try {
+                const s = JSON.parse(localStorage.getItem(STATS_PREFIX + name) || 'null');
+                if (s && typeof s.bestTime === 'number' && typeof s.bestRot === 'number') return s;
+            } catch (e) {}
+            return { bestTime: null, bestRot: null };
+        }
+        function saveStats(diff, time, rot) {
+            const s = loadStats(diff.name);
+            if (s.bestTime === null || time > s.bestTime) s.bestTime = time;
+            if (s.bestRot === null || rot < s.bestRot) s.bestRot = rot;
+            try { localStorage.setItem(STATS_PREFIX + diff.name, JSON.stringify(s)); } catch (e) {}
+        }
+        function showStats() {
+            const s = loadStats(state.diff.name);
+            document.getElementById('result-best-time').textContent = s.bestTime === null ? '—' : s.bestTime + 's';
+            document.getElementById('result-best-rot').textContent = s.bestRot === null ? '—' : String(s.bestRot);
         }
 
         async function sendWebhook(won) {
@@ -950,8 +1043,41 @@
             showScreen('roll-screen');
             document.getElementById('roll-input').focus();
         });
+        const abortBtn = document.getElementById('abort-btn');
+        abortBtn.addEventListener('click', () => {
+            if (!state.active && state.timer === null) return;
+            state.active = false;
+            clearInterval(state.timer);
+            state.timer = null;
+            AudioEngine.click();
+            document.getElementById('roll-input').value = '';
+            document.getElementById('roll-input').style.borderColor = '';
+            showScreen('roll-screen');
+            document.getElementById('roll-input').focus();
+        });
+        const muteBtn = document.getElementById('mute-btn');
+        function updateMuteBtn() {
+            muteBtn.textContent = AudioEngine.muted ? 'SOUND: OFF' : 'SOUND: ON';
+            muteBtn.classList.toggle('muted', AudioEngine.muted);
+        }
+        try { AudioEngine.muted = localStorage.getItem('breach_muted') === '1'; } catch (e) {}
+        updateMuteBtn();
+        muteBtn.addEventListener('click', () => {
+            AudioEngine.muted = !AudioEngine.muted;
+            try { localStorage.setItem('breach_muted', AudioEngine.muted ? '1' : '0'); } catch (e) {}
+            updateMuteBtn();
+            if (!AudioEngine.muted) AudioEngine.click();
+        });
         document.addEventListener('click', () => AudioEngine.init(), {once: true});
         window.addEventListener('resize', () => { if (state.active) render(); });
+        document.addEventListener('visibilitychange', () => {
+            if (!state.active || state.timer === null) return;
+            if (!document.hidden) {
+                clearInterval(state.timer);
+                state.timer = setInterval(tickTimer, 250);
+                tickTimer();
+            }
+        });
 
         runBoot();
     </script>
