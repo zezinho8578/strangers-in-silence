@@ -3,40 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COMPUTER NETWORK BREACH</title>
+    <title>LambdaOS - Breach System</title>
+    <link rel="stylesheet" href="/style.css">
+    <script>
+    let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+    if (!currentUser) window.location.replace("/");
+    </script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --primary: #00ff41;
-            --primary-dim: #006622;
-            --primary-glow: #00ff41;
-            --bg: #0a0a0a;
-            --bg-panel: rgba(0, 10, 0, 0.9);
+            --primary: var(--theme-color);
+            --primary-dim: rgba(128, 128, 128, 0.45);
+            --primary-dim: color-mix(in srgb, var(--theme-color) 45%, var(--bg-color));
+            --primary-glow: var(--theme-color);
+            --bg: var(--bg-color);
+            --bg-panel: rgba(0, 0, 0, 0.9);
+            --bg-panel: color-mix(in srgb, var(--bg-color) 95%, var(--theme-color));
             --source: #00ffff;
             --source-glow: #00ffff;
             --target: #ff0040;
             --target-glow: #ff0040;
             --warning: #ffaa00;
-            --node-bg: #0d1a0d;
-            --node-border: #004411;
-            --node-active: #00ff41;
-            --arm-inactive: #1a3322;
-            --arm-active: #00ff41;
+            --node-bg: #0a0a0a;
+            --node-bg: color-mix(in srgb, var(--bg-color) 90%, var(--theme-color));
+            --node-border: rgba(128, 128, 128, 0.45);
+            --node-border: color-mix(in srgb, var(--theme-color) 45%, var(--bg-color));
+            --node-active: var(--theme-color);
+            --arm-inactive: rgba(128, 128, 128, 0.25);
+            --arm-inactive: color-mix(in srgb, var(--theme-color) 25%, var(--bg-color));
+            --arm-active: var(--theme-color);
         }
 
         body {
             background: var(--bg);
-            background-image: 
-                radial-gradient(ellipse at 20% 50%, rgba(0, 40, 0, 0.3) 0%, transparent 50%),
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(128, 128, 128, 0.12) 0%, transparent 50%),
                 radial-gradient(ellipse at 80% 50%, rgba(0, 20, 40, 0.2) 0%, transparent 50%);
             color: var(--primary);
-            font-family: 'Courier New', 'Lucida Console', monospace;
+            font-family: var(--font-family);
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             overflow: hidden;
+        }
+
+        /* Top navigation matching the rest of the site */
+        #top-nav {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--theme-color);
+            padding-bottom: 10px;
+            margin-right: 180px;
+            z-index: 20;
+        }
+        .nav-link {
+            color: var(--theme-color);
+            text-decoration: none;
+            padding: 2px 6px;
+            cursor: pointer;
+        }
+        .nav-link:hover {
+            background: var(--theme-color);
+            color: var(--bg-color);
+            text-shadow: none;
         }
 
         /* CRT Scanlines */
@@ -74,7 +111,7 @@
             height: 80px;
             background: linear-gradient(
                 transparent 0%,
-                rgba(0, 255, 65, 0.03) 50%,
+                rgba(128, 128, 128, 0.04) 50%,
                 transparent 100%
             );
             animation: scanline 6s linear infinite;
@@ -91,9 +128,9 @@
             max-width: 850px;
             position: relative;
             box-shadow: 
-                0 0 40px rgba(0, 255, 65, 0.15),
-                inset 0 0 40px rgba(0, 255, 65, 0.03),
-                inset 0 1px 0 rgba(0, 255, 65, 0.2);
+                0 0 40px color-mix(in srgb, var(--theme-color) 15%, transparent),
+                inset 0 0 40px color-mix(in srgb, var(--theme-color) 3%, transparent),
+                inset 0 1px 0 color-mix(in srgb, var(--theme-color) 20%, transparent);
         }
 
         /* Corner brackets */
@@ -176,7 +213,7 @@
             margin-bottom: 10px;
         }
         #roll-input:focus { 
-            box-shadow: 0 0 15px var(--primary-glow), inset 0 0 10px rgba(0, 255, 65, 0.1); 
+            box-shadow: 0 0 15px var(--primary-glow), inset 0 0 10px color-mix(in srgb, var(--theme-color) 10%, transparent); 
         }
 
         .btn {
@@ -235,9 +272,9 @@
             max-width: 650px;
             aspect-ratio: 1;
             background: 
-                radial-gradient(circle at center, rgba(0, 50, 0, 0.08) 0%, transparent 70%),
-                linear-gradient(rgba(0, 255, 65, 0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 255, 65, 0.02) 1px, transparent 1px);
+                radial-gradient(circle at center, rgba(128, 128, 128, 0.08) 0%, transparent 70%),
+                linear-gradient(color-mix(in srgb, var(--theme-color) 4%, transparent) 1px, transparent 1px),
+                linear-gradient(90deg, color-mix(in srgb, var(--theme-color) 4%, transparent) 1px, transparent 1px);
             background-size: 100% 100%, 40px 40px, 40px 40px;
             border: 1px solid var(--primary-dim);
             overflow: hidden;
@@ -438,6 +475,13 @@
     </style>
 </head>
 <body>
+    <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
+
+    <div id="top-nav">
+        <a href="/dashboard.html" class="nav-link">&lt; RETURN TO DASHBOARD</a>
+        <span>BREACH SYSTEM</span>
+    </div>
+
     <div id="crt_overlay"></div>
     <div id="scanline"></div>
 
@@ -489,6 +533,8 @@
             <button class="btn" id="play-again">ATTEMPT ANOTHER BREACH</button>
         </div>
     </div>
+
+    <script src="/settings.js"></script>
 
     <script>
         const AudioEngine = {
