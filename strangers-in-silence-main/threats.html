@@ -1,0 +1,3037 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LambdaOS - Threat Registry</title>
+    <link rel="stylesheet" href="/style.css">
+    <script>
+        let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+        if (currentUser !== "Administrator") {
+            window.location.replace("/dashboard.html");
+        }
+    </script>
+    <style>
+        #top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ff3333;
+            padding-bottom: 10px;
+            color: #ff3333;
+            gap: 20px;
+        }
+
+        .nav-link {
+            color: #ff3333;
+            text-decoration: none;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .nav-link:hover {
+            background: #ff3333;
+            color: var(--bg-color);
+        }
+
+        #top-nav>div {
+            white-space: nowrap;
+            font-size: 0.95em;
+        }
+
+        .threat-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr 300px;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: start;
+        }
+
+        @media (max-width: 1000px) {
+            .threat-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel-box {
+            border: 1px solid var(--theme-color);
+            background: rgba(128, 128, 128, 0.1);
+            padding: 15px;
+            height: max-content;
+        }
+
+        .panel-box h3 {
+            margin-top: 0;
+            border-bottom: 1px dashed var(--theme-color);
+            padding-bottom: 5px;
+            font-size: 1.1em;
+        }
+
+        .list-item {
+            padding: 8px;
+            border-bottom: 1px dashed rgba(255, 153, 0, 0.3);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .list-item:hover {
+            background: rgba(255, 153, 0, 0.2);
+        }
+
+        .list-item.active {
+            border-left: 3px solid var(--theme-color);
+            background: rgba(255, 153, 0, 0.1);
+            font-weight: bold;
+        }
+
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-input {
+            background: var(--bg-color);
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            padding: 5px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        .form-input.small {
+            width: 50px;
+            text-align: center;
+            font-size: 1em;
+        }
+
+        .die-btn {
+            background: transparent;
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            padding: 4px 10px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9em;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+
+        .die-btn:hover {
+            background: var(--theme-color);
+            color: var(--bg-color);
+        }
+
+        .die-btn.danger {
+            border-color: #ff3333;
+            color: #ff3333;
+        }
+
+        .die-btn.danger:hover {
+            background: #ff3333;
+            color: var(--bg-color);
+        }
+
+        .custom-checkbox {
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            gap: 8px;
+            user-select: none;
+        }
+
+        .custom-checkbox input[type="checkbox"] {
+            display: none;
+        }
+
+        .custom-checkbox .check-box {
+            width: 18px;
+            height: 18px;
+            border: 1px solid var(--theme-color);
+            background: var(--bg-color);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+            flex-shrink: 0;
+        }
+
+        .custom-checkbox input[type="checkbox"]:checked+.check-box {
+            background: var(--theme-color);
+        }
+
+        .custom-checkbox input[type="checkbox"]:checked+.check-box::after {
+            content: "✓";
+            color: var(--bg-color);
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed var(--theme-color);
+            padding-bottom: 10px;
+            gap: 15px;
+        }
+
+        .editor-header input {
+            font-size: 1.2em;
+            font-weight: bold;
+            flex-grow: 1;
+        }
+
+        .stats-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stats-row .form-row {
+            margin-bottom: 0;
+        }
+
+        .stats-row .form-row span {
+            white-space: nowrap;
+            font-size: 0.9em;
+        }
+
+        .trait-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 8px;
+        }
+
+        .trait-row>span {
+            white-space: nowrap;
+        }
+
+        .trait-row>div {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .weapon-card {
+            border: 1px solid var(--theme-color);
+            padding: 0;
+            margin-bottom: 12px;
+            font-size: 0.9em;
+            background: rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .weapon-card-header {
+            display: flex;
+            align-items: stretch;
+            border-bottom: 1px solid rgba(255, 153, 0, 0.3);
+        }
+
+        .weapon-icon {
+            width: 64px;
+            height: 64px;
+            border-right: 1px solid rgba(255, 153, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.4);
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .weapon-icon img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+
+        .weapon-info {
+            flex-grow: 1;
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .weapon-info-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .weapon-name {
+            font-weight: bold;
+            font-size: 1em;
+        }
+
+        .weapon-remove-btn {
+            background: transparent;
+            color: #ff3333;
+            border: 1px solid #ff3333;
+            padding: 2px 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85em;
+            line-height: 1;
+        }
+
+        .weapon-remove-btn:hover {
+            background: #ff3333;
+            color: var(--bg-color);
+        }
+
+        .weapon-stats {
+            font-size: 0.85em;
+            opacity: 0.85;
+            line-height: 1.5;
+        }
+
+        .weapon-stats span {
+            white-space: nowrap;
+            margin-right: 5px;
+        }
+
+        .weapon-actions {
+            display: flex;
+            gap: 8px;
+            padding: 8px 10px;
+            flex-wrap: wrap;
+        }
+
+        .wep-edit-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 8px 10px 0 10px;
+        }
+
+        .wep-edit-row span {
+            font-size: 0.8em;
+            opacity: 0.8;
+        }
+
+        .wep-input {
+            background: transparent;
+            color: var(--theme-color);
+            border: none;
+            border-bottom: 1px dashed var(--theme-color);
+            font-family: inherit;
+            width: 60px;
+            text-align: center;
+            outline: none;
+        }
+
+        .wep-input:focus {
+            background: rgba(255, 153, 0, 0.1);
+        }
+
+        .edit-area {
+            width: 100%;
+            min-height: 80px;
+            background: rgba(0, 0, 0, 0.5);
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            font-family: inherit;
+            font-size: 0.9em;
+            resize: vertical;
+            padding: 5px;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+
+        #roll-terminal {
+            border: 1px solid #ff3333;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.5);
+            color: #ff3333;
+        }
+
+        .section-header {
+            margin: 0 0 10px 0;
+            border-bottom: 1px solid var(--theme-color);
+            padding-bottom: 5px;
+            font-size: 1.05em;
+        }
+
+        #tn-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid var(--theme-color);
+            background: var(--bg-color);
+            padding: 25px;
+            z-index: 999999 !important;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
+            width: max-content;
+            min-width: 350px;
+            max-width: 92vw;
+            max-height: 90vh;
+            overflow-y: auto;
+            pointer-events: auto !important;
+        }
+
+        #tn-modal h3 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--theme-color);
+            padding-bottom: 10px;
+            position: sticky;
+            top: -25px;
+            background: var(--bg-color);
+            padding-top: 25px;
+            z-index: 2;
+        }
+        .tn-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+            position: sticky;
+            bottom: -25px;
+            background: var(--bg-color);
+            padding: 15px 0 25px;
+            z-index: 2;
+        }
+
+        .reroll-btn {
+            margin-top: 6px;
+            font-size: 0.8em;
+            border-color: #ffff00;
+            color: #ffff00;
+        }
+        .reroll-btn:hover {
+            background: #ffff00;
+            color: var(--bg-color);
+        }
+        .dmg-reroll-btn {
+            margin-top: 4px;
+            font-size: 0.75em;
+            border-color: #ffff00;
+            color: #ffff00;
+        }
+        .dmg-reroll-btn:hover {
+            background: #ffff00;
+            color: var(--bg-color);
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 20px;
+        }
+
+        .admin-input {
+            background: var(--bg-color);
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            padding: 5px;
+            font-family: inherit;
+        }
+    </style>
+</head>
+
+<body>
+    <img id="bg-lambda"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png"
+        alt="Lambda Logo">
+    <div id="top-nav">
+        <a href="/dashboard.html" class="nav-link">
+            < RETURN TO DASHBOARD</a>
+                <div></div>
+    </div>
+    <div class="threat-grid">
+        <div class="panel-box">
+            <h3>THE CODEX</h3>
+            <div id="codex-list" style="margin-bottom: 15px; max-height: 400px; overflow-y: auto;"></div>
+            <button class="die-btn" style="width:100%; margin-bottom: 10px;" onclick="createNewTemplate()">+ CREATE NEW
+                TEMPLATE</button>
+            <button class="die-btn danger" style="width:100%; border-style: dashed;" onclick="seedBestiary()">[ SEED HL2
+                BESTIARY ]</button>
+        </div>
+        <div class="panel-box" id="editor-panel" style="display:none;">
+            <div class="editor-header">
+                <input type="text" id="edit-name" class="form-input" onchange="updateActive()">
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="edit-wildcard" onchange="updateActive()">
+                    <span class="check-box"></span>
+                    <span class="check-label">Wild Card</span>
+                </label>
+            </div>
+            <div class="stats-row editor-grid">
+                <div class="form-row"><span>Pace:</span><input type="number" id="edit-pace" class="form-input small"
+                        onchange="updateActive()"></div>
+                <div class="form-row"><span>Parry:</span><input type="number" id="edit-parry" class="form-input small"
+                        onchange="updateActive()"></div>
+                <div class="form-row"><span>Toughness:</span><input type="number" id="edit-toughness"
+                        class="form-input small" onchange="updateActive()"></div>
+                <div class="form-row"><span>Nat Armor:</span><input type="number" id="edit-naturalarmor" class="form-input small"
+                    onchange="updateActive()" title="Natural/structural armor (always applies)"></div>
+                <div class="form-row"><span>Worn Armor:</span><input type="number" id="edit-wornarmor" class="form-input small"
+                    onchange="updateActive()" title="Worn/equipped armor (subject to Armor Type)"></div>
+                <div class="form-row"><span>Ballistic Prot:</span><input type="number" id="edit-ballisticprotection" class="form-input small"
+                    onchange="updateActive()" title="Negates this much AP from Ballistic attacks"></div>
+                <div class="form-row"><span>Force Field:</span><input type="number" id="edit-forcefield" class="form-input small"
+                    onchange="updateActive()" title="Ignores AP, stacks with all armor"></div>
+                <div class="form-row" style="opacity:0.7; font-size:0.85em;"><span>Total Armor:</span><span id="edit-totalarmor">0</span></div>
+                <div class="form-row"><span>Scale:</span><input type="number" id="edit-scale" class="form-input small"
+                        onchange="onScaleChange(this)" title="Normal=0, Large=2, Huge=4, Gargantuan=6"></div>
+            <div class="form-row">
+                <span>Heavy Armor:</span>
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="edit-heavyarmor" onchange="updateActive()">
+                    <span class="check-box"></span>
+                </label>
+            </div>
+            <div class="form-row">
+                <span>Armor Type:</span>
+                <select id="edit-armortype" class="form-input" style="width:140px;" onchange="updateActive()">
+                    <option value="General">General</option>
+                    <option value="Ballistic">Ballistic Only</option>
+                    <option value="Energy">Energy Only</option>
+                </select>
+            </div>
+            <div id="editor-warnings" style="display:none; border:1px dashed #ff9900; padding:8px; margin-bottom:10px; font-size:0.8em; color:#ff9900;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+            <div id="editor-warnings-text" style="flex:1 1 auto; line-height:1.4;"></div>
+            <button type="button" class="die-btn danger" onclick="dismissWarnings()" title="Dismiss warnings" style="padding:0 7px; line-height:1; flex:0 0 auto; font-size:1.2em;">&times;</button>
+            </div>
+            </div>
+            </div>
+<div id="weakpoint-editor"
+style="display:none; border:1px dashed var(--theme-color); padding:0; margin-bottom:15px;">
+<h4 class="section-header" id="weakpoint-toggle"
+    style="cursor:pointer; user-select:none; padding:8px 10px; margin:0; display:flex; justify-content:space-between; align-items:center;">
+<span>WEAK POINT (VS NATURAL ARMOR)</span>
+<span id="weakpoint-collapse-arrow" style="font-size:0.8em; opacity:0.7;">[ − ]</span>
+</h4>
+<div id="weakpoint-body" style="padding:10px;">
+
+<label class="custom-checkbox">
+<input type="checkbox" id="edit-weakpoint-enabled" onchange="updateActive()">
+<span class="check-box"></span>
+<span>Enabled</span>
+</label>
+
+<div class="form-row">
+<span>Name:</span>
+<input type="text" id="edit-weakpoint-name" class="form-input" onchange="updateActive()">
+</div>
+
+<div class="form-row">
+<span>Hit Penalty:</span>
+<input type="number" id="edit-weakpoint-hit" class="form-input small" value="-4" onchange="updateActive()">
+</div>
+
+<label class="custom-checkbox">
+<input type="checkbox" id="edit-weakpoint-bypassworn" onchange="updateActive()">
+<span class="check-box"></span>
+<span>Bypass Worn Armor</span>
+</label>
+
+<label class="custom-checkbox">
+<input type="checkbox" id="edit-weakpoint-bypassnatural" onchange="updateActive()">
+<span class="check-box"></span>
+<span>Bypass Natural Armor</span>
+</label>
+
+<div class="form-row">
+<span>Toughness Override:</span>
+<input type="number" id="edit-weakpoint-toughness" class="form-input small" placeholder="blank" onchange="updateActive()">
+</div>
+
+<div class="form-row">
+<span>Notes:</span>
+<input type="text" id="edit-weakpoint-notes" class="form-input" onchange="updateActive()">
+</div>
+</div>
+</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
+                <div>
+                    <h4 class="section-header">ATTRIBUTES</h4>
+                    <div id="attr-list"></div>
+                </div>
+                <div>
+                    <h4 class="section-header">SKILLS</h4>
+                    <div id="skill-list"></div>
+                    <div class="form-row"
+                        style="margin-top: 10px; border-top: 1px dashed rgba(255,153,0,0.3); padding-top: 10px;">
+                        <input type="text" id="new-skill-name" class="form-input" placeholder="Skill Name"
+                            style="flex-grow:1;">
+                        <input type="text" id="new-skill-die" class="form-input small" placeholder="d6">
+                        <button class="die-btn" onclick="addSkill()">ADD</button>
+                    </div>
+                </div>
+            </div>
+            <h4 class="section-header">SPECIAL ABILITIES & EDGES</h4>
+            <textarea id="edit-abilities" class="edit-area" placeholder="e.g. Construct, Undead, Immunities..."
+                onchange="updateActive()"></textarea>
+            <div>
+                <h4 class="section-header">ARMAMENT & ATTACKS</h4>
+                <div id="weapon-list"></div>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <select id="preset-weapon-select" class="form-input" style="flex-grow:1;"></select>
+                    <button class="die-btn" onclick="addWeaponFromPreset()">IMPORT PRESET</button>
+                </div>
+                <button class="die-btn" style="width:100%; border-style:dashed; margin-top: 10px;"
+                    onclick="addCustomWeapon()">+ ADD INTRINSIC ATTACK (CLAWS, BITE, ETC)</button>
+            </div>
+            <div style="margin-top: 25px; display: flex; justify-content: space-between;">
+                <button class="die-btn" style="border-color:#00ff00; color:#00ff00;" onclick="saveTemplateToDB()">[ SAVE
+                    TEMPLATE TO CODEX ]</button>
+                <button class="die-btn danger" onclick="deleteTemplate()">[ DELETE ]</button>
+            </div>
+        </div>
+        <div class="panel-box">
+            <h3>DEPLOY TO COMBAT</h3>
+            <p style="font-size: 0.85em; opacity: 0.8;">Spawn instances of the active template directly into the live
+                Combat Tracker.</p>
+            <div class="form-row">
+                <span>Unit Count:</span>
+                <input type="number" id="deploy-count" value="1" min="1" max="20" class="form-input small">
+            </div>
+            <button class="die-btn" style="width:100%; border-color:#00ff00; color:#00ff00; margin-top: 10px;"
+                onclick="deployToTracker()">EXECUTE DEPLOYMENT</button>
+            <h3 style="margin-top: 25px;">ACTIVE ON BOARD</h3>
+            <div id="active-tracker-list" style="font-size: 0.9em; max-height: 200px; overflow-y: auto;"></div>
+            <h3 style="margin-top: 25px;">CALLED SHOT CONFIG</h3>
+            <div id="cs-config-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;"></div>
+        </div>
+    </div>
+    <div style="margin-bottom: 5px; color: #ff3333; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+        <span>> TACTICAL TERMINAL</span>
+        <button id="clear-term-btn" class="die-btn" style="border:none; color:#ff3333;" onclick="clearLog()">CLEAR LOG</button>
+    </div>
+    <div id="roll-terminal">
+        <div>> TERMINAL READY. WAITING FOR INPUT...</div>
+    </div>
+    <div id="tn-modal">
+        <h3>TACTICAL ENGAGEMENT MONITOR</h3>
+        <div class="setting-row">
+            <span>Target Number (TN):</span>
+            <input type="number" id="tn-input" value="4" class="admin-input" style="width:80px; text-align:center;">
+        </div>
+        <!-- Action Type selector for Test/Support (SWADE p.106, 108) -->
+        <div class="setting-row" id="action-mode-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Action Type:</span>
+            <select id="action-mode-select" class="admin-input" style="width:200px;" onchange="onActionModeChange()">
+                <option value="normal">Normal Action / Attack</option>
+                <option value="test">Perform Test (Distract/Vulnerable)</option>
+            </select>
+        </div>
+        <div class="setting-row" id="test-options-row" style="display:none; background:rgba(255,153,0,0.1); padding:8px; border:1px solid var(--theme-color);">
+            <span>Test Primary Effect:</span>
+            <select id="test-effect-select" class="admin-input" style="width:180px;">
+                <option value="distracted">Distracted (-2 Trait Rolls)</option>
+                <option value="vulnerable">Vulnerable (+2 to be Hit)</option>
+            </select>
+        </div>
+        <!-- B8: Target selection (auto Parry for melee, defender modifiers) -->
+        <div id="target-select-container"
+            style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px; margin-top: 10px;">
+            <!-- AREA EFFECT MODE banner (shown only for blast/cone/line weapons) -->
+            <div id="area-effect-banner" style="display:none; border:1px solid #00ccff; background:rgba(0,204,255,0.08); padding:8px; margin-bottom:10px; text-align:left; pointer-events:auto !important;">
+            <div style="color:#00ccff; font-weight:bold; margin-bottom:6px;">&#9888; AREA EFFECT MODE</div>
+            <div style="font-size:0.85em; opacity:0.95; margin-bottom:8px;">Single-target controls are disabled &mdash; this attack targets a <b>location</b>, not a person. Use the list below (Ctrl/Cmd-click) to mark <b>only</b> the targets the GM confirms are inside the template.</div>
+            <div class="setting-row" style="margin-bottom:8px;">
+            <span>Blast Template:</span>
+            <select id="area-template-select" class="admin-input" style="width:240px; pointer-events:auto !important;">
+            <option value="SBT">Small Blast (2&quot; / 4 yd)</option>
+            <option value="MBT">Medium Blast (4&quot; / 8 yd)</option>
+            <option value="LBT">Large Blast (6&quot; / 12 yd)</option>
+            <option value="Cone">Cone (9&quot; / 18 yd)</option>
+            <option value="Line">Line (24&quot;&times;1&quot; / 48&times;2 yd)</option>
+            </select>
+            </div>
+            <div style="font-size:0.82em; color:#ff9900; border-top:1px dashed var(--theme-color); padding-top:6px;">NOTE: Before confirming the roll, ask the GM to place the template on the intended area and name which targets are caught. Select exactly those below. Selecting none = attack the point at TN 4 (misses deviate / falter per weapon kind).</div>
+            </div>
+            <div class="setting-row" id="single-target-row">
+            <span>Target:</span>
+                <select id="target-select" class="admin-input" style="width:240px;" onchange="onTargetChange()">
+                    <option value="">-- No Target (TN 4) --</option>
+                </select>
+            </div>
+            <div class="setting-row" id="multi-target-row" style="display:none; flex-direction:column; align-items:flex-start; gap:5px;">
+                <span style="font-size:0.85em; color:#00ccff;">Click targets to add them to the Area Effect (click again to remove):</span>
+                <select id="multi-target-select" class="admin-input" multiple style="display:none;"></select>
+                <div id="multi-target-list" style="width:100%; max-height:140px; overflow-y:auto; border:1px solid var(--theme-color); text-align:left; pointer-events:auto !important;"></div>
+            </div>
+            <div id="target-status"
+                style="font-size:0.85em; opacity:0.9; text-align:left; min-height:1.2em; margin: 4px 0;"></div>
+            <div id="effective-toughness-preview"
+                style="font-size:0.85em; color:#00ff00; text-align:left; min-height:1.2em; margin: 4px 0; display:none;"></div>
+            <div class="setting-row" id="target-dodge-row" style="display:none;">
+                <span>Target has Dodge/Deflect (-2):</span>
+                <input type="checkbox" id="target-dodge-checkbox" onchange="onTargetDodgeChange()"
+                    style="width:20px; height:20px;">
+            </div>
+        </div>
+        <div class="setting-row" id="called-shot-row"
+            style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Called Shot:</span>
+            <select id="called-shot-select" class="admin-input" style="width:280px;"
+                onchange="updateCalledShot()">
+                <option value="none">None</option>
+            </select>
+        </div>
+        <div id="called-shot-status"
+            style="font-size:0.85em; color:#ff9900; text-align:left; min-height:1.2em; margin: 4px 0; display:none;">
+        </div>
+        <div id="ranged-options-container"
+            style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <div class="setting-row">
+                <span>Range Bracket:</span>
+                <select id="range-select" class="admin-input" style="width:180px;" onchange="updateModifierAdjust()">
+                    <option value="0">Short Range (+0)</option>
+                    <option value="-2">Medium Range (-2)</option>
+                    <option value="-4">Long Range (-4)</option>
+                    <option value="-8">Extreme Range (-8)</option>
+                </select>
+            </div>
+<!-- Replace the old "Is Aiming?" and "Aim Benefit" rows with these: -->
+<div class="setting-row" id="scope-row" style="display:none;">
+    <span>Is Aiming? (takes your whole turn; benefit applies to your next attack)</span>
+    <input type="checkbox" id="scope-checkbox" onchange="updateModifierAdjust()" style="width: 20px; height: 20px;">
+</div>
+<div class="setting-row" id="aim-mode-row" style="display:none;">
+    <span>Aim Benefit:</span>
+    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+        <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+            <input type="radio" name="aim-mode" id="aim-mode-ignore" value="ignore" checked onchange="updateModifierAdjust()"> Ignore up to 4 pts of penalties
+        </label>
+        <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+            <input type="radio" name="aim-mode" id="aim-mode-plus2" value="plus2" onchange="updateModifierAdjust()"> +2 to your roll
+        </label>
+    </div>
+</div>
+<div class="setting-row" id="aim-scope-row" style="display:none;">
+    <span>Scoped weapon? (scope cancels 2 additional pts — ignore cap 6)</span>
+    <input type="checkbox" id="aim-scope-checkbox" onchange="updateModifierAdjust()" style="width: 20px; height: 20px;">
+</div>
+        </div>
+        <div id="rof-options-container"
+            style="display:none; border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <div class="setting-row">
+                <span>Shots Fired (RoF):</span>
+                <select id="rof-select" class="admin-input" style="width:180px;" onchange="updateModifierAdjust()">
+                    <option value="1">Single Shot (1 Bullet)</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <span>Fire Mode:</span>
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+                    <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
+                        <input type="checkbox" id="suppressive-checkbox" onchange="updateModifierAdjust()"> Suppressive
+                        Fire (x3 Ammo)
+                    </label>
+                    <label id="3rb-label" style="font-size: 0.9em; display:flex; align-items:center; gap:5px;">
+                        <input type="checkbox" id="3rb-checkbox" onchange="updateModifierAdjust()"> 3-Round Burst (+1
+                        Hit/Dmg)
+                    </label>
+                </div>
+            </div>
+            <div id="recoil-warning"
+                style="font-size:0.8em; color:#ff3333; opacity:0.9; text-align: left; display: none;">* Firing at RoF >
+                1 incurs a -2 Recoil penalty.</div>
+        </div>
+        <!-- Add this right before the "Actions this Turn" (MAP) row for Wild Attacks: -->
+        <div class="setting-row" id="wild-attack-row" style="display:none;">
+            <span>Wild Attack:</span>
+            <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                <input type="checkbox" id="wild-attack-checkbox"> Wild Attack (+2 Hit/Dmg, Vulnerable)
+            </label>
+        </div>
+        <div class="setting-row" id="threat-joker-row" style="display:none;">
+            <span>Joker's Wild:</span>
+            <label style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
+                <input type="checkbox" id="threat-joker-checkbox"> Joker's Wild (+2)
+            </label>
+        </div>
+        <!-- Shared TEM situational modifiers (from settings.js) -->
+        <div id="tn-tem-container"></div>
+        <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Actions this Turn:</span>
+            <select id="map-select" class="admin-input" style="width:180px;">
+                <option value="0">1 Action (No Penalty)</option>
+                <option value="-2">2 Actions (-2 MAP)</option>
+                <option value="-4">3 Actions (-4 MAP)</option>
+            </select>
+        </div>
+        <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
+            <span>Modifier Adjust:</span>
+            <input type="number" id="mod-override-input" value="0" class="admin-input"
+                style="width:80px; text-align:center;">
+        </div>
+        <div class="tn-buttons">
+            <button class="die-btn" onclick="confirmRoll()">[ CONFIRM ROLL ]</button>
+            <button class="die-btn" onclick="cancelRoll()">[ CANCEL ]</button>
+        </div>
+    </div>
+    <script src="/embeds.js"></script>
+    <script src="/settings.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        const firebaseConfig = {
+            apiKey: "AIzaSyBt1ymfsEvbO1X9eYDVf2ctotRcbFFOO44",
+            authDomain: "strangers-in-silence.firebaseapp.com",
+            databaseURL: "https://strangers-in-silence-default-rtdb.firebaseio.com",
+            projectId: "strangers-in-silence",
+            storageBucket: "strangers-in-silence.firebasestorage.app",
+            messagingSenderId: "62557473299",
+            appId: "1:62557473299:web:e2ebf2ee2520a9189e8de6"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        let globalState = {};
+        let activeTemplateId = null;
+        let activeThreat = null;
+        let pendingRoll = null;
+        let activeWeaponContext = null;
+        let lastRollContext = null;
+        // GM damage reroll context (one pending damage reroll per weapon).
+        let lastDamageContext = null;
+        // B8: Defender/target integration state
+        let defenderModifier = 0;
+        let defenderDisplay = "";
+        // Area‑effect descriptor for the weapon currently being aimed (null = normal).
+        let currentAreaInfo = null;
+        let currentAreaPlan = null;
+        let currentAreaPlanKey = null;
+
+        // Part 4: Called Shots
+        let calledShotId = "none";
+        let calledShotModifier = 0;
+        let calledShotOpts = {};
+        // Validation-warning dismiss state (Problem 2): true = hidden via X or Save
+        let warningsDismissed = false;
+
+// ==========================================
+// AUTO-APPLY DAMAGE: ATTACK CONTEXT + TRACKER WRITE
+// ==========================================
+const pendingAttackPrefix = 'threat_pending_attack_context_';
+
+function getAttackContext(key) {
+    if (!key) return null;
+    try {
+        return JSON.parse(sessionStorage.getItem(pendingAttackPrefix + key)) || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function setAttackContext(key, value) {
+    if (!key) return;
+    sessionStorage.setItem(pendingAttackPrefix + key, JSON.stringify(value));
+}
+
+function clearAttackContext(key) {
+    if (!key) return;
+    sessionStorage.removeItem(pendingAttackPrefix + key);
+}
+
+function clearAllAttackContexts() {
+    Object.keys(sessionStorage)
+        .filter(key => key.startsWith(pendingAttackPrefix))
+        .forEach(key => sessionStorage.removeItem(key));
+}
+
+function storeAttackContext(ctx, hit, results) {
+    if (!ctx || !ctx.storageKey || !ctx.activeWeaponContext) return;
+
+    const summary = (results || [])
+        .map(r => r.isSingle ? String(r.total) : `Shot ${r.shotIndex}: ${r.total}`)
+        .join(', ');
+
+    setAttackContext(ctx.storageKey, {
+        targetId: ctx.targetId || null,
+        targetName: ctx.targetName || "",
+        hit: !!hit,
+        ap: ctx.activeWeaponContext.ap ?? "0",
+        weaponName: ctx.activeWeaponContext.name || "Weapon",
+        attackSummary: summary,
+        round: globalState?.combat?.round ?? null,
+        savedAt: Date.now()
+    });
+}
+
+async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
+    const result = {
+        applied: false,
+        message: "",
+        plainText: ""
+    };
+
+    const attack = getAttackContext(storageKey);
+    if (!attack) return result;
+
+    // Consume the attack context immediately.
+    // One attack = one auto-applied damage result.
+    clearAttackContext(storageKey);
+
+    if (!attack.hit) {
+        if (attack.targetName) {
+            result.message = `> No auto-application: attack vs ${attack.targetName} did not hit.`;
+            result.plainText = `No auto-application: attack vs ${attack.targetName} did not hit.`;
+        }
+        return result;
+    }
+
+    if (!attack.targetId) return result;
+
+    if (!globalState || !globalState.combatActive || !globalState.combat || !globalState.combat.participants) {
+        return result;
+    }
+
+    if (
+        attack.round !== null &&
+        globalState.combat.round !== undefined &&
+        attack.round !== globalState.combat.round
+    ) {
+        result.message = `> No auto-application: attack context is from another round.`;
+        result.plainText = `No auto-application: attack context is from another round.`;
+        return result;
+    }
+
+    const participants = globalState.combat.participants;
+    const idx = participants.findIndex(p => p.id === attack.targetId);
+    if (idx === -1) return result;
+
+    const target = JSON.parse(JSON.stringify(participants[idx]));
+
+    if (target.incapacitated) {
+        result.message = `> <b style="color:#ff9900;">AUTO-CHECK:</b> ${target.name} is already INCAPACITATED. No further effect.`;
+        result.plainText = `AUTO-CHECK: ${target.name} is already INCAPACITATED. No further effect.`;
+        return result;
+    }
+
+    const apInput = (weaponObj && weaponObj.ap !== undefined && weaponObj.ap !== null)
+        ? weaponObj.ap
+        : attack.ap;
+
+    const ap = parseApForDamage(apInput);
+
+    // Resolve weapon damage type (with preset fallback)
+    let weaponDmgType = (weaponObj && weaponObj.damageType) || null;
+    if (!weaponDmgType && weaponObj && globalState && globalState.presets) {
+        let dmgPreset = null;
+        if (weaponObj.id) {
+            dmgPreset = globalState.presets.find(p => p.id === weaponObj.id);
+        }
+        if (!dmgPreset && weaponObj.name) {
+            dmgPreset = globalState.presets.find(p => p.name === weaponObj.name);
+        }
+        if (dmgPreset && dmgPreset.damageType) weaponDmgType = dmgPreset.damageType;
+    }
+    weaponDmgType = weaponDmgType || "Ballistic";
+
+    // Heavy Armor check (before pipeline)
+    let isHeavyWeapon = !!(weaponObj && weaponObj.heavyWeapon);
+    if (!isHeavyWeapon && weaponObj && globalState && globalState.presets) {
+        let masterPreset = null;
+        if (weaponObj.id) {
+            masterPreset = globalState.presets.find(p => p.id === weaponObj.id);
+        }
+        if (!masterPreset && weaponObj.name) {
+            masterPreset = globalState.presets.find(p => p.name === weaponObj.name);
+        }
+        if (masterPreset && masterPreset.heavyWeapon) isHeavyWeapon = true;
+    }
+    if (target.heavyArmor && weaponObj && !isHeavyWeapon) {
+        result.message = `> <b style="color:#ff3333;">HEAVY ARMOR:</b> ${weaponObj.name || "This weapon"} is NOT a Heavy Weapon. ${target.name}'s Heavy Armor is immune to this attack.`;
+        result.plainText = `HEAVY ARMOR: ${weaponObj.name || "This weapon"} cannot damage ${target.name}'s Heavy Armor.`;
+        return result;
+    }
+
+    // Full armor pipeline
+    const calledShot = attack.calledShot || {};
+    const pipeline = computeArmorPipeline(target, weaponDmgType, ap, calledShot);
+    const effectiveToughness = pipeline.effectiveToughness;
+    const breakdown = buildDamageBreakdown(damageTotal, pipeline);
+
+    if (damageTotal < effectiveToughness) {
+        result.message = `> <b style="color:#ff9900;">AUTO-CHECK:</b> ${breakdown} → ${target.name} takes no effect.`;
+        result.plainText = `AUTO-CHECK: ${breakdown} → ${target.name} takes no effect.`;
+        return result;
+    }
+
+    const wasShaken = !!target.shaken;
+    const oldWounds = target.wounds || 0;
+    const raises = Math.floor((damageTotal - effectiveToughness) / 4);
+    let degradeNotes = [];
+
+    let becameShaken = false;
+    let woundsAdded = 0;
+
+    if (!wasShaken) {
+        becameShaken = true;
+        target.shaken = true;
+        woundsAdded = raises;
+    } else {
+        woundsAdded = 1 + raises;
+    }
+
+    if (woundsAdded > 0) {
+        target.wounds = oldWounds + woundsAdded;
+    }
+
+    const woundCap = target.woundCap || (target.isWildCard ? 4 : 1);
+
+    if ((target.wounds || 0) >= woundCap) {
+        target.wounds = woundCap;
+        target.incapacitated = true;
+        target.incapacitationResolved = false;
+    } else if (
+        target.incapacitated &&
+        (target.wounds || 0) < woundCap &&
+        (target.fatigue || 0) < 3
+    ) {
+        target.incapacitated = false;
+        target.incapacitationResolved = false;
+    }
+
+    // SWADE Soak: "don't count the wound modifiers you're about to suffer when
+    // making this roll — they haven't happened yet". Snapshot pre-hit wounds so
+    // soak rolls can exclude this attack's wounds from the Vigor penalty.
+    target.lastSoakHit = {
+        woundsBefore: oldWounds,
+        woundsAdded: woundsAdded,
+        round: (globalState.combat && globalState.combat.round !== undefined) ? globalState.combat.round : null,
+        ts: Date.now()
+    };
+
+    // B7: mirror the new wound total onto the persistent character object (with a
+    // fresh Golden Hour timestamp per added wound) so wounds survive endCombat().
+    if (target.isPlayer && target.id && globalState.characters && globalState.characters[target.id]) {
+        let sheet = globalState.characters[target.id];
+        let netWounds = target.wounds || 0;
+        if (typeof sheet.wounds !== 'number') sheet.wounds = 0;
+        if (!Array.isArray(sheet.woundLog)) sheet.woundLog = [];
+        // Post a Discord embed per newly-added wound (with Golden Hour expiry).
+        if (woundsAdded > 0 && window.Embeds && globalState.webhook) {
+            await window.Embeds.post(globalState.webhook,
+                window.Embeds.woundTaken(target.name, woundsAdded, netWounds, attack.attackerName || null, target.incapacitated));
+        }
+        while (sheet.woundLog.length < netWounds) {
+            sheet.woundLog.push({ ts: Date.now(), attemptedBy: [] });
+        }
+        while (sheet.woundLog.length > netWounds) {
+            sheet.woundLog.pop();
+        }
+        sheet.wounds = netWounds;
+        if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
+            set(ref(db, `campaignState/characters/${target.id}/wounds`), sheet.wounds);
+            set(ref(db, `campaignState/characters/${target.id}/woundLog`), sheet.woundLog);
+        }
+    }
+
+    // If damage Shakes someone who was holding, they lose Hold.
+    if (target.shaken && target.onHold) {
+        target.onHold = false;
+    }
+
+    if (target.incapacitated) {
+        target.onHold = false;
+    }
+
+    // Part 4: Called Shot on-hit effects (shaken / stunned / distracted /
+    // vulnerable / disarm). Applied on any damaging hit (damageTotal >=
+    // effectiveToughness). Stunned is not cleared by a new Shaken.
+    let onHitNotes = [];
+    if (calledShot && Array.isArray(calledShot.onHit) && calledShot.onHit.length) {
+        for (const effect of calledShot.onHit) {
+            if (effect === "shaken") {
+                if (!target.shaken) { target.shaken = true; onHitNotes.push("Shaken"); }
+            } else if (effect === "stunned") {
+                if (!target.stunned) { target.stunned = true; onHitNotes.push("Stunned"); }
+            } else if (effect === "distracted") {
+                target.distracted = true;
+                target.distractedTTL = target.distractedTTL || 1;
+                onHitNotes.push("Distracted");
+            } else if (effect === "vulnerable") {
+                target.vulnerable = true;
+                target.vulnerableTTL = target.vulnerableTTL || 1;
+                onHitNotes.push("Vulnerable");
+            } else if (effect === "disarm") {
+                onHitNotes.push("Disarm (GM: resolve item drop)");
+            }
+        }
+    }
+
+    // Part 4: Armor degradation for player-equipped armor.
+    if (target.isPlayer && globalState.characters && globalState.characters[target.id]) {
+        let sheet = JSON.parse(JSON.stringify(globalState.characters[target.id]));
+
+        if (window.normalizeCharacterArmorInstances) {
+            window.normalizeCharacterArmorInstances(sheet);
+        }
+
+        if (window.degradeCharacterArmor) {
+            degradeNotes = window.degradeCharacterArmor(sheet, {
+                weaponDmgType,
+                woundsAdded,
+                bypassWorn: !!(calledShot && calledShot.bypassWorn),
+                forceFieldApplied: (pipeline.forceField || 0) > 0
+            });
+        }
+
+        if (degradeNotes.length) {
+            if (window.recalcCharacterDerived) {
+                window.recalcCharacterDerived(sheet);
+            }
+
+            globalState.characters[target.id] = sheet;
+
+            target.toughness = sheet.derived.toughness;
+            target.naturalArmor = sheet.derived.naturalArmor;
+            target.wornArmor = sheet.derived.wornArmor;
+            target.armor = sheet.derived.armor;
+            target.ballisticProtection = sheet.derived.ballisticProtection;
+            target.forceField = sheet.derived.forceField;
+            target.armorType = sheet.derived.armorType;
+            target.heavyArmor = sheet.derived.heavyArmor;
+            target.pace = sheet.derived.paceEffective ?? sheet.derived.pace ?? target.pace;
+
+            if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
+                await set(ref(db, `campaignState/characters/${target.id}`), sheet);
+            }
+        }
+    }
+
+    participants[idx] = target;
+    globalState.combat.participants = participants;
+
+    if (typeof isFirebaseConfigured === 'undefined' || isFirebaseConfigured) {
+        await set(ref(db, 'campaignState/combat/participants'), participants);
+    } else {
+        localStorage.setItem('localFallbackDB', JSON.stringify(globalState));
+    }
+
+    let sentence;
+
+    if (wasShaken && woundsAdded > 0) {
+        sentence = `${target.name} was already Shaken and takes ${woundsAdded} Wound${woundsAdded === 1 ? '' : 's'}.`;
+    } else if (becameShaken && woundsAdded > 0) {
+        sentence = `${target.name} is Shaken and takes ${woundsAdded} Wound${woundsAdded === 1 ? '' : 's'}.`;
+    } else if (becameShaken) {
+        sentence = `${target.name} is Shaken.`;
+    } else {
+        sentence = `${target.name} takes ${woundsAdded} Wound${woundsAdded === 1 ? '' : 's'}.`;
+    }
+
+    if (target.incapacitated) {
+        sentence += ` ${target.name} is INCAPACITATED.`;
+    }
+
+    result.applied = true;
+    result.message = `> <b style="color:#ff3333;">AUTO-APPLIED:</b> ${breakdown} → ${sentence}`;
+    result.plainText = `AUTO-APPLIED: ${breakdown} → ${sentence}`;
+
+    if (degradeNotes.length) {
+        result.message += `<br>&nbsp;&nbsp;<b style="color:#ff9900;">ARMOR DEGRADATION:</b> ${degradeNotes.join('<br>&nbsp;&nbsp;')}`;
+        result.plainText += ` ARMOR DEGRADATION: ${degradeNotes.join(' ')}`;
+    }
+
+    if (onHitNotes.length) {
+        result.message += `<br>&nbsp;&nbsp;<b style="color:#ff66cc;">CALLED SHOT EFFECTS:</b> ${onHitNotes.join(', ')}`;
+        result.plainText += ` CALLED SHOT EFFECTS: ${onHitNotes.join(', ')}`;
+    }
+
+    return result;
+}
+
+function getThreatAttackKey() {
+    if (!activeWeaponContext) return "";
+    return `${activeTemplateId || activeThreat?.name || 'threat'}_${activeWeaponContext.id || activeWeaponContext.name}`;
+}
+
+function storeThreatAttackContext(hit, results, calledShotOverride = null) {
+    if (!activeWeaponContext) return;
+
+    const target = getSelectedTarget();
+    const key = getThreatAttackKey();
+
+    if (!key) return;
+
+    const summary = (results || [])
+        .map(r => r.isSingle ? String(r.total) : `Shot ${r.shotIndex}: ${r.total}`)
+        .join(', ');
+
+    setAttackContext(key, {
+        targetId: target ? target.id : null,
+        targetName: target ? target.name : "",
+        hit: !!hit,
+        ap: activeWeaponContext.ap ?? "0",
+        weaponName: activeWeaponContext.name || "Weapon",
+        attackSummary: summary,
+        round: globalState?.combat?.round ?? null,
+        savedAt: Date.now(),
+        calledShot: calledShotOverride || (window.getCurrentCalledShot ? window.getCurrentCalledShot() : null)
+    });
+}
+        const defaultAttributes = { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" };
+        const defaultSkills = { Athletics: "d6", Fighting: "d6", Notice: "d6" };
+        const defaultWeaponIcon = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png";
+        onValue(ref(db, 'campaignState'), (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                globalState = data;
+                if (!globalState.threatTemplates) globalState.threatTemplates = {};
+                if (!globalState.presets) globalState.presets = [];
+                renderCodex();
+                populateWeaponDropdown();
+                renderDeployed();
+                if (activeTemplateId && globalState.threatTemplates[activeTemplateId] && !activeThreat) {
+                    loadTemplate(activeTemplateId);
+                }
+            }
+        });
+        // Collapsible WEAK POINT editor — toggle header click collapses body.
+        (function () {
+            const toggle = document.getElementById('weakpoint-toggle');
+            const body = document.getElementById('weakpoint-body');
+            const arrow = document.getElementById('weakpoint-collapse-arrow');
+            if (!toggle || !body) return;
+            
+            const collapsed = localStorage.getItem('wpCollapsed') === 'true';
+            body.style.display = collapsed ? 'none' : 'block';
+            if (arrow) arrow.textContent = collapsed ? '[ + ]' : '[ − ]';
+
+            toggle.addEventListener('click', function (e) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+                const isCollapsed = body.style.display === 'none';
+                body.style.display = isCollapsed ? 'block' : 'none';
+                if (arrow) arrow.textContent = isCollapsed ? '[ − ]' : '[ + ]';
+                localStorage.setItem('wpCollapsed', isCollapsed ? 'false' : 'true');
+            });
+        })();
+        function renderCodex() {
+            const list = document.getElementById('codex-list');
+            list.innerHTML = '';
+            for (let [id, t] of Object.entries(globalState.threatTemplates || {})) {
+                list.innerHTML += `
+<div class="list-item ${id === activeTemplateId ? 'active' : ''}" onclick="loadTemplate('${id}')">
+<span>${t.name}</span>
+<span style="opacity:0.5;">${t.isWildCard ? 'WC' : 'X'}</span>
+</div>`;
+            }
+        }
+        function populateWeaponDropdown() {
+            const select = document.getElementById('preset-weapon-select');
+            select.innerHTML = '<option value="">-- Select Master Preset --</option>';
+            globalState.presets.forEach(p => { select.innerHTML += `<option value="${p.id}">${p.name}</option>`; });
+        }
+        function renderDeployed() {
+            const list = document.getElementById('active-tracker-list');
+            list.innerHTML = '';
+            if (globalState.combat && globalState.combat.participants) {
+                globalState.combat.participants.forEach(p => {
+                    if (!p.isPlayer) list.innerHTML += `<div style="padding: 4px; border-bottom: 1px dashed var(--theme-color);">${p.name} [Wounds: ${p.wounds}]</div>`;
+                });
+            } else {
+                list.innerHTML = '<div style="opacity: 0.5;">No active combat or NPCs on board.</div>';
+            }
+        }
+        window.createNewTemplate = function () {
+            let id = "threat_" + Date.now();
+            activeThreat = {
+                name: "New Threat", isWildCard: false, pace: 6, parry: 5, toughness: 5,
+                naturalArmor: 0, wornArmor: 0, armor: 0, scale: 0,
+                heavyArmor: false, armorType: "General", ballisticProtection: 0, forceField: 0,
+                weakPoint: {
+                    enabled: false,
+                    name: "Weak Point",
+                    hitPenalty: -4,
+                    bypassWorn: true,
+                    bypassNatural: true,
+                    toughnessOverride: null,
+                    notes: ""
+                },
+                calledShotConfig: normalizeCsConfig(null),
+                attributes: JSON.parse(JSON.stringify(defaultAttributes)), skills: JSON.parse(JSON.stringify(defaultSkills)), abilities: "", weapons: []
+            };
+            activeTemplateId = id;
+            renderEditor(); renderCodex();
+        };
+        window.loadTemplate = function (id) {
+            activeTemplateId = id;
+            activeThreat = JSON.parse(JSON.stringify(globalState.threatTemplates[id]));
+            normalizeArmorData(activeThreat);
+            if (!activeThreat.attributes) activeThreat.attributes = JSON.parse(JSON.stringify(defaultAttributes));
+            if (!activeThreat.skills) activeThreat.skills = JSON.parse(JSON.stringify(defaultSkills));
+            if (!activeThreat.weapons) activeThreat.weapons = [];
+
+            if (!activeThreat.weakPoint) {
+                activeThreat.weakPoint = {
+                    enabled: false,
+                    name: "Weak Point",
+                    hitPenalty: -4,
+                    bypassWorn: true,
+                    bypassNatural: true,
+                    toughnessOverride: null,
+                    notes: ""
+                };
+            }
+            activeThreat.calledShotConfig = normalizeCsConfig(activeThreat.calledShotConfig);
+            renderEditor(); renderCodex();
+        };
+        // ==========================================
+        // CALLED SHOT CONFIG (per-template anatomy)
+        // ==========================================
+        // CS_CONFIG_DEFAULTS, CS_ONHIT_OPTIONS, normalizeCsConfig() are defined
+        // in the shared settings.js and used by BOTH the GM T.E.M. (here) and
+        // the player T.E.M. (character.html). This config is a property of the
+        // TARGET: when any attacker targets a participant, its calledShotConfig
+        // filters the Called Shot dropdown and supplies the custom values /
+        // on-hit effects. Weak Point (vs Natural Armor) is a separate system
+        // that always takes precedence and is NOT part of this anatomy config.
+        function renderCsConfigPanel() {
+            const list = document.getElementById('cs-config-list');
+            if (!list) return;
+            if (!activeThreat) { list.innerHTML = ''; return; }
+            const cfg = activeThreat.calledShotConfig = normalizeCsConfig(activeThreat.calledShotConfig);
+            let html = '';
+            const labels = {
+                head: "Head / Vitals", limb: "Limb", hand: "Hand", gap: "Unarmored Gap"
+            };
+            for (const key of ["head", "limb", "hand", "gap"]) {
+                const c = cfg[key];
+                html += `
+<div style="border:1px solid var(--theme-color); padding:6px; font-size:0.8em; text-align:left;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+<label style="display:flex; align-items:center; gap:6px;">
+<input type="checkbox" data-cs="${key}" data-field="enabled" ${c.enabled ? "checked" : ""} onchange="syncCsConfigFromInputs()">
+<span><b>${labels[key]}</b></span>
+</label>
+</div>
+<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+<span>Hit:</span><input type="number" data-cs="${key}" data-field="hitPenalty" value="${c.hitPenalty}" style="width:50px;" class="admin-input" onchange="syncCsConfigFromInputs()">
+<span>Dmg:</span><input type="number" data-cs="${key}" data-field="dmgMod" value="${c.dmgMod}" style="width:50px;" class="admin-input" onchange="syncCsConfigFromInputs()">
+<span>Tgh:</span><input type="number" data-cs="${key}" data-field="toughnessOverride" value="${c.toughnessOverride === null ? "" : c.toughnessOverride}" placeholder="blank" style="width:55px;" class="admin-input" onchange="syncCsConfigFromInputs()">
+</div>
+<div style="display:flex; gap:5px; flex-wrap:wrap; align-items:center; margin-top:4px;">
+<span style="opacity:0.7;">On-Hit:</span>
+${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; gap:3px; font-size:0.85em;"><input type="checkbox" data-cs="${key}" data-field="onHit" data-opt="${opt}" ${c.onHit.includes(opt) ? "checked" : ""} onchange="syncCsConfigFromInputs()"> ${opt}</label>`).join('')}
+</div>
+</div>`;
+            }
+            list.innerHTML = html;
+        }
+        let csConfigDebounce = null;
+        window.syncCsConfigFromInputs = function () {
+            if (!activeThreat) return;
+            activeThreat.calledShotConfig = normalizeCsConfig(activeThreat.calledShotConfig);
+            const cfg = activeThreat.calledShotConfig;
+            document.querySelectorAll('[data-cs]').forEach(el => {
+                const key = el.dataset.cs;
+                const field = el.dataset.field;
+                if (!cfg[key]) return;
+                if (field === "enabled") {
+                    cfg[key].enabled = el.checked;
+                } else if (field === "hitPenalty") {
+                    cfg[key].hitPenalty = parseInt(el.value);
+                    if (isNaN(cfg[key].hitPenalty)) cfg[key].hitPenalty = CS_CONFIG_DEFAULTS[key].hitPenalty;
+                } else if (field === "dmgMod") {
+                    cfg[key].dmgMod = parseInt(el.value) || 0;
+                } else if (field === "toughnessOverride") {
+                    cfg[key].toughnessOverride = (el.value === "" || el.value === null) ? null : parseInt(el.value);
+                    if (isNaN(cfg[key].toughnessOverride)) cfg[key].toughnessOverride = null;
+                } else if (field === "onHit") {
+                    const opt = el.dataset.opt;
+                    if (!el.checked) {
+                        cfg[key].onHit = cfg[key].onHit.filter(x => x !== opt);
+                    } else if (!cfg[key].onHit.includes(opt)) {
+                        cfg[key].onHit.push(opt);
+                    }
+                }
+            });
+            // keep hit penalty negative
+            for (const k of Object.keys(cfg)) {
+                if (cfg[k].hitPenalty > 0) cfg[k].hitPenalty = -cfg[k].hitPenalty;
+            }
+            // Persist immediately so the config survives reloads / is shared.
+            if (csConfigDebounce) clearTimeout(csConfigDebounce);
+            csConfigDebounce = setTimeout(() => {
+                saveTemplateToDB(true);
+            }, 1000);
+        };
+        function renderEditor() {
+            if (!activeThreat) return;
+            document.getElementById('editor-panel').style.display = 'block';
+            document.getElementById('edit-name').value = activeThreat.name || "";
+            document.getElementById('edit-wildcard').checked = activeThreat.isWildCard;
+            document.getElementById('edit-pace').value = activeThreat.pace || 6;
+            document.getElementById('edit-parry').value = activeThreat.parry || 5;
+            document.getElementById('edit-toughness').value = activeThreat.toughness || 5;
+            document.getElementById('edit-naturalarmor').value = activeThreat.naturalArmor || 0;
+            document.getElementById('edit-wornarmor').value = activeThreat.wornArmor || 0;
+            document.getElementById('edit-ballisticprotection').value = activeThreat.ballisticProtection || 0;
+            document.getElementById('edit-forcefield').value = activeThreat.forceField || 0;
+            let totalArmorDisplay = (parseInt(activeThreat.naturalArmor) || 0) + (parseInt(activeThreat.wornArmor) || 0) + (parseInt(activeThreat.forceField) || 0);
+            document.getElementById('edit-totalarmor').innerText = totalArmorDisplay;
+            document.getElementById('edit-scale').value = activeThreat.scale || 0;
+            document.getElementById('edit-heavyarmor').checked = !!activeThreat.heavyArmor;
+            document.getElementById('edit-armortype').value = activeThreat.armorType || "General";
+
+            // Part 4: Weak Point editor.
+            // Always show the editor so GMs can configure/enable a weak point on
+            // ANY threat — the "Enabled" checkbox below acts as the toggle.
+            // (Previously this was gated on naturalArmor > 0, so threats without
+            // natural armor had no way to enable a weak point.)
+            let wp = activeThreat.weakPoint || {};
+            document.getElementById('weakpoint-editor').style.display = "block";
+
+            document.getElementById('edit-weakpoint-enabled').checked = !!wp.enabled;
+            document.getElementById('edit-weakpoint-name').value = wp.name || "";
+            document.getElementById('edit-weakpoint-hit').value = (wp.hitPenalty === undefined || wp.hitPenalty === null) ? -4 : wp.hitPenalty;
+            document.getElementById('edit-weakpoint-bypassworn').checked = !!wp.bypassWorn;
+            document.getElementById('edit-weakpoint-bypassnatural').checked = !!wp.bypassNatural;
+            document.getElementById('edit-weakpoint-toughness').value =
+                (wp.toughnessOverride === undefined || wp.toughnessOverride === null) ? "" : wp.toughnessOverride;
+            document.getElementById('edit-weakpoint-notes').value = wp.notes || "";
+            document.getElementById('edit-abilities').value = activeThreat.abilities || "";
+            let attrHtml = '';
+            for (let [k, v] of Object.entries(activeThreat.attributes)) {
+                attrHtml += `
+<div class="trait-row">
+<span>${k}</span>
+<div>
+<input type="text" class="form-input small attr-input" data-key="${k}" value="${v}">
+<button class="die-btn" onclick="rollTrait('${k}', '${v}')">ROLL</button>
+</div>
+</div>`;
+            }
+            document.getElementById('attr-list').innerHTML = attrHtml;
+            let skillHtml = '';
+            for (let [k, v] of Object.entries(activeThreat.skills)) {
+                skillHtml += `
+<div class="trait-row">
+<span>${k}</span>
+<div>
+<input type="text" class="form-input small skill-input" data-key="${k}" value="${v}">
+<button class="die-btn" onclick="rollTrait('${k}', '${v}')">ROLL</button>
+<button class="die-btn danger" style="padding: 4px 8px;" onclick="removeSkill('${k}')">X</button>
+</div>
+</div>`;
+            }
+            document.getElementById('skill-list').innerHTML = skillHtml;
+            let wepHtml = '';
+            activeThreat.weapons.forEach((w, index) => {
+                let imgUrl = w.image || w.icon || defaultWeaponIcon;
+                wepHtml += `
+<div class="weapon-card">
+<div class="weapon-card-header">
+<div class="weapon-icon">
+<img src="${imgUrl}" alt="${w.name}">
+</div>
+<div class="weapon-info">
+<div class="weapon-info-top">
+<input type="text" class="form-input" value="${w.name}" style="font-weight:bold; width: 60%; background:transparent; border:none; border-bottom:1px dashed var(--theme-color); padding:2px;" onchange="updateWep(${index}, 'name', this.value)">
+<button class="weapon-remove-btn" onclick="removeWeapon(${index})">X</button>
+</div>
+<div class="wep-edit-row">
+<span>Rng:</span><input type="text" class="wep-input" style="width:60px;" value="${w.range}" onchange="updateWep(${index}, 'range', this.value)">
+<span>Dmg:</span><input type="text" class="wep-input" style="width:60px;" value="${w.damage}" onchange="updateWep(${index}, 'damage', this.value)">
+<span>AP:</span><input type="number" class="wep-input" style="width:30px;" value="${w.ap}" onchange="updateWep(${index}, 'ap', this.value)">
+<span>RoF:</span><input type="number" class="wep-input" style="width:30px;" value="${w.rof}" onchange="updateWep(${index}, 'rof', this.value)">
+<span>3RB:</span><input type="checkbox" ${w.burst ? "checked" : ""} onchange="updateWep(${index}, 'burst', this.checked)" title="Has Three-Round Burst ability">
+</div>
+</div>
+</div>
+<div class="weapon-actions">
+<button class="die-btn" onclick="prepareAttack(${index})">ATTACK</button>
+<button class="die-btn" onclick="rollDamage(${index})">DAMAGE</button>
+<button class="die-btn" style="border-color:#00ff00; color:#00ff00;" onclick="rollDamage(${index}, true)">+1d6 RAISE</button>
+<button class="die-btn dmg-reroll-btn" id="dmg-reroll-${index}" style="display:none;" onclick="rerollThreatDamage(${index})">REROLL DMG (1 BENNY)</button>
+</div>
+</div>`;
+            });
+            document.getElementById('weapon-list').innerHTML = wepHtml;
+            attachEditorListeners();
+            renderCsConfigPanel();
+            refreshWarnings();   // hidden on load/create (dismissed=true), live during edits
+        }
+        window.updateActive = function () {
+            if (!activeThreat) return;
+            activeThreat.name = document.getElementById('edit-name').value;
+            activeThreat.isWildCard = document.getElementById('edit-wildcard').checked;
+            activeThreat.pace = parseInt(document.getElementById('edit-pace').value) || 6;
+            activeThreat.parry = parseInt(document.getElementById('edit-parry').value) || 5;
+            activeThreat.toughness = parseInt(document.getElementById('edit-toughness').value) || 5;
+            activeThreat.naturalArmor = parseInt(document.getElementById('edit-naturalarmor').value) || 0;
+            activeThreat.wornArmor = parseInt(document.getElementById('edit-wornarmor').value) || 0;
+            activeThreat.ballisticProtection = parseInt(document.getElementById('edit-ballisticprotection').value) || 0;
+            activeThreat.forceField = parseInt(document.getElementById('edit-forcefield').value) || 0;
+            activeThreat.armor = activeThreat.naturalArmor + activeThreat.wornArmor + activeThreat.forceField;
+            let totalArmorDisplay = activeThreat.armor;
+            document.getElementById('edit-totalarmor').innerText = totalArmorDisplay;
+            // (Validation warnings are computed at the END of updateActive — see below —
+            //  so they reflect the just-synced scale/armor values. Problem 2.)
+            activeThreat.scale = parseInt(document.getElementById('edit-scale').value) || 0;
+            activeThreat.heavyArmor = document.getElementById('edit-heavyarmor').checked;
+            activeThreat.armorType = document.getElementById('edit-armortype').value;
+
+            // Part 4: Weak Point.
+            let wpToughnessRaw = document.getElementById('edit-weakpoint-toughness').value;
+
+            activeThreat.weakPoint = {
+                enabled: document.getElementById('edit-weakpoint-enabled').checked,
+                name: document.getElementById('edit-weakpoint-name').value.trim() || "Weak Point",
+                hitPenalty: parseInt(document.getElementById('edit-weakpoint-hit').value) || -4,
+                bypassWorn: document.getElementById('edit-weakpoint-bypassworn').checked,
+                bypassNatural: document.getElementById('edit-weakpoint-bypassnatural').checked,
+                toughnessOverride:
+                    (wpToughnessRaw === "" || wpToughnessRaw === null || wpToughnessRaw === undefined)
+                        ? null
+                        : parseInt(wpToughnessRaw),
+                notes: document.getElementById('edit-weakpoint-notes').value.trim()
+            };
+            activeThreat.abilities = document.getElementById('edit-abilities').value;
+            // Re-arm and refresh warnings AFTER all fields (incl. scale) are synced (Problem 2)
+            warningsDismissed = false;
+            refreshWarnings();
+        };
+        // ---- Validation warning helpers (Problem 2) ----
+        function refreshWarnings() {
+            const warnEl = document.getElementById('editor-warnings');
+            const textEl = document.getElementById('editor-warnings-text');
+            if (!warnEl) return;
+            if (!activeThreat || !textEl) { warnEl.style.display = 'none'; return; }
+            const warnings = validateThreatTemplate(activeThreat);
+            if (warnings.length > 0 && !warningsDismissed) {
+                textEl.innerHTML = warnings.join("<br>");
+                warnEl.style.display = "block";
+            } else {
+                warnEl.style.display = "none";
+            }
+        }
+        window.dismissWarnings = function () {
+            warningsDismissed = true;
+            const warnEl = document.getElementById('editor-warnings');
+            if (warnEl) warnEl.style.display = "none";
+        };
+        window.onScaleChange = function(el) {
+            if (!activeThreat) return;
+            let oldScale = activeThreat.scale || 0;
+            let newScale = parseInt(el.value) || 0;
+            let delta = newScale - oldScale;
+            if (delta !== 0) {
+                let toughnessInput = document.getElementById('edit-toughness');
+                let currentToughness = parseInt(toughnessInput.value) || 5;
+                let newToughness = currentToughness + delta;
+                if (newToughness < 1) newToughness = 1;
+                toughnessInput.value = newToughness;
+                logToTerminal(`> SCALE ADJUST: ${oldScale} → ${newScale}. Toughness auto-adjusted by ${delta > 0 ? '+' : ''}${delta} to ${newToughness}.`);
+            }
+            updateActive();
+        };
+        window.updateWep = function (index, field, val) {
+            activeThreat.weapons[index][field] = val;
+            saveTemplateToDB(true);
+        };
+        function attachEditorListeners() {
+            document.querySelectorAll('.attr-input').forEach(el => { el.addEventListener('change', (e) => { activeThreat.attributes[e.target.dataset.key] = e.target.value; updateActive(); }); });
+            document.querySelectorAll('.skill-input').forEach(el => { el.addEventListener('change', (e) => { activeThreat.skills[e.target.dataset.key] = e.target.value; updateActive(); }); });
+        }
+        window.addSkill = function () {
+            let name = document.getElementById('new-skill-name').value.trim();
+            let die = document.getElementById('new-skill-die').value.trim() || "d6";
+            if (name) { activeThreat.skills[name] = die; renderEditor(); }
+        };
+        window.removeSkill = function (name) { delete activeThreat.skills[name]; renderEditor(); };
+        window.addWeaponFromPreset = function () {
+            let wId = document.getElementById('preset-weapon-select').value;
+            let preset = globalState.presets.find(p => p.id === wId);
+            if (preset) {
+                activeThreat.weapons.push(JSON.parse(JSON.stringify(preset)));
+                renderEditor();
+            }
+        };
+        window.addCustomWeapon = function () {
+            activeThreat.weapons.push({ name: "Intrinsic Attack", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", icon: defaultWeaponIcon });
+            renderEditor();
+        };
+        window.removeWeapon = function (index) { activeThreat.weapons.splice(index, 1); renderEditor(); };
+        window.saveTemplateToDB = async function (silent = false) {
+            updateActive();
+            // An explicit Save ([ SAVE TEMPLATE TO CODEX ]) acknowledges the current state,
+            // so suppress the warning until the next edit. Silent auto-saves (weapon field
+            // edits) must NOT suppress it.
+            if (!silent) {
+                warningsDismissed = true;
+                const warnEl = document.getElementById('editor-warnings');
+                if (warnEl) warnEl.style.display = "none";
+            }
+            await set(ref(db, `campaignState/threatTemplates/${activeTemplateId}`), activeThreat);
+            if (!silent) logToTerminal(`> TEMPLATE SAVED: ${activeThreat.name}`);
+        };
+        window.deleteTemplate = async function () {
+            if (confirm("Delete this template?")) {
+                await set(ref(db, `campaignState/threatTemplates/${activeTemplateId}`), null);
+                document.getElementById('editor-panel').style.display = 'none';
+                activeTemplateId = null; activeThreat = null;
+            }
+        };
+        window.seedBestiary = async function () {
+            if (!confirm("Initialize Master HL2 Bestiary? This will overwrite standard templates with 19 pre-configured threats.")) return;
+            const hl2Threats = {
+                "hl2_headcrab": { name: "Headcrab", isWildCard: false, pace: 6, parry: 5, toughness: 4, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d6", Notice: "d6", Stealth: "d8" }, abilities: `Leap: Jumps 6" ignoring elevation.
+Latch: Raise on Fighting roll latches onto head. Victim rolls Vigor or becomes Shaken and starts transforming.`, weapons: [{ name: "Latch/Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_headcrab_fast": { name: "Fast Headcrab", isWildCard: false, pace: 8, parry: 5, toughness: 3, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d10", Smarts: "d4", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Athletics: "d10", Fighting: "d6", Notice: "d8", Stealth: "d10" }, abilities: "Leap & Latch.", weapons: [{ name: "Bite", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_headcrab_poison": { name: "Poison Headcrab", isWildCard: false, pace: 6, parry: 6, toughness: 5, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d4", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8", Intimidation: "d10" }, abilities: `Leap & Latch.
+Toxic Bite: Hit requires Vigor roll. Fail = Fatigue. Success = Shaken with pain (no Spirit recovery next round).`, weapons: [{ name: "Toxic Bite", range: "Melee", damage: "Str", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_zombie": { name: "Zombie", isWildCard: false, pace: 4, parry: 5, toughness: 7, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d6", Strength: "d8", Vigor: "d8" }, skills: { Fighting: "d6", Intimidation: "d6", Notice: "d6", Throwing: "d6", Athletics: "d6" }, abilities: `Undead: +2 recover Shaken, no Called Shot dmg, immune poison/disease.
+Headcrab Survivor: Destroying body drops 1-Wound Headcrab.`, weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }, { name: "Swat Object", range: "3/6/12", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: defaultWeaponIcon }] },
+                "hl2_zombie_fast": { name: "Fast Zombie", isWildCard: false, pace: 8, parry: 6, toughness: 5, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d10", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d6" }, abilities: `Undead.
+Wall Crawler: Climb verticals at Pace 8.`, weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_zombie_poison": { name: "Poison Zombie", isWildCard: false, pace: 4, parry: 6, toughness: 8, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: `Undead.
+Toxic Aura: Start turn in melee = Vigor roll or Fatigue.
+Hive: Can throw 2-3 Poison Headcrabs.`, weapons: [{ name: "Claws", range: "Melee", damage: "Str+d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }, { name: "Throw Headcrab", range: "4/8/16", damage: "Special", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: defaultWeaponIcon }] },
+                "hl2_antlion": { name: "Antlion", isWildCard: false, pace: 8, parry: 6, toughness: 6, naturalArmor: 1, wornArmor: 0, armor: 1, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: `Flight: Winged flight at Pace 8.
+Burrower: Hides underground, pops out as action.`, weapons: [{ name: "Bite/Claws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_antlion_guard": { name: "Antlion Guard", isWildCard: true, pace: 8, parry: 6, toughness: 12, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: 2, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d8", Strength: "d12+2", Vigor: "d12" }, skills: { Athletics: "d8", Fighting: "d8", Intimidation: "d10", Notice: "d6" }, abilities: `Charge: +4 Dmg and +2 Athletics pushback if runs 6" straight line.
+Carapace: +2 Armor.
+Size +2: Large.`, weapons: [{ name: "Ram/Gore", range: "Melee", damage: "Str+d8", ap: "2", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_scanner": { name: "City Scanner", isWildCard: false, pace: 10, parry: 4, toughness: 6, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d4", Strength: "d4", Vigor: "d4" }, skills: { Driving: "d8", Notice: "d10", Taunt: "d6" }, abilities: `Construct: +2 recover Shaken, immune poison/disease, no Called Shot dmg.
+Mark Target: Grants Combine +1 hit vs target.
+Flashbulb: Small Burst, Vigor or Distracted 1d4 rnds.`, weapons: [] },
+                "hl2_manhack": { name: "Manhack", isWildCard: false, pace: 8, parry: 6, toughness: 5, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -2, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d6" }, skills: { Fighting: "d8", Notice: "d6", Athletics: "d8" }, abilities: `Construct.
+Small: Attackers -2 to hit.`, weapons: [{ name: "Buzzsaw", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_rollermine": { name: "Rollermine", isWildCard: false, pace: 8, parry: 4, toughness: 8, naturalArmor: 2, wornArmor: 0, armor: 2, ballisticProtection: 0, forceField: 0, scale: -1, heavyArmor: false, armorType: "General", attributes: { Agility: "d6", Smarts: "d4", Spirit: "d4", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d8", Notice: "d8" }, abilities: `Construct.
+EMP Burst: Explodes Small Burst 2d6 electrical damage when destroyed.`, weapons: [{ name: "Electric Shock", range: "Melee", damage: "2d6", ap: "2", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_metrocop": { name: "Civil Protection (Metrocop)", isWildCard: false, pace: 6, parry: 4, toughness: 6, naturalArmor: 0, wornArmor: 1, armor: 1, ballisticProtection: 1, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d6" }, skills: { Driving: "d6", Fighting: "d6", Intimidation: "d6", Notice: "d6", Shooting: "d6", Taunt: "d6", Athletics: "d6" }, abilities: "Tactical Doctrine: +1 recover Shaken near command.", weapons: [{ id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/sAz8rBR.png" }, { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/oAbqfGW.png" }, { id: "stunstick", name: "Stunstick", range: "Melee", damage: "2d6+2", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: "https://i.imgur.com/pMPZprv.png" }] },
+                "hl2_combine_soldier": { name: "Combine Soldier", isWildCard: false, pace: 6, parry: 5, toughness: 8, naturalArmor: 0, wornArmor: 2, armor: 2, ballisticProtection: 2, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8", Stealth: "d6", Throwing: "d6" }, abilities: "Edges: Steady Hands.", weapons: [{ id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/oAbqfGW.png" }, { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/3rgRKGo.png" }, { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/9a4Uprg.png" }] },
+                "hl2_combine_shotgunner": { name: "Combine Shotgunner", isWildCard: false, pace: 6, parry: 5, toughness: 8, naturalArmor: 0, wornArmor: 2, armor: 2, ballisticProtection: 2, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d6", Strength: "d6", Vigor: "d8" }, skills: { Athletics: "d6", Fighting: "d6", Notice: "d8", Shooting: "d8" }, abilities: "Edges: Sweep.", weapons: [{ id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" }, { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", heavyWeapon: false, damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" }] },
+                "hl2_combine_elite": { name: "Combine Elite", isWildCard: true, pace: 6, parry: 6, toughness: 9, naturalArmor: 0, wornArmor: 3, armor: 3, ballisticProtection: 4, forceField: 0, scale: 0, heavyArmor: false, armorType: "Ballistic", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d8", Vigor: "d8" }, skills: { Athletics: "d8", Fighting: "d8", Notice: "d8", Shooting: "d10", Stealth: "d8" }, abilities: "Edges: Rock and Roll!", weapons: [{ id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/3rgRKGo.png" }, { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/4lFt2CC.png" }] },
+                "hl2_gunship": { name: "Combine Gunship", isWildCard: true, pace: 15, parry: 7, toughness: 17, naturalArmor: 4, wornArmor: 0, armor: 4, ballisticProtection: 0, forceField: 0, scale: 4, heavyArmor: true, armorType: "General", attributes: { Agility: "d8", Smarts: "d6", Spirit: "d8", Strength: "d10", Vigor: "d10" }, skills: { Driving: "d8", Notice: "d10", Shooting: "d10" }, abilities: `Construct. Heavy Vehicle (+4 Tgh, -4 to be hit by small arms).
+Point Defense: Can use Shooting vs Toughness 5 to destroy incoming rockets.`, weapons: [{ name: "Pulse Cannon", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }] },
+                "hl2_strider": { name: "Strider", isWildCard: true, pace: 12, parry: 7, toughness: 28, naturalArmor: 6, wornArmor: 0, armor: 6, ballisticProtection: 0, forceField: 0, scale: 8, heavyArmor: true, armorType: "General", attributes: { Agility: "d6", Smarts: "d6", Spirit: "d10", Strength: "d12+12", Vigor: "d12+4" }, skills: { Athletics: "d8", Notice: "d10", Shooting: "d10", Fighting: "d10" }, abilities: `Construct. Massive (+8 Tgh, -8 to be hit by small arms).
+Impale: Legs deal Str+d10 AP4 in melee.
+Crouch: Can lower body to enter buildings.`, weapons: [{ name: "Heavy Minigun", range: "50/100/200", damage: "2d8", ap: "2", rof: "4", heavyWeapon: true, damageType: "Ballistic", icon: defaultWeaponIcon }, { name: "Warp Cannon", range: "48 Line", damage: "4d10", ap: "10", rof: "1", heavyWeapon: true, damageType: "Energy", icon: defaultWeaponIcon }] },
+                "hl2_barnacle": { name: "Barnacle", isWildCard: false, pace: 0, parry: 2, toughness: 6, naturalArmor: 0, wornArmor: 0, armor: 0, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", weakPoint: {
+                    enabled: true,
+                    name: "Tongue",
+                    hitPenalty: -4,
+                    bypassWorn: true,
+                    bypassNatural: true,
+                    toughnessOverride: 5,
+                    notes: "Tongue is Toughness 5 to sever."
+                }, attributes: { Agility: "d4", Smarts: "d4", Spirit: "d4", Strength: "d10", Vigor: "d6" }, skills: { Notice: "d8", Stealth: "d8", Fighting: "d8" }, abilities: `Tongue Lash: Touching tongue = Auto-Grappled (Strength d10). Pulls 3" up per round.
+Weak Point: Tongue is Toughness 5 to sever.`, weapons: [{ name: "Bite (Ceiling)", range: "Melee", damage: "Str+d4", ap: "0", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] },
+                "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, naturalArmor: 1, wornArmor: 0, armor: 1, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: `Aquatic: Pace 10 in water.
+Drag: Raise on bite pulls target underwater (hold breath).`, weapons: [{ name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] }
+            };
+            await update(ref(db, 'campaignState/threatTemplates'), hl2Threats);
+            logToTerminal("> OVERWATCH BESTIARY FULLY INTEGRATED.");
+        };
+        function rollExploding(sides) {
+            let total = 0; let currentRoll; let history = [];
+            do {
+                currentRoll = Math.floor(Math.random() * sides) + 1;
+                total += currentRoll;
+                history.push(currentRoll);
+            } while (currentRoll === sides && sides > 1);
+            return { total, history };
+        }
+        window.rollTrait = function (traitName, dieValue, modifier = 0) {
+            if (!activeThreat) return;
+            let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
+            let sides = match ? parseInt(match[1]) : 4;
+            let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
+            let jokerBonus = document.getElementById('threat-joker-checkbox')?.checked ? 2 : 0;
+            let totalMod = modifier + intrinsicMod + jokerBonus;
+            let tRoll = rollExploding(sides);
+            let wRoll = activeThreat.isWildCard ? rollExploding(6) : null;
+            let finalTotal = tRoll.total + totalMod;
+            if (wRoll) finalTotal = Math.max(tRoll.total, wRoll.total) + totalMod;
+            let tn = 4;
+            let isCritFail = false;
+            let critConfirmNote = "";
+            if (wRoll) {
+                isCritFail = (tRoll.history[0] === 1 && wRoll.history[0] === 1);
+            } else if (tRoll.history[0] === 1) {
+                let confirmRoll = rollExploding(6);
+                isCritFail = (confirmRoll.history[0] === 1);
+                critConfirmNote = `<br>&nbsp;&nbsp;<span style="color:#ff9900;">Extra rolled natural 1 — confirming d6: ${confirmRoll.history.join(' + ')} → ${isCritFail ? "CRITICAL FAILURE CONFIRMED" : "normal failure"}</span>`;
+            }
+            let outcome = "FAILURE"; let color = "#ff3333";
+            if (isCritFail) { outcome = "CRITICAL FAILURE!"; }
+            else if (finalTotal >= tn) {
+                let raises = Math.floor((finalTotal - tn) / 4);
+                outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                color = raises > 0 ? "#00ff00" : "#ff9900";
+            }
+            let logStr = `> ${activeThreat.name} rolled ${traitName} (${dieValue}):<br>&nbsp;&nbsp;Trait: ${tRoll.history.join(' + ')}`;
+            if (wRoll) logStr += ` | Wild: ${wRoll.history.join(' + ')}`;
+            if (totalMod !== 0) logStr += ` | Mod: ${totalMod > 0 ? '+' + totalMod : totalMod}`;
+            logStr += `<br>&nbsp;&nbsp;Result: <b style="color:${color};">${finalTotal}</b> -> ${outcome}`;
+            logToTerminal(logStr);
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${activeThreat.name} rolled ${traitName}`,
+                    description: `**Result: ${finalTotal}**\n${outcome}`,
+                    color: color === "#00ff00" ? 0x00ff00 : (color === "#ff9900" ? 0xff9900 : 0xff0000),
+                    fields: [{ name: `Trait (d${sides})`, value: tRoll.history.join(' + '), inline: true }]
+                };
+                if (wRoll) embed.fields.push({ name: "Wild (d6)", value: wRoll.history.join(' + '), inline: true });
+                if (totalMod !== 0) embed.fields.push({ name: "Modifier", value: totalMod > 0 ? `+${totalMod}` : `${totalMod}`, inline: true });
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+            }
+        };
+        // ==========================================
+        // B8. TARGET / DEFENDER INTEGRATION (SWADE p.95)
+        // Melee TN = defender's Parry. Ranged TN 4. Defender modifiers
+        // (Vulnerable +2, Dodge -2) kept separate from the Modifier Adjust box.
+        // ==========================================
+        function isMeleeWeapon(weaponObj) {
+            if (!weaponObj) return false;
+            let r = (weaponObj.range || "").toLowerCase();
+            return r.includes("melee") || r.includes("contact");
+        }
+function targetHasDodge(target) {
+    if (!target) return false;
+
+    // Manual combat override.
+    // This allows NPCs and player targets to have Dodge toggled on/off
+    // during combat without editing the character sheet.
+    if (typeof target.hasDodge === "boolean") {
+        return target.hasDodge;
+    }
+
+    // Player targets default from their character sheet.
+    if (target.isPlayer) {
+        let sheet = globalState.characters && globalState.characters[target.id];
+        if (sheet && sheet.edges) return /\bdodge\b/i.test(sheet.edges);
+        return false;
+    }
+
+    return false;
+}
+        function attackerHasMarksman() {
+            // NPC attacker: Marksman listed in the template's abilities
+            return !!(activeThreat && activeThreat.abilities && /\bmarksman\b/i.test(activeThreat.abilities));
+        }
+        function getSelectedTarget() {
+            let id = document.getElementById('target-select').value;
+            if (!id || !globalState.combat || !globalState.combat.participants) return null;
+            return globalState.combat.participants.find(p => p.id === id) || null;
+        }
+        function computeDefenderModifier() {
+            let target = getSelectedTarget();
+            if (!target) return { modifier: 0, notes: "" };
+            let melee = isMeleeWeapon(activeWeaponContext);
+            let mod = 0;
+            let notes = [];
+            if (target.vulnerable) {
+                mod += 2;
+                notes.push("Vulnerable +2");
+            }
+            if (!melee) {
+                let dodge = targetHasDodge(target);
+                if (dodge && !attackerHasMarksman()) {
+                    mod -= 2;
+                    notes.push("Dodge -2");
+                } else if (dodge && attackerHasMarksman()) {
+                    notes.push("Dodge ignored (Marksman)");
+                }
+            }
+            return { modifier: mod, notes: notes.join(", ") };
+        }
+function updateDefenderModifierAndStatus() {
+    let target = getSelectedTarget();
+    let statusEl = document.getElementById('target-status');
+    let result = computeDefenderModifier();
+
+    defenderModifier = result.modifier;
+
+    if (!target) {
+        defenderDisplay = "";
+        statusEl.innerHTML = "";
+        return;
+    }
+
+    let melee = isMeleeWeapon(activeWeaponContext);
+
+    let parry = parseInt(target.parry) || 0;
+    let toughness = parseInt(target.toughness) || 0;
+    let armor = parseInt(target.armor) || 0;
+    let wounds = target.wounds || 0;
+    let fatigue = target.fatigue || 0;
+
+    let tnLabel = melee ? `Parry ${parry}` : `TN 4`;
+
+    let conds = [];
+    if (target.incapacitated) conds.push("INCAPACITATED");
+    if (target.shaken) conds.push("SHAKEN");
+    if (target.distracted) conds.push("DISTRACTED");
+    if (target.vulnerable) conds.push("VULNERABLE");
+
+    let html = `Target: <b>${target.name}</b> — ${tnLabel} | Toughness ${toughness}`;
+
+    if (armor > 0) {
+        html += ` | Armor ${armor}`;
+    }
+
+    html += ` | Wounds ${wounds} | Fatigue ${fatigue}`;
+
+    if (conds.length) {
+        html += ` | ${conds.join(", ")}`;
+    }
+
+    if (result.notes) {
+        html += ` | <span style="color:#00ff00;">${result.notes}</span>`;
+    }
+
+    statusEl.innerHTML = html;
+
+    // Effective Toughness preview (full pipeline)
+    let previewEl = document.getElementById('effective-toughness-preview');
+    if (target && activeWeaponContext) {
+        let wepAp = parseApForDamage(activeWeaponContext.ap || "0");
+        let wepDmgType = activeWeaponContext.damageType || "Ballistic";
+        let prevPipeline = computeArmorPipeline(target, wepDmgType, wepAp);
+        previewEl.style.display = "block";
+        let prevHtml = `⚔ Eff Tgh vs ${activeWeaponContext.name}: <b>${prevPipeline.effectiveToughness}</b><br>`;
+        prevHtml += `&nbsp;&nbsp;Tgh ${prevPipeline.toughness}`;
+        if (prevPipeline.applicableNatural > 0 || prevPipeline.applicableWorn > 0) {
+            prevHtml += ` + Armor ${prevPipeline.totalApplicableArmor}`;
+            if (prevPipeline.applicableNatural > 0 && prevPipeline.applicableWorn > 0) {
+                prevHtml += ` (Nat ${prevPipeline.applicableNatural} + Worn ${prevPipeline.applicableWorn})`;
+            }
+        }
+        if (prevPipeline.bpApplied > 0) {
+            prevHtml += ` [BP ${prevPipeline.bpApplied}]`;
+        }
+        if (!prevPipeline.apIgnore && prevPipeline.effectiveAP > 0 && prevPipeline.totalApplicableArmor > 0) {
+            prevHtml += ` − AP ${prevPipeline.effectiveAP}`;
+        }
+        if (prevPipeline.apIgnore && prevPipeline.totalApplicableArmor > 0) {
+            prevHtml += ` (armor ignored)`;
+        }
+        if (prevPipeline.forceField > 0) {
+            prevHtml += ` + FF ${prevPipeline.forceField}`;
+        }
+        prevHtml += ` = <b>${prevPipeline.effectiveToughness}</b>`;
+        previewEl.innerHTML = prevHtml;
+    } else {
+        previewEl.style.display = "none";
+    }
+
+    defenderDisplay = `Target: ${target.name}` + (defenderModifier !== 0 ? ` (${defenderModifier > 0 ? '+' : ''}${defenderModifier} defender mod)` : "");
+}
+        window.onActionModeChange = function () {
+            let mode = document.getElementById('action-mode-select').value;
+            let testRow = document.getElementById('test-options-row');
+            testRow.style.display = (mode === 'test') ? 'flex' : 'none';
+        };
+
+        async function handleTestOrSupportOutcome(ctx, results, target) {
+            let mode = document.getElementById('action-mode-select')?.value || 'normal';
+            if (mode === 'normal' || !target) return;
+
+            if (!globalState.combat || !globalState.combat.participants) return;
+
+            let hit = results.some(r => r.outcome.includes("SUCCESS"));
+            let hasRaise = results.some(r => r.hasRaise);
+
+            if (mode === 'test' && hit) {
+                let effect = document.getElementById('test-effect-select').value;
+                let participants = globalState.combat.participants;
+                let pIdx = participants.findIndex(p => p.id === target.id);
+
+                if (pIdx !== -1) {
+                    let t = participants[pIdx];
+                    if (effect === 'distracted') {
+                        t.distracted = true;
+                        t.distractedTTL = 2;
+                    } else if (effect === 'vulnerable') {
+                        t.vulnerable = true;
+                        t.vulnerableTTL = 2;
+                    }
+                    if (hasRaise) {
+                        t.shaken = true;
+                    }
+                    await set(ref(db, 'campaignState/combat/participants'), participants);
+
+                    let logMsg = `> <b style="color:#00ff00;">TEST SUCCESS:</b> ${target.name} is now <b>${effect.toUpperCase()}</b>!`;
+                    if (hasRaise) logMsg += ` <b style="color:#ffff00;">(RAISE: Also SHAKEN!)</b>`;
+                    logToTerminal(logMsg);
+                }
+            }
+        }
+
+        async function applyMassDamageToTracker(weaponObj, damageTotal) {
+            let multiSelect = document.getElementById('multi-target-select');
+            let selectedTargetIds = Array.from(multiSelect.selectedOptions).map(o => o.value);
+
+            if (selectedTargetIds.length === 0) {
+                let singleKey = `${activeTemplateId || activeThreat.name}_${weaponObj.id || weaponObj.name}`;
+                return [await applyDamageToTracker(singleKey, weaponObj, damageTotal)];
+            }
+
+            let results = [];
+            let currentCalledShot = window.getCurrentCalledShot ? window.getCurrentCalledShot() : null;
+            for (let targetId of selectedTargetIds) {
+                let targetP = globalState.combat.participants.find(p => p.id === targetId);
+                let attackKey = `mass_blast_${targetId}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                setAttackContext(attackKey, {
+                    targetId: targetId,
+                    targetName: targetP ? targetP.name : "Target",
+                    attackerName: activeThreat.name || "Attacker",
+                    hit: true,
+                    ap: weaponObj.ap || "0",
+                    weaponName: weaponObj.name,
+                    round: globalState.combat?.round ?? null,
+                    savedAt: Date.now(),
+                    calledShot: currentCalledShot
+                });
+                let res = await applyDamageToTracker(attackKey, weaponObj, damageTotal);
+                res.targetName = targetP ? targetP.name : "Target";
+                results.push(res);
+            }
+            return results;
+        }
+
+        function populateTargetSelect() {
+            let select = document.getElementById('target-select');
+            let multiSelect = document.getElementById('multi-target-select');
+            let multiList = document.getElementById('multi-target-list');
+
+            select.innerHTML = '<option value="">-- No Target (TN 4) --</option>';
+            multiSelect.innerHTML = '';
+            if (multiList) multiList.innerHTML = '';
+
+            if (!globalState.combat || !globalState.combat.participants || globalState.combat.participants.length === 0) {
+                return;
+            }
+            let melee = isMeleeWeapon(activeWeaponContext);
+
+            globalState.combat.participants.forEach(p => {
+                let parry = parseInt(p.parry) || 0;
+                let toughness = parseInt(p.toughness) || 0;
+                let armor = parseInt(p.armor) || 0;
+                let wounds = p.wounds || 0;
+                let fatigue = p.fatigue || 0;
+
+                let armorLabel = armor > 0 ? "+" + armor : "";
+                let prefix = p.isPlayer ? "[PC]" : "[NPC]";
+                let label = melee
+                    ? `${prefix} ${p.name} — Parry ${parry}`
+                    : `${prefix} ${p.name} — Tgh ${toughness}${armorLabel} | W ${wounds} | F ${fatigue}`;
+
+                let opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = label;
+                opt.title = label;
+                select.appendChild(opt);
+
+                let mOpt = document.createElement('option');
+                mOpt.value = p.id;
+                mOpt.textContent = label;
+                multiSelect.appendChild(mOpt);
+                if (multiList) {
+                let row = document.createElement('div');
+                row.className = 'area-target-row' + (mOpt.selected ? ' area-target-selected' : '');
+                row.dataset.id = p.id;
+                row.textContent = label;
+                row.title = label;
+                multiList.appendChild(row);
+                }
+            });
+        }
+window.onTargetChange = function () {
+    let target = getSelectedTarget();
+    let dodgeRow = document.getElementById('target-dodge-row');
+    let dodgeCheckbox = document.getElementById('target-dodge-checkbox');
+    
+    if (!target) {
+        document.getElementById('tn-input').value = "4";
+        dodgeRow.style.display = "none";
+        defenderModifier = 0;
+        defenderDisplay = "";
+        document.getElementById('target-status').innerHTML = "";
+        let previewEl = document.getElementById('effective-toughness-preview');
+        if (previewEl) previewEl.style.display = "none";
+        refreshCalledShotOptions();
+        window.updateCalledShot();
+        return;
+    }
+    
+            let melee = isMeleeWeapon(activeWeaponContext);
+            let baseParry = parseInt(target.parry) || 4;
+            let effectiveParry = baseParry + (target.defending ? 4 : 0);
+            
+            let mode = document.getElementById('action-mode-select')?.value || 'normal';
+            document.getElementById('tn-input').value = (melee && mode !== 'test') ? effectiveParry : "4";
+            
+            if (!melee) {
+        dodgeCheckbox.checked = targetHasDodge(target);
+        dodgeCheckbox.disabled = false;
+        dodgeRow.style.display = "flex";
+    } else {
+        dodgeRow.style.display = "none";
+    }
+    
+    updateDefenderModifierAndStatus();
+
+    // Refresh the Called Shot dropdown so the target's weak point (if enabled)
+    // becomes selectable when attacking that enemy.
+    refreshCalledShotOptions();
+    window.updateCalledShot();
+
+};
+// ==========================================
+// PART 4: CALLED SHOT HELPERS
+// ==========================================
+// The Called Shot dropdown & config resolution are shared with the player
+// T.E.M. via settings.js (populateCalledShotSelect / getCalledShotConfig).
+// The dropdown is driven by the TARGET's calledShotConfig + weakPoint; Weak
+// Point (vs Natural Armor) always takes precedence over the anatomy config.
+function refreshCalledShotOptions() {
+    const sel = document.getElementById('called-shot-select');
+    if (!sel) return;
+    if (window.populateCalledShotSelect) {
+        window.populateCalledShotSelect(sel, getSelectedTarget());
+    }
+}
+
+window.updateCalledShot = function () {
+    const cfg = window.getCurrentCalledShot
+        ? window.getCurrentCalledShot()
+        : { id: "none", label: "None", hitMod: 0, dmgMod: 0 };
+
+    calledShotId = cfg.id;
+    calledShotModifier = parseInt(cfg.hitMod) || 0;
+    calledShotOpts = cfg;
+
+    const status = document.getElementById('called-shot-status');
+    if (!status) return;
+
+    if (!cfg || cfg.id === "none") {
+        status.style.display = "none";
+        status.innerHTML = "";
+        return;
+    }
+
+    status.style.display = "block";
+    status.innerHTML = `Called Shot: <b>${cfg.label}</b>`;
+};
+
+window.getCurrentCalledShot = function () {
+    const sel = document.getElementById('called-shot-select');
+    if (!sel) return { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
+    const target = getSelectedTarget();
+    return window.getCalledShotConfig
+        ? window.getCalledShotConfig(sel.value, target)
+        : { id: "none", hitMod: 0, dmgMod: 0, onHit: [] };
+};
+window.onTargetDodgeChange = async function () {
+    let target = getSelectedTarget();
+    if (!target) return;
+
+    if (globalState.combat && globalState.combat.participants) {
+        let participants = globalState.combat.participants;
+        let idx = participants.findIndex(p => p.id === target.id);
+
+        if (idx !== -1) {
+            participants[idx].hasDodge = document.getElementById('target-dodge-checkbox').checked;
+            await set(ref(db, 'campaignState/combat/participants'), participants);
+        }
+    }
+
+    updateDefenderModifierAndStatus();
+
+    // Part 4: target may have a Weak Point.
+    refreshCalledShotOptions();
+    window.updateCalledShot();
+};
+        // ==========================================
+        // WEAPON ATTACKS & MODALS
+        // ==========================================
+        window.prepareAttack = function (wepIndex) {
+            let wep = activeThreat.weapons[wepIndex];
+            let isMelee = wep.range.toLowerCase().includes("melee") || wep.range.toLowerCase().includes("contact");
+            let isThrown = wep.range.toLowerCase().includes("throw") || wep.name.toLowerCase().includes("grenade");
+            let skillName = isMelee ? "Fighting" : (isThrown ? "Athletics" : "Shooting");
+            pendingRoll = { skill: skillName };
+            activeWeaponContext = wep;
+            currentAreaInfo = getAreaEffectInfo(wep);
+            if (currentAreaPlanKey) clearAreaAttackPlan(currentAreaPlanKey);
+            currentAreaPlan = null;
+            currentAreaPlanKey = null;
+            document.getElementById('tn-input').value = "4";
+            document.getElementById('mod-override-input').value = "0";
+            document.getElementById('map-select').value = "0";
+            document.getElementById('action-mode-select').value = "normal";
+            document.getElementById('test-options-row').style.display = "none";
+            // Reset the shared TEM situational modifiers.
+            if (window.resetTEMModifiers) window.resetTEMModifiers('tn');
+
+            // Part 4: Called Shots.
+            const calledShotRow = document.getElementById('called-shot-row');
+            const calledShotSelect = document.getElementById('called-shot-select');
+            calledShotRow.style.display = "flex";
+            refreshCalledShotOptions();
+            window.updateCalledShot();
+            // B8: Reset defender state and populate the target list when combat is live
+            defenderModifier = 0;
+            defenderDisplay = "";
+            let targetContainer = document.getElementById('target-select-container');
+            if (globalState.combatActive && globalState.combat && globalState.combat.participants && globalState.combat.participants.length > 0) {
+                populateTargetSelect();
+                targetContainer.style.display = "block";
+            } else {
+                targetContainer.style.display = "none";
+                document.getElementById('target-select').value = "";
+                document.getElementById('target-status').innerHTML = "";
+                document.getElementById('target-dodge-row').style.display = "none";
+            }
+            const rangedOpts = document.getElementById('ranged-options-container');
+            const rofOpts = document.getElementById('rof-options-container');
+            document.getElementById('range-select').value = "0";
+            document.getElementById('scope-checkbox').checked = false;
+            document.getElementById('aim-mode-ignore').checked = true;
+            document.getElementById('aim-scope-checkbox').checked = false;
+            document.getElementById('wild-attack-checkbox').checked = false;
+            if (!isMelee) {
+                rangedOpts.style.display = "block";
+                rofOpts.style.display = "block";
+                document.getElementById('scope-row').style.display = "flex";
+                document.getElementById('wild-attack-row').style.display = "none";
+                document.getElementById('threat-joker-row').style.display = "none";
+                let rofVal = parseInt(wep.rof) || 1;
+                const rofSelect = document.getElementById('rof-select');
+                rofSelect.innerHTML = `<option value="1">Single Shot (1 Bullet)</option>`;
+                const costMap = { 2: 5, 3: 10, 4: 20, 5: 40, 6: 50 };
+                for (let r = 2; r <= Math.min(rofVal, 6); r++) {
+                    rofSelect.innerHTML += `<option value="${r}">RoF ${r} (${costMap[r]} Bullets)</option>`;
+                }
+                document.getElementById('suppressive-checkbox').checked = false;
+                document.getElementById('3rb-checkbox').checked = false;
+                document.getElementById('rof-select').disabled = false;
+                document.getElementById('suppressive-checkbox').disabled = false;
+                document.getElementById('3rb-checkbox').disabled = false;
+                document.getElementById('3rb-label').style.display = (wep.burst === true) ? "flex" : "none";
+            } else {
+                rangedOpts.style.display = "none";
+                rofOpts.style.display = "none";
+                document.getElementById('scope-row').style.display = "none";
+                document.getElementById('aim-mode-row').style.display = "none";
+                document.getElementById('aim-scope-row').style.display = "none";
+                document.getElementById('wild-attack-row').style.display = "flex";
+                document.getElementById('threat-joker-row').style.display = "flex";
+            }
+            // AREA MODE: re‑skin after the single‑target show/hide logic (see character.html).
+            applyAreaModeUI(!!currentAreaInfo, currentAreaInfo);
+            document.getElementById('tn-modal').style.display = 'block';
+        };
+        window.updateModifierAdjust = function () {
+            if (!activeWeaponContext) return;
+            // Gate on the RANGED container (not RoF): area mode hides RoF but keeps the
+            // range bracket for thrown/fired, so the range penalty must still apply.
+            let isRanged = document.getElementById('ranged-options-container').style.display !== 'none';
+            let rangePenalty = 0;
+            let recoilPenalty = 0;
+            let trbBonus = 0;
+            if (isRanged) {
+                rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
+                let is3RB = document.getElementById('3rb-checkbox').checked;
+                let isSupp = document.getElementById('suppressive-checkbox').checked;
+                let rofSelect = document.getElementById('rof-select');
+                if (is3RB) {
+                    rofSelect.disabled = true;
+                    document.getElementById('suppressive-checkbox').disabled = true;
+                } else if (isSupp) {
+                    rofSelect.disabled = true;
+                    document.getElementById('3rb-checkbox').disabled = true;
+                } else {
+                    rofSelect.disabled = false;
+                    document.getElementById('suppressive-checkbox').disabled = false;
+                    document.getElementById('3rb-checkbox').disabled = false;
+                }
+                let shots = parseInt(rofSelect.value) || 1;
+                if (isSupp) {
+                    recoilPenalty = -2;
+                } else if (!is3RB && shots > 1) {
+                    recoilPenalty = -2;
+                } else {
+                    recoilPenalty = 0;
+                }
+                trbBonus = is3RB ? 1 : 0;
+                const warning = document.getElementById('recoil-warning');
+                if (warning) warning.style.display = (recoilPenalty !== 0) ? 'block' : 'none';
+            }
+            let aimBonus = 0;
+            let computedRangePenalty = rangePenalty;
+            let isAiming = document.getElementById('scope-checkbox')?.checked || false;
+            let aimModeRow = document.getElementById('aim-mode-row');
+            let aimScopeRow = document.getElementById('aim-scope-row');
+            if (aimModeRow) aimModeRow.style.display = (isRanged && isAiming) ? "flex" : "none";
+            if (aimScopeRow) aimScopeRow.style.display = (isRanged && isAiming) ? "flex" : "none";
+
+            if (isRanged && isAiming) {
+                let isPlus2 = document.getElementById('aim-mode-plus2')?.checked || false;
+                if (isPlus2) {
+                    aimBonus = 2;
+                } else {
+                    let isScoped = document.getElementById('aim-scope-checkbox')?.checked || false;
+                    let cap = isScoped ? 6 : 4;
+                    computedRangePenalty = Math.min(0, rangePenalty + cap);
+                }
+            }
+            let computed = computedRangePenalty + recoilPenalty + trbBonus + aimBonus + getThreatsTEMTotal();
+            const _inp = document.getElementById('mod-override-input');
+            // Preserve GM manual tweaks across recompute (same rule as character).
+            let manual = parseInt(_inp.value) - parseInt(_inp.dataset.computed || 0);
+            if (isNaN(manual)) manual = 0;
+            // First pass after weapon select has no baseline: don't treat the reset
+            // "0" as manual. Seed baseline instead.
+            if (!_inp.dataset.computed) manual = 0;
+            _inp.value = String(computed + manual);
+            try {
+                // Sole-writer bookkeeping: tag computed so later manual edits survive
+                // recompute (mirrors character.html applyComputedModifiers).
+                _inp.dataset.computed = String(computed);
+            } catch (e) { /* non-fatal */ }
+        };
+        // Shared TEM helpers (settings.js). The TEM panel is injected into #tn-tem-container.
+        function threatsIsMelee() {
+            if (!activeWeaponContext) return false;
+            let r = (activeWeaponContext.range || '').toLowerCase();
+            return r.includes('melee') || r.includes('contact');
+        }
+        function getThreatsTEMTotal() {
+            if (!window.getTEMModifierValues || !document.getElementById('tn-sit-cover')) return 0;
+            const steady = !!(activeThreat && activeThreat.abilities && /steady\s*hands/i.test(activeThreat.abilities));
+            let tem = window.getTEMModifierValues('tn', { isMelee: threatsIsMelee(), steadyHands: steady });
+            let total = tem.total;
+            
+            let target = getSelectedTarget();
+            let targetAlreadyDefending = target ? target.defending : false;
+            
+            // Defend = target defending (+4 Parry = -4 to roll, melee only).
+            // Do not subtract 4 if the target's native 'defending' flag is already inflating Parry.
+            if (tem.values.defend && threatsIsMelee() && !targetAlreadyDefending) {
+                total -= 4;
+            }
+            return total;
+        }
+        window.__temChanged = function () { window.updateModifierAdjust(); };
+        // Inject the shared TEM panel once the DOM is ready.
+        (function injectThreatsTEM() {
+            let host = document.getElementById('tn-tem-container');
+            if (host && window.buildTEMModifiersHTML) {
+                host.innerHTML = window.buildTEMModifiersHTML('tn');
+            }
+        })();
+        window.confirmRoll = function () {
+            if (!pendingRoll) return;
+            let tn = parseInt(document.getElementById('tn-input').value) || 4;
+            if (currentAreaInfo) {
+                currentAreaPlan = buildAreaAttackPlan(
+                    currentAreaInfo, activeWeaponContext, activeThreat ? activeThreat.name : "Attacker",
+                    (globalState.combat && globalState.combat.participants) ? globalState.combat.participants : [],
+                    globalState.combat ? globalState.combat.round : null);
+                currentAreaPlanKey = getThreatAttackKey();
+                setAreaAttackPlan(currentAreaPlanKey, currentAreaPlan);
+            } else {
+                currentAreaPlan = null;
+                currentAreaPlanKey = null;
+            }
+            let is3RB = false;
+            let isSupp = false;
+            let shotsFired = 1;
+            if (activeWeaponContext && document.getElementById('rof-options-container').style.display !== 'none') {
+                is3RB = document.getElementById('3rb-checkbox').checked;
+                isSupp = document.getElementById('suppressive-checkbox').checked;
+                if (is3RB) {
+                    shotsFired = 1;
+                } else if (isSupp) {
+                    shotsFired = 1;
+                } else {
+                    shotsFired = parseInt(document.getElementById('rof-select').value) || 1;
+                }
+            }
+            document.getElementById('tn-modal').style.display = 'none';
+            pendingRoll.is3RB = is3RB;
+            pendingRoll.isSupp = isSupp;
+            executeThreatRoll(pendingRoll.skill, tn, shotsFired, is3RB, isSupp);
+        };
+        window.cancelRoll = function () {
+            document.getElementById('tn-modal').style.display = 'none';
+            pendingRoll = null;
+            activeWeaponContext = null;
+            currentAreaInfo = null;
+            if (currentAreaPlanKey) clearAreaAttackPlan(currentAreaPlanKey);
+            currentAreaPlan = null;
+            currentAreaPlanKey = null;
+            // B8: clear defender state on cancel
+            defenderModifier = 0;
+            defenderDisplay = "";
+            // Clear effective toughness preview
+            let previewEl = document.getElementById('effective-toughness-preview');
+            if (previewEl) previewEl.style.display = "none";
+        };
+function performThreatRoll(sides, totalModifier, targetNumber, shotsFired, is3RB, isSuppressive) {
+    let results = []; 
+    let isCritFail = false;
+    let isShotgun = activeWeaponContext && activeWeaponContext.name.toLowerCase().includes("shotgun");
+    let isFullAutoMode = is3RB || isSuppressive || shotsFired > 1;
+    let bThresh = (isShotgun || isFullAutoMode) ? 2 : 1;
+
+    if (shotsFired > 1) {
+        let traitRolls = [];
+        for (let i = 0; i < shotsFired; i++) {
+            let r = rollExploding(sides);
+            r.originalTraitFirst = r.history[0];
+            traitRolls.push(r);
+        }
+        let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
+        let onesCount = 0;
+        traitRolls.forEach(r => { if (r.originalTraitFirst === 1) onesCount++; });
+        if (wildRoll && wildRoll.history[0] === 1) onesCount++;
+        let overHalf = (onesCount > (wildRoll ? shotsFired + 1 : shotsFired) / 2);
+        
+        if (wildRoll) isCritFail = overHalf && wildRoll.history[0] === 1;
+        else if (overHalf) {
+            let confirmRoll = rollExploding(6);
+            isCritFail = (confirmRoll.history[0] === 1);
+        }
+
+        let minVal = Math.min(...traitRolls.map(r => r.total));
+        let minIdx = traitRolls.findIndex(r => r.total === minVal);
+        if (wildRoll && wildRoll.total > minVal) {
+            let replaced = wildRoll;
+            replaced.originalTraitFirst = traitRolls[minIdx].originalTraitFirst;
+            traitRolls[minIdx] = replaced;
+        }
+
+        traitRolls.forEach((r, idx) => {
+            let score = r.total + totalModifier;
+            let outcome = ""; let hasRaise = false;
+            if (isCritFail) outcome = "CRITICAL FAILURE!";
+            else if (score < targetNumber) outcome = "FAILURE.";
+            else {
+                let raises = Math.floor((score - targetNumber) / 4);
+                outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+                if (raises > 0) hasRaise = true;
+            }
+            let isBystander = (!outcome.includes("SUCCESS") && r.originalTraitFirst <= bThresh);
+            results.push({ shotIndex: idx + 1, total: score, history: r.history, outcome: outcome, hasRaise: hasRaise, bystander: isBystander, initialTrait: r.originalTraitFirst });
+        });
+    } else {
+        let traitRoll = rollExploding(sides);
+        traitRoll.originalTraitFirst = traitRoll.history[0];
+        let wildRoll = activeThreat.isWildCard ? rollExploding(6) : null;
+        let bestTotal = traitRoll.total;
+        
+        if (wildRoll) {
+            bestTotal = Math.max(traitRoll.total, wildRoll.total);
+            isCritFail = (traitRoll.originalTraitFirst === 1 && wildRoll.history[0] === 1);
+        } else if (traitRoll.originalTraitFirst === 1) {
+            let confirmRoll = rollExploding(6);
+            isCritFail = (confirmRoll.history[0] === 1);
+        }
+        
+        bestTotal += totalModifier;
+        let outcome = ""; let hasRaise = false;
+        if (isCritFail) outcome = "CRITICAL FAILURE!";
+        else if (bestTotal < targetNumber) outcome = "FAILURE.";
+        else {
+            let raises = Math.floor((bestTotal - targetNumber) / 4);
+            outcome = raises > 0 ? `SUCCESS with ${raises} RAISE(S)!` : "SUCCESS!";
+            if (raises > 0) hasRaise = true;
+        }
+        let isBystander = (!outcome.includes("SUCCESS") && traitRoll.originalTraitFirst <= bThresh);
+        results.push({
+            shotIndex: 1, total: bestTotal,
+            history: wildRoll && wildRoll.total > traitRoll.total ? wildRoll.history : traitRoll.history,
+            outcome: outcome, hasRaise: hasRaise, isSingle: true,
+            traitHistory: traitRoll.history, wildHistory: wildRoll ? wildRoll.history : null,
+            bystander: isBystander, initialTrait: traitRoll.originalTraitFirst
+        });
+    }
+    return { results, isCritFail };
+}
+
+function scoreVolley(results, isCritFail) {
+    if (isCritFail) return -100000;
+    let hits = results.filter(r => r.outcome.includes("SUCCESS")).length;
+    let sum = results.reduce((acc, r) => acc + r.total, 0);
+    return hits * 100000 + sum;
+}
+
+function summarizeVolley(results, isCritFail) {
+    if (isCritFail) return "CRITICAL FAILURE";
+    let totals = results.map(r => r.total).join(", ");
+    let hits = results.filter(r => r.outcome.includes("SUCCESS")).length;
+    return `${totals} (${hits} hit${hits !== 1 ? 's' : ''})`;
+}
+
+window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, is3RB, isSuppressive) {
+    let dieValue = activeThreat.skills[skillName] || "d4";
+    let match = dieValue.match(/d(\d+)(?:\+|-)?(\d+)?/);
+    let sides = match ? parseInt(match[1]) : 4;
+    let intrinsicMod = match && match[2] && dieValue.includes('+') ? parseInt(match[2]) : (match && match[2] && dieValue.includes('-') ? -parseInt(match[2]) : 0);
+    let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
+    let customMod = parseInt(document.getElementById('mod-override-input').value) || 0;
+    let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
+    // Unified status penalty: threats previously ignored wounds/fatigue/distracted.
+    // Deployed participants mirror wounds/fatigue; fall back to template fields.
+    let _tw = (activeThreat.wounds ?? 0), _tf = (activeThreat.fatigue ?? 0), _td = !!(activeThreat.distracted);
+    try {
+        if (globalState.combat && globalState.combat.participants) {
+            const _dep = globalState.combat.participants.find(p => activeThreat.name && p.name === activeThreat.name);
+            if (_dep) { _tw = _dep.wounds ?? _tw; _tf = _dep.fatigue ?? _tf; _td = !!_dep.distracted; }
+        }
+    } catch (e) { /* non-fatal */ }
+    let statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(_tw, _tf, _td) : ((-(Math.min(_tw || 0, 3) + Math.min(_tf || 0, 2) + (_td ? 2 : 0))) || 0);
+    // Part 4: Called Shots.
+    const calledShot = window.getCurrentCalledShot
+        ? window.getCurrentCalledShot()
+        : { id: "none", hitMod: 0, dmgMod: 0 };
+
+            // Joker parity: auto-detect dealt Joker (like character sheet), manual
+            // checkbox is an OR override — never additive.
+            let _autoJoker = false;
+            try {
+                if (globalState.combat && globalState.combat.participants) {
+                    const _jp = globalState.combat.participants.find(p => activeThreat.name && p.name === activeThreat.name);
+                    _autoJoker = !!(_jp && _jp.card && _jp.card.isJoker && _jp.jokerRound === globalState.combat.round);
+                }
+            } catch (e) { _autoJoker = false; }
+            let jokerBonus = (document.getElementById('threat-joker-checkbox')?.checked || _autoJoker) ? 2 : 0;
+
+    let totalModifier = window.computeTraitModifier ? window.computeTraitModifier({ traitMod: intrinsicMod + unskilledMod, customModifier: customMod + mapPenalty, statusPenalty: statusPenalty, jokerBonus: jokerBonus, wildAttackBonus: 0, defenderModifier: defenderModifier, calledHitMod: parseInt(calledShot.hitMod) || 0 }) : (intrinsicMod
+        + unskilledMod
+        + customMod
+        + mapPenalty
+        + statusPenalty
+        + defenderModifier
+        + jokerBonus
+        + (parseInt(calledShot.hitMod) || 0));
+    
+    let isWildAttack = !isMeleeWeapon(activeWeaponContext) ? false : document.getElementById('wild-attack-checkbox').checked;
+    if (isWildAttack) {
+        totalModifier += 2;
+        logToTerminal(`> <span style="color:#ff3333;">[!] WILD ATTACK: +2 to hit. GM must manually apply VULNERABLE to the attacking NPC on the Combat Tracker.</span>`);
+    }
+
+    let outcome = performThreatRoll(sides, totalModifier, targetNumber, shotsFired, is3RB, isSuppressive);
+    
+    // Save context for reroll
+    lastRollContext = {
+        skillName, targetNumber, shotsFired, is3RB, isSuppressive,
+        sides, totalModifier, isWildAttack,
+        results: outcome.results,
+        isCritFail: outcome.isCritFail,
+        score: scoreVolley(outcome.results, outcome.isCritFail),
+        usedReroll: false,
+        calledShot: calledShot
+    };
+
+    let hit = outcome.results.some(r => r.outcome.includes("SUCCESS"));
+    if (activeWeaponContext && hit && is3RB) {
+        let bonusKey = `threat_pending_damage_bonus_${activeTemplateId || activeThreat.name}_${activeWeaponContext.id || activeWeaponContext.name}`;
+        sessionStorage.setItem(bonusKey, "3rb");
+    }
+
+    let attackHit = isSuppressive ? outcome.results.some(r => r.hasRaise) : hit;
+    storeThreatAttackContext(attackHit, outcome.results, calledShot);
+    if (currentAreaInfo && currentAreaPlan) {
+    computeAreaMissOutcome(currentAreaInfo, currentAreaPlan, attackHit, outcome.isCritFail);
+    if (currentAreaPlanKey) setAreaAttackPlan(currentAreaPlanKey, currentAreaPlan);
+    }
+    let mode = document.getElementById('action-mode-select')?.value || 'normal';
+    if (mode !== 'normal') {
+        let target = getSelectedTarget();
+        await handleTestOrSupportOutcome({}, outcome.results, target);
+    }
+    renderAttackEmbed(skillName, sides, totalModifier, targetNumber, outcome.results, outcome.isCritFail, is3RB, isSuppressive, null, calledShot);
+};
+
+window.rerollLastRoll = async function () {
+    if (!lastRollContext) return;
+    if (lastRollContext.usedReroll) {
+        logToTerminal("> [!] This roll has already been rerolled (one Benny per roll).");
+        return;
+    }
+    if (lastRollContext.isCritFail) {
+        logToTerminal("> [!] CANNOT REROLL: Critical Failures cannot be rerolled (SWADE p.92).");
+        return;
+    }
+    let gmPool = globalState.combat?.gmPool || 0;
+    if (gmPool <= 0) {
+        logToTerminal("> [!] CANNOT REROLL: GM Benny Pool is empty.");
+        return;
+    }
+
+    // Deduct Benny
+    globalState.combat.gmPool = gmPool - 1;
+    await set(ref(db, 'campaignState/combat/gmPool'), globalState.combat.gmPool);
+
+    // Re-roll
+    let newOutcome = performThreatRoll(lastRollContext.sides, lastRollContext.totalModifier, lastRollContext.targetNumber, lastRollContext.shotsFired, lastRollContext.is3RB, lastRollContext.isSuppressive);
+    let newScore = scoreVolley(newOutcome.results, newOutcome.isCritFail);
+    let oldScore = lastRollContext.score;
+
+    let keptResults, keptIsCritFail, keptWhich;
+    if (newOutcome.isCritFail) {
+        keptResults = newOutcome.results;
+        keptIsCritFail = true;
+        keptWhich = "NEW ROLL — CRITICAL FAILURE (must be accepted!)";
+    } else if (newScore >= oldScore) {
+        keptResults = newOutcome.results;
+        keptIsCritFail = newOutcome.isCritFail;
+        keptWhich = "NEW ROLL";
+    } else {
+        keptResults = lastRollContext.results;
+        keptIsCritFail = lastRollContext.isCritFail;
+        keptWhich = "ORIGINAL ROLL";
+    }
+
+    lastRollContext.usedReroll = true;
+    let attackHit = lastRollContext.isSuppressive
+        ? keptResults.some(r => r.hasRaise)
+        : keptResults.some(r => r.outcome.includes("SUCCESS"));
+    storeThreatAttackContext(attackHit, keptResults, lastRollContext.calledShot);
+    if (currentAreaInfo && currentAreaPlan) {
+    computeAreaMissOutcome(currentAreaInfo, currentAreaPlan, attackHit, keptIsCritFail);
+    if (currentAreaPlanKey) setAreaAttackPlan(currentAreaPlanKey, currentAreaPlan);
+    }
+
+    renderAttackEmbed(lastRollContext.skillName, lastRollContext.sides, lastRollContext.totalModifier, lastRollContext.targetNumber, keptResults, keptIsCritFail, lastRollContext.is3RB, lastRollContext.isSuppressive, {
+        which: keptWhich,
+        oldSummary: summarizeVolley(lastRollContext.results, lastRollContext.isCritFail),
+        newSummary: summarizeVolley(newOutcome.results, newOutcome.isCritFail)
+    }, lastRollContext.calledShot);
+};
+
+async function renderAttackEmbed(skillName, sides, totalModifier, targetNumber, results, isCritFail, is3RB, isSuppressive, rerollInfo = null, calledShot = null) {
+    let color = isCritFail ? 0xff0000 : (results.some(r => r.hasRaise) ? 0x00ff00 : 0xff9900);
+    let modStrDisplay = totalModifier !== 0 ? ` (${totalModifier > 0 ? '+' : ''}${totalModifier})` : "";
+    let title = currentAreaPlan
+        ? `${activeThreat.name} — AREA ATTACK: ${activeWeaponContext.name}`
+        : `${activeThreat.name} rolled Attack [${activeWeaponContext.name}] via ${skillName}`;
+    
+    let termLog = "";
+    if (rerollInfo) {
+        let bannerStyle = isCritFail ? "color:#ff3333; text-shadow: 0 0 8px #ff3333; animation: pulse 1s infinite;" : "color:#ffff00;";
+        termLog += `<span style="${bannerStyle}">> ⟳ REROLL (1 Benny spent) — ${activeThreat.name.toUpperCase()}<br>`;
+        termLog += `&nbsp;&nbsp;Original: ${rerollInfo.oldSummary}<br>`;
+        termLog += `&nbsp;&nbsp;New:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${rerollInfo.newSummary}<br>`;
+        termLog += `&nbsp;&nbsp;-> Keeping <b>${rerollInfo.which}</b>.</span><br>`;
+    }
+    
+    termLog += `> ${title} vs TN ${targetNumber}${modStrDisplay}<br>`;
+    if (currentAreaPlan) {
+        let _names = currentAreaPlan.targets.length ? currentAreaPlan.targets.map(t => t.name).join(', ') : 'none (point blast)';
+        termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">⚠ AREA EFFECT: ${currentAreaPlan.templateLabel} (${currentAreaPlan.rangeOrReachLabel}). Intended targets: ${_names}.</span><br>`;
+        if (currentAreaPlan.attackHit === false) {
+        if (currentAreaPlan.deviation) {
+        let d = currentAreaPlan.deviation;
+        termLog += `&nbsp;&nbsp;<span style="color:#ff3333;">✦ DEVIATION (miss): d12 = ${d.direction} → ${d.directionLabel}; distance ${d.rawRolls.join('+')} = ${d.rawDistance}" ×${d.multiplier} = ${d.multiplied}", capped at ${d.cap}" → <b>deviates ${d.finalDistance}"</b>.</span><br>`;
+        if (currentAreaPlan.critFail) termLog += `&nbsp;&nbsp;<span style="color:#ff3333;">⚠ CRITICAL FAILURE — GM may rule the explosive lands at the attacker's feet.</span><br>`;
+        termLog += `&nbsp;&nbsp;<span style="opacity:0.85;">No auto-application — GM adjudicates who is caught by the deviated blast.</span><br>`;
+        } else if (currentAreaPlan.missNote) {
+        termLog += `&nbsp;&nbsp;<span style="color:#ff9900;">✦ MISS: ${currentAreaPlan.missNote}</span><br>`;
+        }
+        } else if (currentAreaPlan.attackHit === true) {
+        termLog += `&nbsp;&nbsp;<span style="color:#00ff00;">✦ BLAST ON TARGET — the explosion lands on the intended point; all selected targets are in the zone.</span><br>`;
+        }
+    }
+    if (defenderDisplay) termLog += `&nbsp;&nbsp;<span style="color:#00ccff;">${defenderDisplay}</span><br>`;
+    if (calledShot && calledShot.id && calledShot.id !== "none") {
+        termLog += `&nbsp;&nbsp;<span style="color:#ff9900;">🎯 Called Shot: ${calledShot.label || calledShot.id}</span><br>`;
+    }
+
+    results.forEach(r => {
+        if (r.isSingle) {
+            termLog += `&nbsp;&nbsp;Trait: ${r.traitHistory.join(' + ')}<br>`;
+            if (r.wildHistory) termLog += `&nbsp;&nbsp;Wild:  ${r.wildHistory.join(' + ')}<br>`;
+            termLog += `&nbsp;&nbsp;Result: <b>${r.total}</b> -> ${r.outcome}<br>`;
+        } else {
+            termLog += `&nbsp;&nbsp;Shot #${r.shotIndex}: ${r.history.join(' + ')}${modStrDisplay} = <b>${r.total}</b> -> ${r.outcome}<br>`;
+        }
+        if (isSuppressive) termLog += `&nbsp;&nbsp;<span style="color:#ff9900;">🟧 <b>SUPPRESSIVE FIRE:</b> Success = Distracted, Raise = Hit!</span><br>`;
+        if (is3RB) termLog += `&nbsp;&nbsp;<span style="color:#00aaff;">🟦 <b>3-ROUND BURST:</b> +1 Hit/Dmg</span><br>`;
+        if (r.bystander) termLog += `&nbsp;&nbsp;<span style="color:#ff3333;">⚠️ INNOCENT BYSTANDER HIT!</span><br>`;
+    });
+
+    // Reroll Button Logic
+    let gmPool = globalState.combat?.gmPool || 0;
+    let rerollBtnHtml = "";
+    if (rerollInfo === null && !isCritFail) {
+        let canReroll = gmPool > 0;
+        rerollBtnHtml = `<br><button class="die-btn reroll-btn" onclick="rerollLastRoll()" ${canReroll ? '' : 'disabled'}>⟳ REROLL (1 BENNY — GM POOL: ${gmPool})</button>`;
+    }
+    
+    logToTerminal(termLog + rerollBtnHtml);
+
+    // Discord Embed Logic (Updated for Reroll Info)
+    if (globalState && globalState.webhook) {
+        let desc = "";
+        if (rerollInfo) {
+            desc += `⟳ **REROLL (1 Benny spent)**\nOriginal: ${rerollInfo.oldSummary}\nNew: ${rerollInfo.newSummary}\n**Keeping ${rerollInfo.which}**\n\n`;
+        }
+        if (defenderDisplay) desc += `🎯 **${defenderDisplay}**\n`;
+        if (calledShot && calledShot.id && calledShot.id !== "none") {
+            desc += `🎯 **Called Shot: ${calledShot.label || calledShot.id}**\n`;
+        }
+        if (currentAreaPlan) {
+            let _names = currentAreaPlan.targets.length
+                ? currentAreaPlan.targets.map(t => `**${t.name}** (Tgh ${t.tgh}${t.armor ? '+' + t.armor : ''})`).join(', ')
+                : '_none — blast placed at the point_';
+            desc += `⚠ **AREA EFFECT** — ${currentAreaPlan.templateLabel} (${currentAreaPlan.rangeOrReachLabel}).
+Intended targets: ${_names}
+`;
+            if (currentAreaPlan.attackHit === false) {
+            if (currentAreaPlan.deviation) {
+            let d = currentAreaPlan.deviation;
+            desc += `✦ **DEVIATION (miss)** — d12 = **${d.direction}** → ${d.directionLabel}; distance ${d.rawRolls.join(' + ')} = **${d.rawDistance}"** ×${d.multiplier} = ${d.multiplied}", capped at ${d.cap}" → **deviates ${d.finalDistance}"**.
+_No auto-application — GM adjudicates who is caught._
+`;
+            if (currentAreaPlan.critFail) desc += `⚠ **CRITICAL FAILURE** — GM may rule the explosive lands at the attacker's feet.
+`;
+            } else if (currentAreaPlan.missNote) {
+            desc += `✦ **MISS** — ${currentAreaPlan.missNote}
+`;
+            }
+            } else if (currentAreaPlan.attackHit === true) {
+            desc += `✦ **BLAST ON TARGET** — the explosion lands on the intended point; all selected targets are in the zone.
+`;
+            }
+        }
+        results.forEach(r => {
+            if (r.isSingle) desc += `**Result: ${r.total}**\n${r.outcome}\n`;
+            else desc += `**Shot #${r.shotIndex}: ${r.total}** -> ${r.outcome}\n`;
+        });
+        
+        const embed = { title: `${title}${rerollInfo ? ' (REROLL)' : ''}`, description: desc.trim(), color: color, fields: [] };
+        if (results[0].isSingle) {
+            embed.fields.push({ name: `Trait (d${sides})`, value: `${results[0].traitHistory.join(' + ')}`, inline: true });
+            if (results[0].wildHistory) embed.fields.push({ name: "Wild (d6)", value: `${results[0].wildHistory.join(' + ')}`, inline: true });
+        }
+        if (totalModifier !== 0) embed.fields.push({ name: "Modifier", value: `${totalModifier > 0 ? '+' : ''}${totalModifier}`, inline: true });
+        if (calledShot && calledShot.id && calledShot.id !== "none") {
+            embed.fields.push({ name: "Called Shot", value: calledShot.label || calledShot.id, inline: true });
+        }
+        if (currentAreaPlan) {
+            embed.fields.push({ name: "Template / Range", value: `${currentAreaPlan.templateLabel} — ${currentAreaPlan.rangeOrReachLabel}`, inline: false });
+            if (currentAreaPlan.attackHit === false && currentAreaPlan.deviation) {
+            let d = currentAreaPlan.deviation;
+            embed.fields.push({ name: "Deviation (miss)", value: `Direction: ${d.directionLabel}
+Raw: ${d.rawRolls.join(' + ')} = ${d.rawDistance}" ×${d.multiplier} = ${d.multiplied}"
+Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
+            }
+        }
+        let imgUrl = activeWeaponContext.image || activeWeaponContext.icon || "";
+        if (imgUrl) {
+            embed.thumbnail = { url: imgUrl };
+        }
+        
+        fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+    }
+}
+        function shouldPromptForContextualDamage(damageStr) {
+            let cleaned = (damageStr || "").toString().replace(/\s/g, '').toLowerCase();
+            return !cleaned.match(/(?:\d*d\d+|str|[+-]?\d+)/i);
+        }
+        window.rollDamage = async function (wepIndex, addRaise = false) {
+            let wep = activeThreat.weapons[wepIndex];
+            let dmgStr = (wep.damage || "").toLowerCase().replace(/\s/g, '');
+            if (shouldPromptForContextualDamage(dmgStr)) {
+                let custom = prompt(`Damage for ${wep.name} is '${wep.damage}'. Enter a dice formula (example: 4d10):`);
+                if (!custom) return;
+                dmgStr = custom.toLowerCase().replace(/\s/g, '');
+            }
+            let total = 0; let rolls = []; let flatMod = 0;
+            let baseDice = []; // [{sides, sign}] for reroll
+            const tokenRegex = /[+-]?\s*(?:\d*d\d+|str|\d+)/gi;
+            let parts = dmgStr.match(tokenRegex) || [];
+            let bonusKey = `threat_pending_damage_bonus_${activeTemplateId || activeThreat.name}_${wep.id || wep.name}`;
+            let has3RBBonus = sessionStorage.getItem(bonusKey) === "3rb";
+            if (has3RBBonus) {
+                flatMod += 1;
+                sessionStorage.removeItem(bonusKey);
+            }
+            parts.forEach(rawPart => {
+                let part = rawPart.replace(/\s/g, '').toLowerCase();
+                let sign = part.startsWith('-') ? -1 : 1;
+                part = part.replace(/^[+-]/, '');
+                if (part === 'str') {
+                    let strVal = (activeThreat.attributes.Strength || "d6").toString().toLowerCase();
+                    let match = strVal.match(/d(\d+)(?:([+-])(\d+))?/);
+                    let sides = match ? parseInt(match[1]) : 4;
+                    let strMod = match && match[3] ? parseInt(match[3]) * (match[2] === '-' ? -1 : 1) : 0;
+                    let r = rollExploding(sides);
+                    total += r.total * sign;
+                    flatMod += strMod * sign;
+                    baseDice.push({ sides, sign });
+                    rolls.push(`Str(d${sides}${strMod ? (strMod > 0 ? '+' : '') + strMod : ''}):[${r.history.join('+')}]`);
+                } else if (part.includes('d')) {
+                    let [c, s] = part.split('d');
+                    let count = parseInt(c) || 1; let sides = parseInt(s);
+                    for (let i = 0; i < count; i++) {
+                        let r = rollExploding(sides);
+                        total += r.total * sign; rolls.push(`${sign < 0 ? '-' : ''}d${sides}:[${r.history.join('+')}]`);
+                        baseDice.push({ sides, sign });
+                    }
+                } else if (!isNaN(parseInt(part))) flatMod += parseInt(part) * sign;
+            });
+            if (rolls.length === 0 && flatMod === 0) {
+                alert(`No rollable damage formula found for '${wep.damage}'.`);
+                return;
+            }
+            total += flatMod;
+            let jokerBonus = document.getElementById('threat-joker-checkbox')?.checked ? 2 : 0;
+            total += jokerBonus;
+            let wildAttackDmgBonus = (!isMeleeWeapon(activeWeaponContext) ? false : document.getElementById('wild-attack-checkbox')?.checked) ? 2 : 0;
+            total += wildAttackDmgBonus;
+            let bonusStr = ""; let bonusRolls = [];
+            if (addRaise) {
+                let rRoll = rollExploding(6);
+                total += rRoll.total; bonusRolls = rRoll.history;
+                bonusStr = ` + ${rRoll.history.join('+')} [Raise]`;
+            }
+            let attackKey = `${activeTemplateId || activeThreat.name}_${wep.id || wep.name}`;
+            // Part 4: Called Shot damage bonus.
+            let preAttack = getAttackContext(attackKey);
+            let calledShot = preAttack?.calledShot || {};
+            let calledDmg = parseInt(calledShot.dmgMod) || 0;
+            total += calledDmg;
+            let calledStr = calledDmg > 0 ? ` + ${calledDmg} (Called Shot)` : "";
+            // PHASE 4 — AREA EFFECT damage application (replaces the old multi-select mass
+            // path). On a confirmed hit with selected targets, the SAME rolled damage is
+            // applied to each target, reduced individually (Cover subtracted, then Evasion
+            // halves the remainder) via the cover modal. The live multi-select is no longer
+            // consulted, so a stale selection can never mis-apply a normal weapon.
+            let wepAreaInfo = getAreaEffectInfo(wep);
+            let areaPlanForWep = wepAreaInfo ? (currentAreaPlan && currentAreaPlan.weaponName === wep.name ? currentAreaPlan : null) : null;
+            let curRound = globalState.combat?.round ?? null;
+            let areaHitWithTargets = !!(areaPlanForWep
+                && areaPlanForWep.attackHit === true
+                && !areaPlanForWep.damageApplied
+                && (areaPlanForWep.round === null || areaPlanForWep.round === curRound)
+                && areaPlanForWep.targets && areaPlanForWep.targets.length > 0);
+            let application;
+            if (areaHitWithTargets) {
+                let coverMap = await window.showAreaCoverModal(areaPlanForWep);
+                if (coverMap === null) {
+                    application = { applied: false, embedPosted: true, message: `> <b style="color:#ff9900;">AREA:</b> Cover / Evasion selection cancelled — <b>${total}</b> damage was rolled but NOT applied. Apply it manually via the tracker, or press REROLL DMG.`, plainText: `AREA: cover selection cancelled; ${total} damage not applied.` };
+                } else {
+                    let massResults = [];
+                    for (let t of areaPlanForWep.targets) {
+                        let cm = coverMap[t.id] || {};
+                        let cov = parseInt(cm.cover) || 0;
+                        let ev = !!cm.evasion;
+                        let eff = Math.max(0, total - cov);
+                        if (ev) eff = Math.floor(eff / 2);
+                        let aKey = `area_plan_${t.id}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                        setAttackContext(aKey, {
+                            targetId: t.id, targetName: t.name,
+                            attackerName: areaPlanForWep.attackerName || activeThreat.name || "Attacker",
+                            hit: true, ap: wep.ap ?? "0", weaponName: wep.name,
+                            round: globalState.combat?.round ?? null, savedAt: Date.now(),
+                            calledShot: { id: "none" }
+                        });
+                        let res = await applyDamageToTracker(aKey, wep, eff);
+                        massResults.push({
+                            targetName: t.name, tgh: t.tgh, armor: t.armor,
+                            coverApplied: cov, evasion: ev, effectiveDamage: eff,
+                            applied: res.applied, plainText: res.plainText || ""
+                        });
+                    }
+                    areaPlanForWep.damageApplied = true;
+                    if (currentAreaPlanKey) setAreaAttackPlan(currentAreaPlanKey, areaPlanForWep);
+                    let termLines = massResults.map(r => {
+                        let mit = `Cover −${r.coverApplied}` + (r.evasion ? ' + Evasion (halved)' : '');
+                        let body = (r.plainText || 'No effect.').replace(/^AUTO-APPLIED:\s*/, '').replace(/^AUTO-CHECK:\s*/, '');
+                        return `&nbsp;&nbsp;<b>${r.targetName}</b> [${mit} → eff dmg ${r.effectiveDamage}]: ${body}`;
+                    });
+                    application = {
+                        applied: massResults.some(r => r.applied), embedPosted: true,
+                        message: `> <b style="color:#ff3333;">AREA DAMAGE (${total})</b> — same blast, per-target cover/Evasion:<br>` + termLines.join('<br>'),
+                        plainText: massResults.map(r => `${r.targetName}: ${r.plainText || 'No effect.'}`).join(' | ')
+                    };
+                    if (globalState && globalState.webhook && window.Embeds && window.Embeds.areaDamage) {
+                        await window.Embeds.post(globalState.webhook, window.Embeds.areaDamage({
+                            attackerName: activeThreat.name, weapon: wep, total: total,
+                            diceHistory: rolls, modifier: flatMod,
+                            raiseRolls: addRaise ? bonusRolls : null,
+                            has3RB: has3RBBonus, hasDT: false, dtVal: 0,
+                            jokerBonus: jokerBonus, wildAttackDmgBonus: wildAttackDmgBonus, calledDmg: calledDmg,
+                            plan: areaPlanForWep, perTarget: massResults
+                        }));
+                    }
+                }
+            } else if (wepAreaInfo) {
+                let note;
+                if (areaPlanForWep && areaPlanForWep.damageApplied) {
+                    note = 'This area attack\'s damage was already applied. A rerolled/second damage value is NOT auto-applied — apply manually if needed.';
+                } else if (areaPlanForWep && areaPlanForWep.attackHit === true) {
+                    note = 'Blast on target at the intended point, but no targets were selected — GM adjudicates who (if anyone) is caught and applies manually.';
+                } else {
+                    note = areaDamageApplicationNote(areaPlanForWep, true);
+                }
+                application = { applied: false, embedPosted: true, message: `> <b style="color:#ff9900;">AREA:</b> ${note}`, plainText: `AREA: ${note}` };
+            } else {
+                application = await applyDamageToTracker(attackKey, wep, total);
+            }
+            // AREA EFFECT (note cases): mirror of character.html — post a record embed on the
+            // first damage press for a missed blast or a zero-target hit, then mark resolved.
+            if (wepAreaInfo && areaPlanForWep && !areaPlanForWep.damageApplied
+            && (areaPlanForWep.attackHit === false
+            || (areaPlanForWep.attackHit === true && !(areaPlanForWep.targets && areaPlanForWep.targets.length > 0)))) {
+            let _noteTitle = (areaPlanForWep.attackHit === true)
+            ? `${activeThreat.name} — Area Blast: ${wep.name} (no targets selected)`
+            : `${activeThreat.name} — Area Blast: ${wep.name} (missed / deviated)`;
+            let _noteText = (areaPlanForWep.attackHit === true)
+            ? 'Blast on target at the intended point, but no targets were selected — GM adjudicates who (if anyone) is caught and applies manually.'
+            : (areaDamageApplicationNote(areaPlanForWep, true) || 'The area attack missed.');
+            if (globalState && globalState.webhook && window.Embeds && window.Embeds.areaDamage) {
+            await window.Embeds.post(globalState.webhook, window.Embeds.areaDamage({
+            attackerName: activeThreat.name, weapon: wep, total: total,
+            diceHistory: rolls, modifier: flatMod,
+            raiseRolls: addRaise ? bonusRolls : null,
+            has3RB: has3RBBonus, hasDT: false, dtVal: 0,
+            jokerBonus: jokerBonus, wildAttackDmgBonus: wildAttackDmgBonus, calledDmg: calledDmg,
+            plan: areaPlanForWep, perTarget: [], note: _noteText, title: _noteTitle
+            }));
+            }
+            areaPlanForWep.damageApplied = true;
+            if (currentAreaPlanKey) setAreaAttackPlan(currentAreaPlanKey, areaPlanForWep);
+            }
+            // Store context for a Benny damage reroll (one reroll per damage roll).
+            lastDamageContext = {
+                wepIndex,
+                wep: JSON.parse(JSON.stringify(wep)),
+                baseDice,
+                baseModifier: flatMod,
+                hasRaise: addRaise,
+                staticBonus: jokerBonus + wildAttackDmgBonus + calledDmg, // BUG 1 & 16 FIX
+                total: total,
+                rolls: rolls.slice(),
+                formula: dmgStr,
+                has3RBBonus,
+                calledShot: JSON.parse(JSON.stringify(calledShot)),
+                preAttack: preAttack ? JSON.parse(JSON.stringify(preAttack)) : null,
+                attackKey,
+                usedReroll: false
+            };
+            updateDamageRerollButton(wepIndex);
+            let trbStr = has3RBBonus ? ` (Includes +1 from 3RB)` : "";
+            let termLog = `> ${activeThreat.name} dealt damage with ${wep.name.toUpperCase()}<br>&nbsp;&nbsp;Dmg Roll [${wep.damage}]: ${rolls.join(' + ')}${flatMod !== 0 ? (flatMod > 0 ? '+' + flatMod : flatMod) : ''}${trbStr}${bonusStr}${calledStr}<br>&nbsp;&nbsp;Result: <b style="color:#ff3333;">${total}</b> Damage.`;
+            if (application.message) {
+                termLog += `<br>&nbsp;&nbsp;${application.message}`;
+            }
+            // Damage reroll button (terminal) — shown when GM Benny pool > 0.
+            let gmPool = globalState.combat?.gmPool || 0;
+            if (gmPool > 0) {
+                termLog += `<br>&nbsp;&nbsp;<button class="die-btn dmg-reroll-btn" onclick="rerollThreatDamage(${wepIndex})">⟳ REROLL DMG (1 BENNY — GM POOL: ${gmPool})</button>`;
+            }
+            logToTerminal(termLog);
+            if (!application.embedPosted && globalState && globalState.webhook) {
+                const embed = {
+                    title: `${activeThreat.name} rolled damage with ${wep.name}`,
+                    description: `**Damage Total: ${total}**`, color: 0xff3333,
+                    fields: [{ name: "Dice History", value: rolls.join('\n'), inline: true }]
+                };
+                if (flatMod !== 0) embed.fields.push({ name: "Modifier", value: flatMod > 0 ? `+${flatMod}` : `${flatMod}`, inline: true });
+                if (addRaise) {
+                    embed.fields.push({ name: "Raise Bonus (+1d6)", value: `${bonusRolls.join(' + ')}`, inline: true });
+                    embed.description += `\n*(Includes +1d6 Raise Bonus)*`;
+                }
+                if (has3RBBonus) {
+                    embed.fields.push({ name: "Three-Round Burst", value: "+1 Damage", inline: true });
+                    embed.description += `\n*(Includes +1 Damage from 3-Round Burst)*`;
+                }
+                if (preAttack && preAttack.targetName) {
+                    embed.fields.push({ name: "Target", value: preAttack.targetName, inline: true });
+                }
+                if (calledShot && calledShot.id && calledShot.id !== "none") {
+                    let csVal = calledShot.label || calledShot.id;
+                    if (calledDmg > 0) csVal += ` (+${calledDmg} Dmg)`;
+                    embed.fields.push({ name: "Called Shot", value: csVal, inline: true });
+                    if (calledDmg > 0) {
+                        embed.description += `\n*(Includes +${calledDmg} Called Shot damage)*`;
+                    }
+                }
+                let imgUrl = wep.image || wep.icon || "";
+                if (imgUrl && !imgUrl.includes("Orange_lambda.svg")) {
+                    embed.thumbnail = { url: imgUrl };
+                }
+                embed.fields.push({ name: "Weapon Specifications", value: `Range: ${wep.range || "—"}\nDamage: ${wep.damage || "—"}\nAP: ${wep.ap || "0"}\nRoF: ${wep.rof || "1"}` });
+                if (application.plainText) {
+                    embed.description += `\n${application.plainText}`;
+                }
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+            }
+        };
+        // Damage reroll button visibility (card-level) — only shown when a
+        // damage roll is pending for this weapon AND the GM Benny pool > 0.
+        function updateDamageRerollButton(wepIndex) {
+            const btn = document.getElementById(`dmg-reroll-${wepIndex}`);
+            if (!btn) return;
+            const gmPool = globalState.combat?.gmPool || 0;
+            const hasPending = !!(lastDamageContext && lastDamageContext.wepIndex === wepIndex && !lastDamageContext.usedReroll);
+            btn.style.display = (hasPending && gmPool > 0) ? 'block' : 'none';
+            btn.disabled = gmPool <= 0;
+        }
+        window.rerollThreatDamage = async function (wepIndex) {
+            const last = lastDamageContext;
+            if (!last || last.wepIndex !== wepIndex) {
+                logToTerminal("> [!] No damage roll to reroll for this weapon. Roll damage first.");
+                return;
+            }
+            if (last.usedReroll) {
+                logToTerminal("> [!] This damage roll has already been rerolled (one Benny per roll).");
+                return;
+            }
+            let gmPool = globalState.combat?.gmPool || 0;
+            if (gmPool <= 0) {
+                logToTerminal("> [!] CANNOT REROLL DAMAGE: GM Benny Pool is empty.");
+                return;
+            }
+            // Deduct Benny
+            globalState.combat.gmPool = gmPool - 1;
+            await set(ref(db, 'campaignState/combat/gmPool'), globalState.combat.gmPool);
+
+            // Re-roll the base dice + raise die, keep the better total.
+            let newTotal = 0;
+            let newRolls = [];
+            last.baseDice.forEach(d => {
+                let r = rollExploding(d.sides);
+                newTotal += (r.total * d.sign);
+                if (d.sign > 0) newRolls.push(...r.history);
+                else r.history.forEach(roll => newRolls.push(`-${roll}`));
+            });
+            newTotal += last.baseModifier;
+            if (last.hasRaise) {
+                let bRoll = rollExploding(6);
+                newTotal += bRoll.total;
+                newRolls.push(`Raise:${bRoll.history.join('+')}`);
+            }
+            newTotal += last.staticBonus;
+            let hasNoMercy = !!(activeThreat && activeThreat.abilities && /\bno\s*mercy\b/i.test(activeThreat.abilities));
+            newTotal += (hasNoMercy ? 2 : 0);
+
+            last.usedReroll = true;
+            updateDamageRerollButton(wepIndex);
+
+            let keptTotal, keptRolls, which;
+            if (newTotal >= last.total) {
+                keptTotal = newTotal; keptRolls = newRolls; which = "NEW ROLL";
+            } else {
+                keptTotal = last.total; keptRolls = last.rolls; which = "ORIGINAL ROLL";
+            }
+
+            const wep = last.wep;
+            const calledShot = last.calledShot || {};
+            const calledDmg = parseInt(calledShot.dmgMod) || 0;
+            let termLog = `> ${activeThreat.name} spent a Benny to REROLL DAMAGE with ${wep.name.toUpperCase()}<br>`;
+            termLog += `&nbsp;&nbsp;Original [${last.formula}]: <b>${last.total}</b> | New: <b>${newTotal}</b><br>`;
+            termLog += `&nbsp;&nbsp;-> Keeping <b style="color:#00ff00;">${which}: ${keptTotal} Damage</b>.`;
+            logToTerminal(termLog);
+
+            if (globalState && globalState.webhook) {
+                const embed = {
+                    title: `${activeThreat.name} rerolled damage with ${wep.name}`,
+                    description: `Spent a Benny (GM Pool) to reroll damage.\nOriginal: **${last.total}** | New: **${newTotal}**\n**Keeping ${which}: ${keptTotal} Damage**`,
+                    color: 0xff3333,
+                    fields: [{ name: "Kept Dice History", value: keptRolls.join(' + '), inline: true }]
+                };
+                let imgUrl = wep.image || wep.icon || "";
+                if (imgUrl && !imgUrl.includes("Orange_lambda.svg")) embed.thumbnail = { url: imgUrl };
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+            }
+        };
+        function logToTerminal(html) {
+            const term = document.getElementById('roll-terminal');
+            const div = document.createElement('div');
+            div.style.marginBottom = "8px"; div.innerHTML = html;
+            term.appendChild(div); term.scrollTop = term.scrollHeight;
+        }
+        // ==========================================
+        // DEPLOYMENT LOGIC (B3 GM Pool + B14 Squad Grouping)
+        // ==========================================
+        window.deployToTracker = async function () {
+            if (!activeThreat) return alert("Select or create a template to deploy.");
+            if (!globalState.combatActive || !globalState.combat) return alert("Combat Tracker is not active! Initialize it from the Tracker view first.");
+            let count = parseInt(document.getElementById('deploy-count').value) || 1;
+            let participants = globalState.combat.participants || [];
+            let baseName = activeThreat.name;
+            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            let batchGroupId = activeThreat.isWildCard ? null : ("grp_" + activeTemplateId + "_" + Date.now());
+            for (let i = 0; i < count; i++) {
+                let suffix = count > 1 ? ` ${letters[i % 26]}` : "";
+                let newNpc = {
+                    id: "npc_" + activeTemplateId + "_" + Date.now() + "_" + i, name: baseName + suffix, isPlayer: false,
+                    isWildCard: activeThreat.isWildCard, parry: activeThreat.parry, toughness: activeThreat.toughness,
+                    naturalArmor: parseInt(activeThreat.naturalArmor) || 0,
+                    wornArmor: parseInt(activeThreat.wornArmor) || 0,
+                    armor: (parseInt(activeThreat.naturalArmor) || 0) + (parseInt(activeThreat.wornArmor) || 0) + (parseInt(activeThreat.forceField) || 0),
+                    ballisticProtection: parseInt(activeThreat.ballisticProtection) || 0,
+                    forceField: parseInt(activeThreat.forceField) || 0,
+                    scale: parseInt(activeThreat.scale) || 0, pace: activeThreat.pace || 6,
+                    heavyArmor: !!activeThreat.heavyArmor,
+                    armorType: activeThreat.armorType || "General",
+                    attributes: JSON.parse(JSON.stringify(activeThreat.attributes || defaultAttributes)),
+                    skills: JSON.parse(JSON.stringify(activeThreat.skills || defaultSkills)),
+                    weakPoint: JSON.parse(JSON.stringify(activeThreat.weakPoint || null)),
+                    calledShotConfig: normalizeCsConfig(activeThreat.calledShotConfig),
+                    bennies: 0, // NPCs use shared GM pool
+                    groupId: batchGroupId, // B14
+                    groupName: baseName,   // B14
+                    hasDodge: false,       // B8: defender Dodge/Deflect flag (toggled from the TN modal)
+                    woundCap: activeThreat.isWildCard ? 4 : 1, incapacitated: false,
+                    wounds: 0, fatigue: 0, shaken: false, distracted: false, distractedTTL: 0, vulnerable: false, vulnerableTTL: 0, card: null
+                };
+                participants.push(newNpc);
+            }
+            let newGmPool = globalState.combat.gmPool || 0;
+            let poolGrew = false;
+            if (activeThreat.isWildCard) {
+                newGmPool += 2;
+                poolGrew = true;
+            }
+            await update(ref(db, 'campaignState/combat'), {
+                participants: participants,
+                gmPool: newGmPool
+            });
+            logToTerminal(`> DEPLOYMENT SUCCESS: Deployed ${count} unit(s) of ${baseName} to Combat Monitor.`);
+            if (poolGrew) {
+                logToTerminal(`> GM BENNY POOL +2 (Wild Card deployed). Pool is now ${newGmPool}.`);
+            }
+            if (globalState && globalState.webhook) {
+                let desc = `${count} unit(s) of **${baseName}** spawned into the tactical net.`;
+                if (poolGrew) desc += `\n**GM Benny Pool +2** (Wild Card deployed) → now **${newGmPool}**.`;
+                const embed = { title: "REINFORCEMENTS HAVE ARRIVED", description: desc, color: 0xff3333 };
+                fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) }).catch(e => { });
+            }
+        };
+        function clearLog() {
+            document.getElementById('roll-terminal').innerHTML = '<div>> TERMINAL LOG CLEARED...</div>';
+        }
+        window.clearLog = clearLog;
+    </script>
+</body>
+
+</html>

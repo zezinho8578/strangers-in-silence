@@ -1,0 +1,432 @@
+/* =========================================
+   LAMBDA OS - UNIVERSAL STYLES
+   ========================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+:root {
+    --theme-color: #ff9900; 
+    --bg-color: #050505;
+    --font-size: 22px;      
+    --scanline-display: block; 
+    --font-family: 'VT323', monospace;
+    --text-shadow-glow: 0 0 5px var(--theme-color);
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--theme-color); 
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    margin: 0;
+    padding: 15px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    text-shadow: var(--text-shadow-glow);
+    transition: background-color 0.3s, color 0.3s;
+}
+
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; box-sizing: border-box; }
+
+/* CRT Scanlines */
+body::after {
+    content: " ";
+    display: var(--scanline-display);
+    position: fixed;
+    top: 0; left: 0; bottom: 0; right: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    z-index: 2;
+    background-size: 100% 4px, 3px 100%;
+    pointer-events: none;
+}
+
+/* Faded Background Logo */
+#bg-lambda {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    opacity: 0.08;
+    z-index: -1;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+/* Settings Button */
+#settings-btn {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    cursor: pointer;
+    z-index: 10;
+    transition: opacity 0.2s;
+}
+#settings-btn:hover { opacity: 0.7; }
+
+/* Terminal Elements */
+.highlight {
+    background-color: var(--theme-color);
+    color: var(--bg-color);
+    text-shadow: none;
+    padding: 0 6px;
+}
+.cursor {
+    display: inline-block;
+    width: 10px;
+    height: 20px;
+    background-color: var(--theme-color);
+    animation: blink 1s step-end infinite;
+    vertical-align: bottom;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Dashboard Specifics */
+#dashboard-ui {
+    display: none; 
+    margin-top: 40px;
+    max-width: 800px;
+    width: 100%; /* Added for mobile scaling */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.system-header {
+    font-size: 1.2em;
+    border-bottom: 2px solid var(--theme-color);
+    margin-bottom: 20px;
+    padding-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Clickable Panels */
+.panel-grid { display: flex; flex-direction: column; gap: 15px; }
+.panel {
+    border: 1px solid var(--theme-color);
+    padding: 15px 20px;
+    text-decoration: none;
+    color: var(--theme-color);
+    font-size: 1.1em;
+    background: transparent;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.panel::before { content: "> "; }
+
+.panel:hover:not(.locked) {
+    background-color: var(--theme-color);
+    color: var(--bg-color);
+    text-shadow: none;
+    box-shadow: var(--text-shadow-glow);
+    cursor: pointer;
+}
+
+.panel.locked { opacity: 0.4; border-style: dashed; cursor: not-allowed; }
+.panel.locked::after { content: "[ ENCRYPTED ]"; font-size: 0.8em; }
+
+/* Settings Modal Elements */
+#settings-modal {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid var(--theme-color);
+    background-color: var(--bg-color);
+    padding: 25px;
+    z-index: 9999999 !important; /* Added an extra 9 to sit above TN modal */
+    width: max-content;
+    min-width: 400px;
+    max-width: 95vw;
+    box-shadow: 0 0 20px rgba(0,0,0,0.9);
+}
+
+#settings-modal h2 { 
+    margin-top: 0; 
+    font-size: 1.2em; 
+    border-bottom: 1px solid var(--theme-color); 
+    padding-bottom: 5px; 
+}
+
+.setting-row { 
+    display: flex; 
+    justify-content: space-between; 
+    margin-bottom: 15px; 
+    align-items: center; 
+    gap: 20px; 
+}
+
+.setting-row select, #settings-modal button {
+    background: transparent;
+    color: var(--theme-color);
+    border: 1px solid var(--theme-color);
+    font-family: inherit;
+    font-size: 1em;
+    padding: 8px;
+    cursor: pointer;
+    outline: none;
+    transition: 0.2s;
+}
+
+.setting-row select option { background: var(--bg-color); }
+
+.setting-row select:hover, #settings-modal button:hover {
+    background: var(--theme-color);
+    color: var(--bg-color);
+    text-shadow: none;
+}
+
+#logout-btn { width: 100%; margin-bottom: 10px; margin-top: 10px; }
+#close-settings { width: 100%; }
+
+/* Minigames Menu Modal */
+#minigames-modal {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid var(--theme-color);
+    background-color: var(--bg-color);
+    padding: 25px;
+    z-index: 9999999 !important;
+    width: max-content;
+    min-width: 400px;
+    max-width: 95vw;
+    box-shadow: 0 0 20px rgba(0,0,0,0.9);
+}
+
+#minigames-modal h2 {
+    margin-top: 0;
+    font-size: 1.2em;
+    border-bottom: 1px solid var(--theme-color);
+    padding-bottom: 5px;
+}
+
+#minigames-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.minigame-item {
+    display: block;
+    border: 1px solid var(--theme-color);
+    color: var(--theme-color);
+    text-decoration: none;
+    padding: 12px 16px;
+    font-family: inherit;
+    font-size: 1.05em;
+    transition: 0.2s;
+    cursor: pointer;
+}
+
+.minigame-item:hover {
+    background: var(--theme-color);
+    color: var(--bg-color);
+    text-shadow: none;
+}
+
+#minigames-modal button {
+    width: 100%;
+    background: transparent;
+    color: var(--theme-color);
+    border: 1px solid var(--theme-color);
+    font-family: inherit;
+    font-size: 1em;
+    padding: 8px;
+    cursor: pointer;
+    outline: none;
+    transition: 0.2s;
+}
+
+#minigames-modal button:hover {
+    background: var(--theme-color);
+    color: var(--bg-color);
+    text-shadow: none;
+}
+
+.danger-btn { border-color: #ff3333 !important; color: #ff3333 !important; }
+.danger-btn:hover { background: #ff3333 !important; color: #000 !important; }
+
+/* Armor System Enhancements */
+.dmg-type-select {
+    font-size: 0.85em;
+    padding: 2px 4px;
+}
+#effective-toughness-preview {
+    border-left: 2px solid #00ff00;
+    padding-left: 8px;
+}
+#effective-toughness-preview b {
+    color: #00ff00;
+    text-shadow: 0 0 4px #00ff00;
+}
+#editor-warnings {
+    line-height: 1.4;
+}
+/* Armor Equip System */
+#armor-list-container .weapon-card {
+    border-left: 3px solid var(--theme-color);
+}
+#armor-equip-modal .setting-row {
+    margin-bottom: 12px;
+}
+#armor-preview {
+    border: 1px dashed var(--theme-color);
+    padding: 8px;
+    min-height: 40px;
+}
+/* Problem 5: the Armor Config table now inherits .preset-table styling
+   verbatim (width:100%, 6px padding, 0.8em font, left-aligned cells) so it
+   renders with the SAME box model as the Weapon Armory Config table.
+   The deleted overrides were the entire cause of the "narrow left strip"
+   look: width:auto shrink-wrapped the table, the reduced padding/font made
+   it cramped, and the forced max-width:180 ellipsis stopped the Name column
+   from growing to fill the row the way the Weapon Name column does. The
+   Icon Image Link cell keeps its own inline ellipsis; the Armor Name cell
+   is now allowed to expand. */
+.badge {
+    display: inline-block;
+    font-size: 0.75em;
+    padding: 2px 5px;
+    margin-right: 5px;
+    border: 1px solid;
+    margin-top: 5px;
+}
+
+/* =========================================
+   MOBILE COMPATIBILITY 
+   ========================================= */
+@media (max-width: 600px) {
+    :root {
+        --font-size: 18px; /* Slightly smaller text for small screens */
+    }
+    
+    body {
+        padding: 10px;
+    }
+
+    #bg-lambda {
+        width: 90%; /* Shrink background logo so it doesn't bleed off screen */
+        max-width: 400px;
+    }
+
+    #start-screen {
+        font-size: 22px !important;
+        padding: 0 20px;
+        text-align: center;
+    }
+
+    #settings-modal {
+        min-width: unset !important; /* Remove 400px forced width */
+        width: 90vw;
+        padding: 15px;
+    }
+
+    .panel {
+        font-size: 1em;
+        padding: 12px 15px;
+    }
+}
+
+/* Threat editor: tidy, uniform stat grid.
+   Each .form-row uses display:contents so its <span> label and its control
+   become direct grid items. The grid declares explicit label/control column
+   pairs; each label column is sized to max-content (the widest label in that
+   column), so every control column starts at a fixed offset -> perfect
+   vertical alignment that is font-agnostic (max-content measures real text,
+   unlike the old min-width:96px floor which let long labels overflow and
+   push their inputs out of line). Container queries on #editor-panel swap
+   between 1 / 2 / 3 column-pairs so pairs never split and the grid never
+   overflows on narrow screens. */
+#editor-panel { container-type: inline-size; }
+
+.stats-row.editor-grid {
+    display: grid;
+    grid-template-columns: max-content auto;                 /* fallback / narrow: 1 pair per row */
+    gap: 8px 12px;
+    align-items: center;
+}
+.stats-row.editor-grid .form-row {
+    display: contents;                                       /* dissolve the row box */
+}
+.stats-row.editor-grid .form-row > span:first-child {
+    white-space: nowrap;
+}
+.stats-row.editor-grid #edit-armortype { width: 100px !important; }
+.stats-row.editor-grid #edit-totalarmor {
+    display: inline-block;
+    min-width: 34px;
+    border: 1px solid var(--theme-color);
+    padding: 1px 6px;
+    text-align: center;
+    opacity: 0.7;                                            /* restore faded look lost by display:contents */
+}
+.stats-row.editor-grid #editor-warnings { grid-column: 1 / -1; }
+
+@container (min-width: 460px) {
+    .stats-row.editor-grid { grid-template-columns: max-content auto max-content auto; }            /* 2 pairs */
+}
+@container (min-width: 720px) {
+    .stats-row.editor-grid { grid-template-columns: max-content auto max-content auto max-content auto; } /* 3 pairs */
+}
+
+/* =========================================
+PART 4: CALLED SHOTS / WEAK POINTS / ARMOR DEGRADATION
+========================================= */
+
+#called-shot-status {
+    border-left: 2px solid #ff9900;
+    padding-left: 8px;
+}
+
+#weakpoint-editor {
+    background: rgba(255, 153, 0, 0.05);
+}
+
+#armor-details-modal textarea,
+#armor-details-modal input {
+    background: var(--bg-color);
+    color: var(--theme-color);
+    border: 1px solid var(--theme-color);
+    font-family: inherit;
+}
+
+#armor-min-str-modal {
+    border-color: #ff3333 !important;
+}
+
+#armor-min-str-modal h3 {
+    color: #ff3333;
+}
+
+/* ==========================================
+   AREA EFFECT — custom target list
+   Replaces the native multi-select so selections survive focus changes and the
+   list scrolls (the old 80px native box clipped at ~3 rows with no scroll).
+   ========================================== */
+#multi-target-list {
+    background: rgba(0, 0, 0, 0.3);
+}
+.area-target-row {
+    padding: 3px 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 0.85em;
+    user-select: none;
+    transition: background 0.1s, border-color 0.1s;
+}
+.area-target-row:hover {
+    background: rgba(0, 204, 255, 0.08);
+}
+.area-target-row.area-target-selected {
+    border: 1px solid #00ccff;
+    background: rgba(0, 204, 255, 0.15);
+    color: #00ccff;
+    text-shadow: 0 0 4px rgba(0, 204, 255, 0.6);
+}

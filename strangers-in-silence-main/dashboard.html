@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LambdaOS - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Security Check Before Load -->
+    <script>
+        let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+        if (!currentUser) window.location.replace("index.html");
+    </script>
+</head>
+<body>
+
+    <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
+
+    <!-- Terminal Prompt Area (for stay logged in Y/N) -->
+    <div id="terminal-prompt">
+        <div id="output-history"></div>
+        <div><span id="input-line"></span><span class="cursor" id="cursor"></span></div>
+    </div>
+
+    <!-- The actual interactive dashboard -->
+    <div id="dashboard-ui">
+        <div class="system-header">
+            <span>RESISTANCE NODE_04</span>
+            <span id="display-username">USER: UNKNOWN</span>
+        </div>
+        
+        <div class="panel-grid" id="main-panel-grid">
+            <a href="#" id="link-character" class="panel">MY CHARACTER SHEET</a>
+            <a href="tracker.html" class="panel">COMBAT TRACKER</a>
+            <a href="/clocks.html" class="panel">DRAMATIC CLOCKS</a>
+            <a href="#" id="link-minigames" class="panel">MINIGAMES</a>
+            <div class="panel locked">SETTLEMENT LEDGER</div>
+        </div>
+    </div>
+
+    <!-- Minigames Menu Modal -->
+    <div id="minigames-modal">
+        <h2>MINIGAMES_TERMINAL</h2>
+        <div id="minigames-list"></div>
+        <button id="close-minigames">[ CLOSE ]</button>
+    </div>
+
+    <!-- Include universal settings and modal logic -->
+    <script src="settings.js"></script>
+
+    <script>
+        let hasPrompted = sessionStorage.getItem('promptedStatus') || localStorage.getItem('promptedStatus');
+
+        const terminalPrompt = document.getElementById('terminal-prompt');
+        const inputLine = document.getElementById('input-line');
+        const outputHistory = document.getElementById('output-history');
+        const dashboardUI = document.getElementById('dashboard-ui');
+        const linkCharacter = document.getElementById('link-character');
+        const displayUsername = document.getElementById('display-username');
+        const cursor = document.getElementById('cursor');
+
+        // Set UI info
+        displayUsername.innerText = `USER: ${currentUser.toUpperCase()}`;
+
+        function getCharacterUrl(name) {
+            if (name === "Administrator") return "character.html";
+            let formattedName = name.toLowerCase().replace(' ', '-');
+            return `character.html?user=${formattedName}`;
+        }
+
+        linkCharacter.href = getCharacterUrl(currentUser);
+        if (currentUser === "Administrator") {
+            linkCharacter.innerHTML = "VIEW PLAYER SHEETS";
+            
+            // Inject GM Threat Registry Button
+            const grid = document.getElementById('main-panel-grid');
+            const threatBtn = document.createElement('a');
+            threatBtn.href = "threats.html";
+            threatBtn.className = "panel";
+            threatBtn.style.borderColor = "#ff3333";
+            threatBtn.style.color = "#ff3333";
+            threatBtn.innerHTML = "OVERWATCH THREAT REGISTRY [ADMIN]";
+            grid.appendChild(threatBtn);
+        }
+
+        // Minigames menu
+        const minigamesAvailable = [
+            { name: "BREACH SYSTEM", file: "minigames/breach_system.html" }
+        ];
+
+        const linkMinigames = document.getElementById('link-minigames');
+        const minigamesModal = document.getElementById('minigames-modal');
+        const minigamesList = document.getElementById('minigames-list');
+        const closeMinigames = document.getElementById('close-minigames');
+
+        function openMinigames(e) {
+            e.preventDefault();
+            minigamesList.innerHTML = '';
+            minigamesAvailable.forEach(g => {
+                const item = document.createElement('a');
+                item.href = g.file;
+                item.className = "minigame-item";
+                item.innerHTML = g.name;
+                item.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    minigamesModal.style.display = 'none';
+                    window.location.href = g.file;
+                });
+                minigamesList.appendChild(item);
+            });
+            minigamesModal.style.display = 'block';
+        }
+
+        linkMinigames.addEventListener('click', openMinigames);
+        closeMinigames.addEventListener('click', () => minigamesModal.style.display = 'none');
+        window.addEventListener('click', (e) => {
+            if (e.target === minigamesModal) minigamesModal.style.display = 'none';
+        });
+
+        let awaitingInput = false;
+
+        function finalizeRawText(text) {
+            const div = document.createElement('div');
+            div.innerHTML = text;
+            outputHistory.appendChild(div);
+        }
+
+        function showDashboard() {
+            terminalPrompt.style.display = "none";
+            dashboardUI.style.display = "block";
+        }
+
+        if (!hasPrompted) {
+            finalizeRawText("> SESSION ESTABLISHED.");
+            finalizeRawText("> ENABLE PERSISTENT LOGIN TOKEN?");
+            inputLine.innerHTML = "> (Y/N): ";
+            awaitingInput = true;
+        } else {
+            showDashboard();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (awaitingInput) {
+                let key = e.key.toUpperCase();
+                if (key === 'Y') {
+                    localStorage.setItem('currentUser', currentUser);
+                    localStorage.setItem('promptedStatus', 'true');
+                    sessionStorage.removeItem('currentUser'); 
+                    
+                    inputLine.innerHTML += "Y";
+                    finalizeRawText("> TOKEN SAVED. BYPASSING FUTURE LOGIN PROTOCOLS...");
+                    awaitingInput = false;
+                    cursor.style.display = 'none';
+                    setTimeout(showDashboard, 1500);
+                } 
+                else if (key === 'N') {
+                    sessionStorage.setItem('promptedStatus', 'true');
+                    
+                    inputLine.innerHTML += "N";
+                    finalizeRawText("> TOKEN REJECTED. SESSION TEMPORARY.");
+                    awaitingInput = false;
+                    cursor.style.display = 'none';
+                    setTimeout(showDashboard, 1500);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

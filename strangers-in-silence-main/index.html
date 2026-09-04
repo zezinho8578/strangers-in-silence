@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LambdaOS - Node Terminal</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- CHECK FOR PERSISTENT LOGIN INSTANTLY -->
+    <script>
+        if (localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser')) {
+            window.location.replace("dashboard.html");
+        }
+    </script>
+</head>
+<body>
+
+    <img id="bg-lambda" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png" alt="Lambda Logo">
+
+    <div id="start-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background-color: #000; z-index: 10; cursor: pointer; animation: pulse 2s infinite; font-size: 26px;">
+        [ CLICK TO INITIALIZE TERMINAL ]
+    </div>
+
+    <!-- Terminal Structure -->
+    <div id="terminal" style="display:none;">
+        <div id="output-history"></div>
+        <div><span id="input-line"></span><span class="cursor" id="cursor"></span></div>
+    </div>
+
+    <!-- Hidden Input for Mobile Keyboard Support -->
+    <input type="text" id="hidden-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="position:absolute; top:-100px; left:0; width:1px; height:1px; opacity:0; border:none;">
+
+    <!-- Audio Elements -->
+    <audio id="audio-boot" src="boot.mp3"></audio>
+    <audio id="audio-error" src="error.mp3"></audio>
+
+    <script src="settings.js"></script>
+    <script>
+        // --- GAME DATA ---
+        const accounts = ["Katey Commons", "Trombley Hicks", "Vesa Novik", "Arnold Rutherford", "Administrator"];
+        const passwords = {
+            "Katey Commons": "katey123",
+            "Trombley Hicks": "hicks123",
+            "Vesa Novik": "vesa123",
+            "Arnold Rutherford": "arnold123",
+            "Administrator": "admin"
+        };
+
+        // --- TERMINAL STATE ---
+        let currentMode = "uninitialized"; 
+        let selectedIndex = 0;
+        let typedPassword = "";
+        
+        const startScreen = document.getElementById('start-screen');
+        const terminal = document.getElementById('terminal');
+        const outputHistory = document.getElementById('output-history');
+        const inputLine = document.getElementById('input-line');
+        const hiddenInput = document.getElementById('hidden-input');
+        const audioBoot = document.getElementById('audio-boot');
+        const audioError = document.getElementById('audio-error');
+
+        const bootText = [
+            "LambdaOS v.2.1.4 (Build 8472)",
+            "Checking memory... OK (640K Base / 15360K Extended)",
+            "Mounting file systems... OK",
+            "Initializing Overwatch Bypass Protocol... SUCCESS",
+            "Establishing connection to Resistance Node...",
+            "DONE.",
+            "" 
+        ];
+
+        function scrollToBottom() { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
+
+        function playSound(audioElement) {
+            if (localStorage.getItem('lambdaAudio') !== 'off') {
+                audioElement.currentTime = 0;
+                audioElement.play().catch(e => console.log("Audio not found/blocked."));
+            }
+        }
+
+        startScreen.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            terminal.style.display = 'block';
+            audioBoot.volume = 0.5;
+            playSound(audioBoot);
+            runBootSequence();
+        });
+
+        async function runBootSequence() {
+            currentMode = "booting";
+            for (let line of bootText) {
+                if (line === "") {
+                    inputLine.innerHTML = "";
+                    finalizeInput();
+                } else {
+                    await typeLine("> " + line);
+                    finalizeInput(); 
+                    await sleep(300); 
+                }
+            }
+            renderAccountSelection();
+        }
+
+        function typeLine(text) {
+            return new Promise(resolve => {
+                let i = 0;
+                inputLine.innerHTML = "";
+                let interval = setInterval(() => {
+                    inputLine.textContent += text.charAt(i);
+                    scrollToBottom();
+                    i++;
+                    if (i >= text.length) {
+                        clearInterval(interval);
+                        resolve();
+                    }
+                }, 20); 
+            });
+        }
+
+        function finalizeInput() {
+            const div = document.createElement('div');
+            div.innerHTML = inputLine.innerHTML || "<br>"; 
+            outputHistory.appendChild(div);
+            inputLine.innerHTML = "";
+            scrollToBottom();
+        }
+
+        function finalizeRawText(text) {
+            const div = document.createElement('div');
+            div.innerHTML = text;
+            outputHistory.appendChild(div);
+            scrollToBottom();
+        }
+
+        function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+        function renderAccountSelection() {
+            currentMode = "selecting";
+            let selectionString = "> SELECT ACCOUNT: ";
+            accounts.forEach((acc, index) => {
+                if (index === selectedIndex) {
+                    selectionString += `<span class="highlight" style="cursor:pointer" onclick="selectAccount(${index})">${acc}</span>`;
+                } else {
+                    selectionString += `<span style="cursor:pointer" onclick="selectAccount(${index})">${acc}</span>`;
+                }
+                if (index < accounts.length - 1) selectionString += " / ";
+            });
+            inputLine.innerHTML = selectionString; 
+            scrollToBottom();
+        }
+
+        function renderPasswordPrompt() {
+            let maskedStr = "*".repeat(typedPassword.length);
+            inputLine.innerHTML = `> PASSWORD: ${maskedStr} <span style="opacity:0.5; font-size:0.8em;">(tap to type)</span>`;
+            scrollToBottom();
+        }
+
+        // Allows clicking/tapping the password line to open the mobile keyboard
+        inputLine.addEventListener('click', () => {
+            if (currentMode === "password") {
+                hiddenInput.focus();
+            }
+        });
+
+        function selectAccount(index) {
+            if (currentMode !== "selecting") return;
+            selectedIndex = index;
+            finalizeInput();
+            currentMode = "password";
+            typedPassword = ""; 
+            renderPasswordPrompt();
+            // Trigger mobile keyboard by focusing hidden input
+            setTimeout(() => hiddenInput.focus(), 100);
+        }
+
+        function handlePasswordEnter() {
+            let selectedAccount = accounts[selectedIndex];
+            let correctPassword = passwords[selectedAccount];
+            
+            hiddenInput.value = '';
+            hiddenInput.blur();
+            finalizeInput(); 
+
+            if (typedPassword === correctPassword) {
+                currentMode = "loading";
+                sessionStorage.setItem('currentUser', selectedAccount);
+                finalizeRawText("> ACCESS GRANTED. WELCOME.");
+                finalizeRawText("> INITIALIZING DASHBOARD...");
+                
+                setTimeout(() => { window.location.href = "dashboard.html"; }, 2000);
+            } else {
+                playSound(audioError);
+                finalizeRawText("> ACCESS DENIED. TRY AGAIN.");
+                typedPassword = ""; 
+                renderPasswordPrompt();
+                setTimeout(() => hiddenInput.focus(), 100);
+            }
+        }
+
+        // Global keydown listener (handles physical keyboards for both account selection and passwords)
+        document.addEventListener('keydown', (e) => {
+            if (currentMode === "selecting") {
+                if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) e.preventDefault(); 
+
+                if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
+                    selectedIndex = (selectedIndex > 0) ? selectedIndex - 1 : accounts.length - 1;
+                    renderAccountSelection();
+                } 
+                else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
+                    selectedIndex = (selectedIndex < accounts.length - 1) ? selectedIndex + 1 : 0;
+                    renderAccountSelection();
+                }
+                else if (e.key === "Enter") {
+                    selectAccount(selectedIndex);
+                }
+            }
+            // Note: Password input on physical keyboards is also caught by the hiddenInput listener below
+        });
+
+        // Listener specifically for the hidden input (catches mobile keyboard typing and physical keyboard typing when focused)
+        hiddenInput.addEventListener('input', (e) => {
+            if (currentMode === "password") {
+                typedPassword = e.target.value;
+                renderPasswordPrompt();
+            }
+        });
+
+        hiddenInput.addEventListener('keydown', (e) => {
+            if (currentMode === "password" && e.key === "Enter") {
+                e.preventDefault(); // Prevent form submission/refresh
+                handlePasswordEnter();
+            }
+        });
+    </script>
+</body>
+</html>
