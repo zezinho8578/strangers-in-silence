@@ -100,10 +100,10 @@
     }
 
     // SOAK (Vigor, spend a benny).
-    function soak(name, vigorDie, traitHistory, wildHistory, totalMod, bestTotal, removed, allSoaked) {
+    function soak(name, vigorDie, traitHistory, wildHistory, totalMod, bestTotal, removed, allSoaked, note) {
         const embed = {
             title: `${name} spent a Benny to Soak`,
-            description: `**Result: ${bestTotal}** (Vigor vs TN 4)\n**Soaked ${removed} Wound(s)** — removed from the target${allSoaked ? " (Shaken cleared)" : ""}.`,
+            description: `**Result: ${bestTotal}** (Vigor vs TN 4)\n**Soaked ${removed} Wound(s)** — removed from the target${allSoaked ? " (Shaken cleared)" : ""}.${note ? `\n_${note}_` : ""}`,
             color: removed > 0 ? 0x00ff00 : 0xff3333,
             fields: traitFields(`Vigor (d${vigorDie})`, traitHistory, wildHistory)
         };

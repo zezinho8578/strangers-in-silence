@@ -1737,6 +1737,10 @@
             }
             let newVal = (p[stat] || 0) + amount;
             if (newVal < 0) newVal = 0;
+            // Manual GM wound adds also get a SWADE soak window: snapshot pre-edit
+            // wounds so a follow-up soak ignores the just-added wounds (per user:
+            // manual +/- must NOT suffer full penalty). Decrements clear it.
+            let _manualWoundsBefore = p.wounds || 0;
             if (stat === 'wounds') {
                 let cap = p.woundCap || (p.isWildCard ? 4 : 1);
                 if (newVal >= cap) {
@@ -1762,6 +1766,20 @@
                 }
             }
             p[stat] = newVal;
+            if (stat === 'wounds') {
+                if (amount > 0) {
+                    p.lastSoakHit = {
+                        woundsBefore: _manualWoundsBefore,
+                        woundsAdded: Math.max(0, newVal - _manualWoundsBefore),
+                        round: (globalState.combat && globalState.combat.round !== undefined) ? globalState.combat.round : null,
+                        ts: Date.now(),
+                        manual: true
+                    };
+                } else if (amount < 0) {
+                    // Healing/removal invalidates any pending soak window.
+                    p.lastSoakHit = null;
+                }
+            }
             // B7: mirror wounds/fatigue onto the persistent character object (with a
             // fresh Golden Hour wound timestamp per added wound) so they survive
             // endCombat(). This mirrors the existing benny sync above.
@@ -1867,13 +1885,21 @@
             } else if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
                 vigorDie = parseInt(globalState.characters[p.id].attributes?.Vigor?.die) || 6;
             }
-            let penalty = Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2);
+            // Unified: shared caps + Distracted + Combat Reflexes (parity with sheet).
+            let _edges = "";
+            try {
+                if (p.isPlayer && globalState.characters && globalState.characters[p.id] && globalState.characters[p.id].edges) _edges = globalState.characters[p.id].edges;
+                else if (p.abilities) _edges = p.abilities;
+            } catch (e) { _edges = ""; }
+            let _cr = /\bcombat\s*reflexes\b/i.test(_edges || "") ? 2 : 0;
+            let penalty = window.computeStatusPenalty ? window.computeStatusPenalty(p.wounds, p.fatigue, p.distracted) : (Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2) + (p.distracted ? 2 : 0));
+            let edgeBonus = _cr;
             let tRoll = rollExplodingDice(vigorDie);
             let wRoll = p.isWildCard ? rollExplodingDice(6) : null;
-            let best = (wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total) - penalty;
+            let best = (wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total) - penalty + edgeBonus;
             let success = best >= 4;
             let raise   = best >= 8;
-            let desc = `${p.name} rolled Vigor Recovery (d${vigorDie})${penalty > 0 ? ` at -${penalty}` : ''}: ${tRoll.history.join(' + ')}`;
+            let desc = `${p.name} rolled Vigor Recovery (d${vigorDie})${penalty > 0 ? ` at -${penalty}` : ''}${edgeBonus ? ` (+${edgeBonus} Combat Reflexes)` : ''}: ${tRoll.history.join(' + ')}`;
             if (wRoll) desc += ` | Wild: ${wRoll.history.join(' + ')}`;
             if (success && raise) {
                 // Raise: no longer Stunned, Vulnerable ends this turn
@@ -1934,12 +1960,18 @@
             if (p.isPlayer && globalState.characters && globalState.characters[p.id]) {
                 spiritDie = parseInt(globalState.characters[p.id].attributes?.Spirit?.die) || 6;
             }
-            let penalty = Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2) + (p.distracted ? 2 : 0);
+            let _sEdges = "";
+            try {
+                if (p.isPlayer && globalState.characters && globalState.characters[p.id] && globalState.characters[p.id].edges) _sEdges = globalState.characters[p.id].edges;
+                else if (p.abilities) _sEdges = p.abilities;
+            } catch (e) { _sEdges = ""; }
+            let _sCr = /\bcombat\s*reflexes\b/i.test(_sEdges || "") ? 2 : 0;
+            let penalty = window.computeStatusPenalty ? window.computeStatusPenalty(p.wounds, p.fatigue, p.distracted) : (Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2) + (p.distracted ? 2 : 0));
             let tRoll = rollExplodingDice(spiritDie);
             let wRoll = p.isWildCard ? rollExplodingDice(6) : null;
-            let best = (wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total) - penalty;
+            let best = (wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total) - penalty + _sCr;
             let success = best >= 4;
-            let desc = `${p.name} rolled Spirit Recovery (d${spiritDie})${penalty > 0 ? ` at -${penalty}` : ''}: ${tRoll.history.join(' + ')}`;
+            let desc = `${p.name} rolled Spirit Recovery (d${spiritDie})${penalty > 0 ? ` at -${penalty}` : ''}${_sCr ? ` (+${_sCr} Combat Reflexes)` : ''}: ${tRoll.history.join(' + ')}`;
             if (wRoll) desc += ` | Wild: ${wRoll.history.join(' + ')}`;
             desc += ` = **${best}** -> ${success ? "RECOVERED! No longer Shaken — may act normally." : "STILL SHAKEN (free actions only)."}`;
             if (success) {
@@ -1964,12 +1996,27 @@
             }
             let tRoll = rollExplodingDice(vigorDie);
             let wRoll = p.isWildCard ? rollExplodingDice(6) : null;
-            let statusPenalty = -(Math.min(p.wounds || 0, 3) + Math.min(p.fatigue || 0, 2));
-            let best = (wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total) + statusPenalty;
+            // SWADE Soak ignores this attack's wounds — use pre-hit snapshot.
+            let penaltyWounds = p.wounds || 0;
+            let soakCtx = p.lastSoakHit;
+            if (soakCtx && typeof soakCtx.woundsBefore === 'number' && (p.wounds || 0) >= soakCtx.woundsBefore && (soakCtx.woundsAdded || 0) > 0) {
+                penaltyWounds = Math.min(p.wounds || 0, soakCtx.woundsBefore);
+            }
+            let ignoredNew = Math.max(0, (p.wounds || 0) - penaltyWounds);
+            let _kEdges = "";
+            try {
+                if (p.isPlayer && globalState.characters && globalState.characters[p.id] && globalState.characters[p.id].edges) _kEdges = globalState.characters[p.id].edges;
+                else if (p.abilities) _kEdges = p.abilities;
+            } catch (e) { _kEdges = ""; }
+            let _ironJaw = /\biron\s*jaw\b/i.test(_kEdges || "") ? 2 : 0;
+            let statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(penaltyWounds, p.fatigue, p.distracted) : ((-(Math.min(penaltyWounds, 3) + Math.min(p.fatigue || 0, 2) + (p.distracted ? 2 : 0))) || 0);
+            let best = (wRoll ? Math.max(tRoll.total, wRoll.total) : tRoll.total) + statusPenalty + _ironJaw;
             let soaked = 0;
             if (best >= 4) soaked = 1 + Math.floor((best - 4) / 4);
             soaked = Math.min(soaked, p.wounds);
             await spendBenny(p);
+            // One soak per attack: consume the snapshot.
+            p.lastSoakHit = null;
             p.wounds = (p.wounds || 0) - soaked;
             let removedShaken = false;
             if (soaked > 0 && p.wounds === 0 && p.shaken) {
@@ -1993,6 +2040,8 @@
             let desc = `${p.name} spent a Benny to Soak (Vigor d${vigorDie}): ${tRoll.history.join(' + ')}`;
             if (wRoll) desc += ` | Wild: ${wRoll.history.join(' + ')}`;
             desc += ` = **${best}** -> Soaked **${soaked}** Wound(s). ${p.wounds} Wound(s) remain.`;
+            if (ignoredNew > 0) desc += ` (ignored ${ignoredNew} new wound(s) per SWADE soak)`;
+            if (_ironJaw) desc += ` (+${_ironJaw} Iron Jaw)`;
             if (removedShaken) desc += ` Shaken removed.`;
             logToWebhook("SOAK ROLL", desc);
         };
@@ -2085,17 +2134,33 @@
             // Shared TEM: Defend = TARGET defending (+4 Parry, melee only). Applied ONLY
             // to Parry (not also to the roll) to avoid double-counting.
             let isMelee = document.getElementById('calc-is-melee')?.checked || false;
-            let temVals = window.getTEMModifierValues ? window.getTEMModifierValues('calc', { isMelee: isMelee }) : { total: 0, summary: [], values: {} };
+            // Steady Hands parity: calc attacker is the active turn participant when
+            // known, else fall back to no-Steady (sheet/threats pass it explicitly).
+            let _calcSteady = false;
+            try {
+                const _act = globalState.combat && globalState.combat.participants ? globalState.combat.participants[globalState.combat.activeTurnIndex || 0] : null;
+                const _sheet = _act && _act.isPlayer && globalState.characters ? globalState.characters[_act.id] : null;
+                const _ab = (_sheet && _sheet.edges) || (_act && _act.abilities) || "";
+                _calcSteady = /steady\s*hands/i.test(_ab || "");
+            } catch (e) { _calcSteady = false; }
+            let temVals = window.getTEMModifierValues ? window.getTEMModifierValues('calc', { isMelee: isMelee, steadyHands: _calcSteady }) : { total: 0, summary: [], values: {} };
             let targetDefending = target.defending || temVals.values.defend;
             let defendBonus = (targetDefending && isMelee) ? 4 : 0;
             let parry = baseParry + defendBonus;
             let calcCalled = window.getCalcCalledShot ? window.getCalcCalledShot() : { hitMod: 0 };
             // The shared TEM total includes Cover/GangUp/Drop/Illum/Running (NOT Defend).
             let temTotal = temVals.total;
-            let effectiveRoll = roll + (parseInt(calcCalled.hitMod) || 0) + (target.vulnerable ? 2 : 0) + temTotal;
+            // Joker parity: auto-add +2 like the character sheet (was previously ignored).
+            let _jokerBonus = 0;
+            try {
+                const _act2 = globalState.combat && globalState.combat.participants ? globalState.combat.participants[globalState.combat.activeTurnIndex || 0] : null;
+                if (_act2 && _act2.card && _act2.card.isJoker && _act2.jokerRound === globalState.combat.round) _jokerBonus = 2;
+            } catch (e) { _jokerBonus = 0; }
+            let effectiveRoll = roll + (parseInt(calcCalled.hitMod) || 0) + (target.vulnerable ? 2 : 0) + temTotal + _jokerBonus;
             let modNotes = [];
             if (defendBonus) modNotes.push(`Target Defending +${defendBonus} Parry (melee)`);
             if (target.vulnerable) modNotes.push("Vulnerable +2");
+            if (_jokerBonus) modNotes.push("Joker +2");
             temVals.summary.forEach(s => modNotes.push(s));
             if (calcCalled.label) modNotes.push('Called Shot: ' + calcCalled.label);
             resultBox.style.borderColor = "var(--theme-color)";
@@ -2154,9 +2219,17 @@
                         let participants = globalState.combat.participants;
                         let idx = participants.findIndex(x => x.id === targetId);
                         if (idx !== -1) {
-                            participants[idx].wounds = (participants[idx].wounds || 0) + 1;
+                            let woundsBefore = participants[idx].wounds || 0;
+                            participants[idx].wounds = woundsBefore + 1;
                             let cap = participants[idx].woundCap || (participants[idx].isWildCard ? 4 : 1);
                             if (participants[idx].wounds >= cap) participants[idx].incapacitated = true;
+                            // SWADE Soak ignores this attack's wounds: snapshot pre-hit total.
+                            participants[idx].lastSoakHit = {
+                                woundsBefore: woundsBefore,
+                                woundsAdded: 1,
+                                round: (globalState.combat && globalState.combat.round !== undefined) ? globalState.combat.round : null,
+                                ts: Date.now()
+                            };
                             // B7: mirror the wound onto the persistent character sheet.
                             if (participants[idx].isPlayer) {
                                 let pid = participants[idx].id;

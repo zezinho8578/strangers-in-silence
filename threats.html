@@ -1007,6 +1007,16 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         target.incapacitationResolved = false;
     }
 
+    // SWADE Soak: "don't count the wound modifiers you're about to suffer when
+    // making this roll — they haven't happened yet". Snapshot pre-hit wounds so
+    // soak rolls can exclude this attack's wounds from the Vigor penalty.
+    target.lastSoakHit = {
+        woundsBefore: oldWounds,
+        woundsAdded: woundsAdded,
+        round: (globalState.combat && globalState.combat.round !== undefined) ? globalState.combat.round : null,
+        ts: Date.now()
+    };
+
     // B7: mirror the new wound total onto the persistent character object (with a
     // fresh Golden Hour timestamp per added wound) so wounds survive endCombat().
     if (target.isPlayer && target.id && globalState.characters && globalState.characters[target.id]) {
@@ -2186,7 +2196,20 @@ window.onTargetDodgeChange = async function () {
                     computedRangePenalty = Math.min(0, rangePenalty + cap);
                 }
             }
-            document.getElementById('mod-override-input').value = computedRangePenalty + recoilPenalty + trbBonus + aimBonus + getThreatsTEMTotal();
+            let computed = computedRangePenalty + recoilPenalty + trbBonus + aimBonus + getThreatsTEMTotal();
+            const _inp = document.getElementById('mod-override-input');
+            // Preserve GM manual tweaks across recompute (same rule as character).
+            let manual = parseInt(_inp.value) - parseInt(_inp.dataset.computed || 0);
+            if (isNaN(manual)) manual = 0;
+            // First pass after weapon select has no baseline: don't treat the reset
+            // "0" as manual. Seed baseline instead.
+            if (!_inp.dataset.computed) manual = 0;
+            _inp.value = String(computed + manual);
+            try {
+                // Sole-writer bookkeeping: tag computed so later manual edits survive
+                // recompute (mirrors character.html applyComputedModifiers).
+                _inp.dataset.computed = String(computed);
+            } catch (e) { /* non-fatal */ }
         };
         // Shared TEM helpers (settings.js). The TEM panel is injected into #tn-tem-container.
         function threatsIsMelee() {
@@ -2196,7 +2219,8 @@ window.onTargetDodgeChange = async function () {
         }
         function getThreatsTEMTotal() {
             if (!window.getTEMModifierValues || !document.getElementById('tn-sit-cover')) return 0;
-            let tem = window.getTEMModifierValues('tn', { isMelee: threatsIsMelee() });
+            const steady = !!(activeThreat && activeThreat.abilities && /steady\s*hands/i.test(activeThreat.abilities));
+            let tem = window.getTEMModifierValues('tn', { isMelee: threatsIsMelee(), steadyHands: steady });
             let total = tem.total;
             
             let target = getSelectedTarget();
@@ -2369,20 +2393,40 @@ window.executeThreatRoll = async function (skillName, targetNumber, shotsFired, 
     let unskilledMod = activeThreat.skills[skillName] ? 0 : -2;
     let customMod = parseInt(document.getElementById('mod-override-input').value) || 0;
     let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
+    // Unified status penalty: threats previously ignored wounds/fatigue/distracted.
+    // Deployed participants mirror wounds/fatigue; fall back to template fields.
+    let _tw = (activeThreat.wounds ?? 0), _tf = (activeThreat.fatigue ?? 0), _td = !!(activeThreat.distracted);
+    try {
+        if (globalState.combat && globalState.combat.participants) {
+            const _dep = globalState.combat.participants.find(p => activeThreat.name && p.name === activeThreat.name);
+            if (_dep) { _tw = _dep.wounds ?? _tw; _tf = _dep.fatigue ?? _tf; _td = !!_dep.distracted; }
+        }
+    } catch (e) { /* non-fatal */ }
+    let statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(_tw, _tf, _td) : ((-(Math.min(_tw || 0, 3) + Math.min(_tf || 0, 2) + (_td ? 2 : 0))) || 0);
     // Part 4: Called Shots.
     const calledShot = window.getCurrentCalledShot
         ? window.getCurrentCalledShot()
         : { id: "none", hitMod: 0, dmgMod: 0 };
 
-            let jokerBonus = document.getElementById('threat-joker-checkbox')?.checked ? 2 : 0;
+            // Joker parity: auto-detect dealt Joker (like character sheet), manual
+            // checkbox is an OR override — never additive.
+            let _autoJoker = false;
+            try {
+                if (globalState.combat && globalState.combat.participants) {
+                    const _jp = globalState.combat.participants.find(p => activeThreat.name && p.name === activeThreat.name);
+                    _autoJoker = !!(_jp && _jp.card && _jp.card.isJoker && _jp.jokerRound === globalState.combat.round);
+                }
+            } catch (e) { _autoJoker = false; }
+            let jokerBonus = (document.getElementById('threat-joker-checkbox')?.checked || _autoJoker) ? 2 : 0;
 
-    let totalModifier = intrinsicMod
+    let totalModifier = window.computeTraitModifier ? window.computeTraitModifier({ traitMod: intrinsicMod + unskilledMod, customModifier: customMod + mapPenalty, statusPenalty: statusPenalty, jokerBonus: jokerBonus, wildAttackBonus: 0, defenderModifier: defenderModifier, calledHitMod: parseInt(calledShot.hitMod) || 0 }) : (intrinsicMod
         + unskilledMod
         + customMod
         + mapPenalty
+        + statusPenalty
         + defenderModifier
         + jokerBonus
-        + (parseInt(calledShot.hitMod) || 0);
+        + (parseInt(calledShot.hitMod) || 0));
     
     let isWildAttack = !isMeleeWeapon(activeWeaponContext) ? false : document.getElementById('wild-attack-checkbox').checked;
     if (isWildAttack) {

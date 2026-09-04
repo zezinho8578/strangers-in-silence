@@ -1142,6 +1142,7 @@
         let activeWeaponIndex = -1;
         let isEditing = false;
         let pendingMinStrPenalty = 0;
+        let pendingPrepareMod = 0;
         let combatParticipant = null;
         let isJoker = false;
         let lastCombatRound = null;
@@ -1401,6 +1402,16 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         target.incapacitated = false;
         target.incapacitationResolved = false;
     }
+
+    // SWADE Soak: "don't count the wound modifiers you're about to suffer when
+    // making this roll — they haven't happened yet". Snapshot pre-hit wounds so
+    // soakWounds() can exclude this attack's wounds from the Vigor penalty.
+    target.lastSoakHit = {
+        woundsBefore: oldWounds,
+        woundsAdded: woundsAdded,
+        round: (globalState.combat && globalState.combat.round !== undefined) ? globalState.combat.round : null,
+        ts: Date.now()
+    };
 
     // B7: mirror the new wound total onto the persistent character object (with a
     // fresh Golden Hour timestamp per added wound) so wounds survive endCombat().
@@ -2265,7 +2276,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             }
             let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
             let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
-            let statusPenalty = -(Math.min(charData.wounds || 0, 3) + Math.min(charData.fatigue || 0, 2));
+            let statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(charData.wounds, charData.fatigue, combatParticipant ? combatParticipant.distracted : false) : (-(Math.min(charData.wounds || 0, 3) + Math.min(charData.fatigue || 0, 2)));
             let totalMod = vigorMod + statusPenalty;
             let traitRoll = rollExploding(vigorDie);
             let wildRoll = rollExploding(6);
@@ -2360,7 +2371,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if ((charData.bennies || 0) <= 0) { logToTerminal("> [!] No Bennies to Soak."); return; }
             let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
             let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
-            let statusPenalty = -(Math.min(charData.wounds || 0, 3) + Math.min(charData.fatigue || 0, 2));
+            let statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(charData.wounds, charData.fatigue, combatParticipant ? combatParticipant.distracted : false) : (-(Math.min(charData.wounds || 0, 3) + Math.min(charData.fatigue || 0, 2)));
             let ironJawMod = hasEdge("Iron Jaw") ? 2 : 0;
             let totalMod = vigorMod + statusPenalty + ironJawMod;
             let traitRoll = rollExploding(vigorDie);
@@ -2417,7 +2428,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             }
             let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
             let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
-            let statusPenalty = -(Math.min(charData.wounds || 0, 3) + Math.min(charData.fatigue || 0, 2));
+            let statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(charData.wounds, charData.fatigue, combatParticipant ? combatParticipant.distracted : false) : (-(Math.min(charData.wounds || 0, 3) + Math.min(charData.fatigue || 0, 2)));
             let totalMod = vigorMod + statusPenalty;
             let traitRoll = rollExploding(vigorDie);
             let wildRoll = rollExploding(6);
@@ -2481,7 +2492,8 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
             let woundPen = hasEdge("Hard to Kill") ? 0 : Math.min(charData.wounds || 0, 3);
             let fatiguePen = Math.min(charData.fatigue || 0, 2);
-            let statusPenalty = -(woundPen + fatiguePen);
+            let distPen = (combatParticipant && combatParticipant.distracted) ? 2 : 0;
+            let statusPenalty = (-(woundPen + fatiguePen + distPen)) || 0;
             let totalMod = vigorMod + statusPenalty;
             let traitRoll = rollExploding(vigorDie);
             let wildRoll = rollExploding(6);
@@ -2878,7 +2890,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (!isFirebaseConfigured || !globalState.combat || !globalState.combat.participants) return;
             let spiritDie = parseInt(charData.attributes?.Spirit?.die) || 4;
             let spiritMod = parseInt(charData.attributes?.Spirit?.mod) || 0;
-            let statusPenalty = -(Math.min(charData.wounds || combatParticipant.wounds || 0, 3) + Math.min(charData.fatigue || combatParticipant.fatigue || 0, 2) + (combatParticipant.distracted ? 2 : 0));
+            let statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(window.resolveTraitSource ? window.resolveTraitSource(charData.wounds, combatParticipant.wounds) : (charData.wounds ?? combatParticipant.wounds ?? 0), window.resolveTraitSource ? window.resolveTraitSource(charData.fatigue, combatParticipant.fatigue) : (charData.fatigue ?? combatParticipant.fatigue ?? 0), combatParticipant.distracted) : (-(Math.min(charData.wounds ?? combatParticipant.wounds ?? 0, 3) + Math.min(charData.fatigue ?? combatParticipant.fatigue ?? 0, 2) + (combatParticipant.distracted ? 2 : 0)));
             let combatReflexesMod = hasEdge("Combat Reflexes") ? 2 : 0;
             let totalMod = spiritMod + statusPenalty + combatReflexesMod;
             let traitRoll = rollExploding(spiritDie);
@@ -2923,7 +2935,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (!isFirebaseConfigured || !globalState.combat || !globalState.combat.participants) return;
             let vigorDie = parseInt(charData.attributes?.Vigor?.die) || 4;
             let vigorMod = parseInt(charData.attributes?.Vigor?.mod) || 0;
-            let statusPenalty = -(Math.min(charData.wounds || combatParticipant.wounds || 0, 3) + Math.min(charData.fatigue || combatParticipant.fatigue || 0, 2));
+            let statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(window.resolveTraitSource ? window.resolveTraitSource(charData.wounds, combatParticipant.wounds) : (charData.wounds ?? combatParticipant.wounds ?? 0), window.resolveTraitSource ? window.resolveTraitSource(charData.fatigue, combatParticipant.fatigue) : (charData.fatigue ?? combatParticipant.fatigue ?? 0), combatParticipant.distracted) : (-(Math.min(charData.wounds ?? combatParticipant.wounds ?? 0, 3) + Math.min(charData.fatigue ?? combatParticipant.fatigue ?? 0, 2) + (combatParticipant.distracted ? 2 : 0)));
             let combatReflexesMod = hasEdge("Combat Reflexes") ? 2 : 0;
             let totalMod = vigorMod + statusPenalty + combatReflexesMod;
             let traitRoll = rollExploding(vigorDie);
@@ -2998,9 +3010,18 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             let statusPenalty = 0;
             // B7: wounds/fatigue persist on the character, so the soak penalty applies
             // whether or not combat is currently active.
+            // SWADE Soak: ignore the wounds from the attack being soaked — they
+            // haven't happened yet. Use the pre-hit snapshot when available.
             let sw = charData.wounds ?? (combatParticipant ? combatParticipant.wounds : 0) ?? 0;
             let sf = charData.fatigue ?? (combatParticipant ? combatParticipant.fatigue : 0) ?? 0;
-            statusPenalty = -(Math.min(sw, 3) + Math.min(sf, 2));
+            let penaltyWounds = sw;
+            let ignoredNewWounds = 0;
+            let soakCtx = combatParticipant ? combatParticipant.lastSoakHit : null;
+            if (soakCtx && typeof soakCtx.woundsBefore === 'number' && (sw || 0) >= soakCtx.woundsBefore && (soakCtx.woundsAdded || 0) > 0) {
+                penaltyWounds = Math.min(sw, soakCtx.woundsBefore);
+                ignoredNewWounds = Math.max(0, (sw || 0) - penaltyWounds);
+            }
+            statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(penaltyWounds, sf, combatParticipant ? combatParticipant.distracted : false) : ((-(Math.min(penaltyWounds, 3) + Math.min(sf, 2))) || 0);
             let ironJawMod = hasEdge("Iron Jaw") ? 2 : 0;
             let totalMod = vigorMod + statusPenalty + ironJawMod;
             let traitRoll = rollExploding(vigorDie);
@@ -3032,6 +3053,9 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             charData.bennies = Math.max(0, (charData.bennies || 0) - 1);
             if (combatParticipant) {
                 combatParticipant.bennies = charData.bennies;
+                // One soak roll per attack: consume the pre-hit snapshot so a
+                // second soak can't reuse the favorable penalty.
+                combatParticipant.lastSoakHit = null;
             }
             document.getElementById('benny-count').innerText = charData.bennies;
             const unshakeBtn = document.getElementById('unshake-btn');
@@ -3048,6 +3072,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             // Re-enable the soak button based on the new benny count + remaining wounds.
             if (soakBtn) soakBtn.disabled = (charData.bennies || 0) <= 0 || (charData.wounds || 0) <= 0;
             let modStr = totalMod !== 0 ? ` (${totalMod > 0 ? '+' : ''}${totalMod})` : "";
+            if (ignoredNewWounds > 0) modStr += ` [ignoring ${ignoredNewWounds} new wound(s) per SWADE soak]`;
             let termLog = `> ${charData.name} spent a Benny to SOAK (Vigor) vs TN 4${modStr}<br>`;
             termLog += `&nbsp;&nbsp;Trait: ${traitRoll.history.join(' + ')} | Wild: ${wildRoll.history.join(' + ')}<br>`;
             termLog += `&nbsp;&nbsp;Result: <b>${bestTotal}</b> -> <b style="color:#00ff00;">SOAKED ${actuallyRemoved} WOUND(S)</b><br>`;
@@ -3055,7 +3080,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             logToTerminal(termLog);
             if (globalState && globalState.webhook && window.Embeds) {
                 await window.Embeds.post(globalState.webhook,
-                    window.Embeds.soak(charData.name, vigorDie, traitRoll.history, wildRoll.history, totalMod, bestTotal, actuallyRemoved, actuallyRemoved > 0 && charData.wounds === 0));
+                    window.Embeds.soak(charData.name, vigorDie, traitRoll.history, wildRoll.history, totalMod, bestTotal, actuallyRemoved, actuallyRemoved > 0 && charData.wounds === 0, ignoredNewWounds > 0 ? `Soak ignores ${ignoredNewWounds} new wound(s)` : ""));
             }
         }
         function evaluateMinStr(weaponMinStr) {
@@ -4748,12 +4773,10 @@ window.onTargetChange = function () {
             }
             let statusPenalty = 0;
             if (combatParticipant) {
-                // B7: read wounds/fatigue from the persistent character object (the
-                // combat participant mirrors it). Wound penalty still caps at 3, fatigue at 2.
-                let woundPen = Math.min(charData.wounds ?? combatParticipant.wounds ?? 0, 3);
-                let fatiguePen = Math.min(charData.fatigue ?? combatParticipant.fatigue ?? 0, 2);
-                let distPen = combatParticipant.distracted ? 2 : 0;
-                statusPenalty = -(woundPen + fatiguePen + distPen);
+                // Unified: 0-safe source (??, not ||) + shared caps.
+                const wSrc = window.resolveTraitSource ? window.resolveTraitSource(charData.wounds, combatParticipant.wounds) : (charData.wounds ?? combatParticipant.wounds ?? 0);
+                const fSrc = window.resolveTraitSource ? window.resolveTraitSource(charData.fatigue, combatParticipant.fatigue) : (charData.fatigue ?? combatParticipant.fatigue ?? 0);
+                statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(wSrc, fSrc, combatParticipant.distracted) : ((-(Math.min(wSrc, 3) + Math.min(fSrc, 2) + (combatParticipant.distracted ? 2 : 0))) || 0);
             }
             let jokerBonus = isJoker ? 2 : 0;
             let wildAttackBonus = 0;
@@ -4772,14 +4795,15 @@ window.onTargetChange = function () {
             const calledShot = (activeWeaponContext && window.getCurrentCalledShot)
                 ? window.getCurrentCalledShot()
                 : { id: "none", hitMod: 0, dmgMod: 0, bypassWorn: false, bypassNatural: false, toughnessOverride: null };
-            // B8: include the defender modifier (Vulnerable/Dodge) in the frozen context
-            let totalModifier = traitModifier
+            // B8: include the defender modifier (Vulnerable/Dodge) in the frozen context.
+            // Unified addition order via shared helper so all pages match.
+            let totalModifier = window.computeTraitModifier ? window.computeTraitModifier({ traitMod: traitModifier, customModifier: customModifier, statusPenalty: statusPenalty, jokerBonus: jokerBonus, wildAttackBonus: wildAttackBonus, defenderModifier: defenderModifier, calledHitMod: parseInt(calledShot.hitMod) || 0 }) : (traitModifier
                 + customModifier
                 + statusPenalty
                 + jokerBonus
                 + wildAttackBonus
                 + defenderModifier
-                + (parseInt(calledShot.hitMod) || 0);
+                + (parseInt(calledShot.hitMod) || 0));
             let is3RB = _is3RB || false;
             let isDoubleTap = _isDoubleTap || false;
             let isSupp = _isSupp || false;
@@ -5315,25 +5339,29 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                 document.getElementById('target-status').innerHTML = "";
                 document.getElementById('target-dodge-row').style.display = "none";
             }
+            // Sole-writer rule: prepareRoll never writes penalties directly.
+            // Weapon min-Str/armor flow through updateRecoilPenalty's computed
+            // total (aim.penalty includes min-Str, _armorPen covers armor).
+            // Trait-roll armor flows via nonWeaponBaseModifier below.
+            pendingPrepareMod = 0;
             if (weaponObj && pendingMinStrPenalty !== 0) {
-                let currentMod = parseInt(document.getElementById('mod-override-input').value) || 0;
-                document.getElementById('mod-override-input').value = currentMod + pendingMinStrPenalty;
                 logToTerminal(`> [!] STRENGTH REQUIREMENT NOT MET: Auto-applied ${pendingMinStrPenalty} penalty to attack roll.`);
             }
             // Armor Min Str penalty for Agility and Agility-linked skills
             let armorPenalty = parseInt(charData.derived?.armorPenalty) || 0;
-            if (armorPenalty > 0) {
+            if (armorPenalty > 0 && !weaponObj) {
                 const agiLinkedSkills = ['Athletics', 'Boating', 'Driving', 'Fighting', 'Piloting', 'Shooting', 'Stealth', 'Thievery'];
                 let isAgiLinked = (cat === 'attributes' && name === 'Agility') || (cat === 'skills' && agiLinkedSkills.includes(name));
                 if (isAgiLinked) {
-                    let currentMod = parseInt(document.getElementById('mod-override-input').value) || 0;
-                    document.getElementById('mod-override-input').value = currentMod - armorPenalty;
+                    pendingPrepareMod += -armorPenalty;
                     logToTerminal(`> [!] ARMOR PENALTY: −${armorPenalty} applied to ${name} (Min Str not met).`);
                 }
             }
-            // B10/B11: capture the non-weapon base modifier (armor penalty etc.) so the
+            // B10/B11: capture the non-weapon base modifier so the
             // situational/running toggles can recompute the box without wiping it.
-            nonWeaponBaseModifier = weaponObj ? 0 : (parseInt(document.getElementById('mod-override-input').value) || 0);
+            nonWeaponBaseModifier = weaponObj ? 0 : pendingPrepareMod;
+            document.getElementById('mod-override-input').value = String(nonWeaponBaseModifier);
+            document.getElementById('mod-override-input').dataset.computed = String(nonWeaponBaseModifier);
             const rangedOpts = document.getElementById('ranged-options-container');
             const rofOpts = document.getElementById('rof-options-container');
             const scopeRow = document.getElementById('scope-row');
@@ -5391,6 +5419,12 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
             // area weapons override it; non‑area weapons get the layout fully restored.
             applyAreaModeUI(!!currentAreaInfo, currentAreaInfo);
             document.getElementById('tn-modal').style.display = 'block';
+            // Initial computed pass so the box reflects range/recoil/TEM/armor
+            // immediately (sole-writer: no direct writes above).
+            try {
+                if (weaponObj) { updateRecoilPenalty(); }
+                else { applyComputedModifiers(nonWeaponBaseModifier + getExtraModifiers()); }
+            } catch (e) { /* non-fatal */ }
         }
         function updateRangePenalty() {
             if (!activeWeaponContext) return;
@@ -5461,18 +5495,39 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
             let _isMelee = activeWeaponContext && isMeleeWeapon(activeWeaponContext);
             let _tem = window.getTEMModifierValues('tn', { isMelee: _isMelee, steadyHands: hasSteadyHands() });
             lastTEMSummary = _tem.summary.slice();
-            let _defendMod = (_tem.values.defend && _isMelee) ? -4 : 0;
+            // Defend guard: target.defending already adds +4 Parry to TN (see
+            // effectiveParry). Only apply -4 to the roll when the native flag is
+            // NOT already inflating Parry — mirrors threats.html getThreatsTEMTotal.
+            let _targetDefending = false;
+            try {
+                const _selId = document.getElementById('target-select') ? document.getElementById('target-select').value : "";
+                if (_selId && globalState.combat && globalState.combat.participants) {
+                    const _t = globalState.combat.participants.find(p => p.id === _selId);
+                    _targetDefending = !!(_t && _t.defending);
+                }
+            } catch (e) { _targetDefending = false; }
+            let _defendMod = (_tem.values.defend && _isMelee && !_targetDefending) ? -4 : 0;
             applyComputedModifiers(aim.penalty + aim.bonus + trbBonus + dtBonus + _tem.total + _defendMod - _armorPen);
         }
         // Shared TEM: read the situational modifier total (Cover, Gang Up, The Drop,
         // Illumination, Running) from the shared panel, plus Defend (-4 roll, melee).
+        // Same Defend guard as updateRecoilPenalty: skip -4 when target.defending
+        // already adds +4 Parry to TN.
         function getExtraModifiers() {
             if (!document.getElementById('tn-sit-cover')) return 0;
             let _isMelee = activeWeaponContext && isMeleeWeapon(activeWeaponContext);
             let _tem = window.getTEMModifierValues('tn', { isMelee: _isMelee, steadyHands: hasSteadyHands() });
             let total = _tem.total;
             // Defend = target defending (+4 Parry = -4 to attacker's roll, melee only).
-            if (_tem.values.defend && _isMelee) total -= 4;
+            let _tDef = false;
+            try {
+                const _id = document.getElementById('target-select') ? document.getElementById('target-select').value : "";
+                if (_id && globalState.combat && globalState.combat.participants) {
+                    const _tt = globalState.combat.participants.find(p => p.id === _id);
+                    _tDef = !!(_tt && _tt.defending);
+                }
+            } catch (e) { _tDef = false; }
+            if (_tem.values.defend && _isMelee && !_tDef) total -= 4;
             return total;
         }
         // Capture the active TEM summary (non-default settings only) for Discord embeds.

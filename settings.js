@@ -1063,6 +1063,38 @@ function resetTEMModifiers(prefix) {
     set('sit-running', false);
 }
 
+// ---- Unified combat modifier helpers (single source of truth) ----
+// SWADE caps: wounds -3 max, fatigue -2 max, Distracted -2. All Trait rolls
+// share this penalty unless a rule explicitly exempts them (none here).
+function computeStatusPenalty(wounds, fatigue, distracted) {
+    const w = Math.min(Math.max(0, parseInt(wounds) || 0), 3);
+    const f = Math.min(Math.max(0, parseInt(fatigue) || 0), 2);
+    const d = distracted ? 2 : 0;
+    return (-(w + f + d)) || 0;
+}
+
+// 0-safe source resolution: charData owns wounds/fatigue, participant mirrors
+// it. MUST use ?? (not ||) so a healed 0 doesn't fall through to stale data.
+function resolveTraitSource(charVal, partVal) {
+    return (charVal ?? partVal ?? 0);
+}
+
+// One addition order for every trait roll. Edges passed explicitly so
+// character/threats/tracker can't diverge silently.
+function computeTraitModifier(opts) {
+    opts = opts || {};
+    const o = (opts && typeof opts === 'object' && !Array.isArray(opts)) ? opts : {};
+    const traitMod = parseInt(o.traitMod) || 0;
+    const statusPenalty = parseInt(o.statusPenalty) || 0;
+    const customModifier = parseInt(o.customModifier) || 0;
+    const jokerBonus = parseInt(o.jokerBonus) || 0;
+    const wildAttackBonus = parseInt(o.wildAttackBonus) || 0;
+    const defenderModifier = parseInt(o.defenderModifier) || 0;
+    const calledHitMod = parseInt(o.calledHitMod) || 0;
+    const edgeBonus = parseInt(o.edgeBonus) || 0;
+    return traitMod + customModifier + statusPenalty + jokerBonus + wildAttackBonus + defenderModifier + calledHitMod + edgeBonus;
+}
+
 // Build a compact "Active Modifiers" line for Discord embeds from a summary array
 // plus any extra page-specific modifiers (range, rof, map, wild attack, called shot, etc.)
 function temSummaryToField(extras) {
@@ -1116,6 +1148,9 @@ window.HEAD_SUB_TABLE = HEAD_SUB_TABLE;
 window.buildTEMModifiersHTML = buildTEMModifiersHTML;
 window.getTEMModifierValues = getTEMModifierValues;
 window.resetTEMModifiers = resetTEMModifiers;
+window.computeStatusPenalty = computeStatusPenalty;
+window.resolveTraitSource = resolveTraitSource;
+window.computeTraitModifier = computeTraitModifier;
 window.temSummaryToField = temSummaryToField;
 window.formatCountdown = formatCountdown;
 
