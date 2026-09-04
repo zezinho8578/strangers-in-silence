@@ -1095,6 +1095,56 @@ function computeTraitModifier(opts) {
     return traitMod + customModifier + statusPenalty + jokerBonus + wildAttackBonus + defenderModifier + calledHitMod + edgeBonus;
 }
 
+// Build a labeled modifier breakdown so a "-4" always explains WHY.
+// Hybrid model: the Modifier Adjust box holds situational computed + manual;
+// this breakdown lists every cause for the box AND the roll-time adds.
+// Each entry: {label, value}. Zero values are omitted (except manual when noted).
+function buildModifierBreakdown(o) {
+    o = o || {};
+    const lines = [];
+    const push = (label, v) => {
+        v = parseInt(v) || 0;
+        if (v !== 0 && label) lines.push({ label: label, value: v });
+    };
+    if (o.range) push('Range: ' + (o.rangeLabel || o.range), o.range);
+    if (o.recoil) push('Recoil', o.recoil);
+    if (o.aimPenalty) push('Aim (penalty retained)', o.aimPenalty);
+    if (o.aimBonus) push('Aim (+2)', o.aimBonus);
+    if (o.trb) push('3-Round Burst (+1 hit)', o.trb);
+    if (o.dt) push('Double Tap', o.dt);
+    if (o.supp) push('Suppressive Fire', o.supp);
+    if (o.rofNote) push('RoF', o.rofNote);
+    if (o.cover) push('Cover' + (o.coverLabel ? ' (' + o.coverLabel + ')' : ''), o.cover);
+    if (o.gangUp) push('Gang Up', o.gangUp);
+    if (o.drop) push('The Drop (+4 hit)', o.drop);
+    if (o.illum) push('Illumination' + (o.illumLabel ? ' (' + o.illumLabel + ')' : ''), o.illum);
+    if (o.running) push('Running' + (o.steadyHands ? ' (Steady Hands −1)' : ' (−2)'), o.running);
+    if (o.defendRoll) push('Target Defending (−4 roll, melee)', o.defendRoll);
+    if (o.armorPen) push('Armor Min-Str penalty', o.armorPen);
+    if (o.minStrPen) push('Weapon Min-Str penalty', o.minStrPen);
+    if (o.calledHitMod) push('Called Shot' + (o.calledLabel ? ' (' + o.calledLabel + ')' : ''), o.calledHitMod);
+    if (o.wildAttack) push('Wild Attack (+2)', o.wildAttack);
+    if (o.map) push('Multi-Action (MAP)', o.map);
+    if (o.vulnerable) push('Target Vulnerable (+2)', o.vulnerable);
+    if (o.dodge) push('Target Dodge/Deflect (−2)', o.dodge);
+    if (o.joker) push("Joker's Wild (+2)", o.joker);
+    if (o.woundPen) push('Wounds', o.woundPen);
+    if (o.fatiguePen) push('Fatigue', o.fatiguePen);
+    if (o.distractedPen) push('Distracted (−2)', o.distractedPen);
+    if (o.traitMod) push('Trait modifier', o.traitMod);
+    if (o.edgeBonus) push('Edge bonus', o.edgeBonus);
+    const computed = lines.reduce((a, l) => a + (parseInt(l.value) || 0), 0);
+    return { lines: lines, computed: computed };
+}
+
+function formatBreakdownLines(bd, manual) {
+    bd = bd || { lines: [] };
+    const out = (bd.lines || []).map(l => `${l.label}: ${l.value > 0 ? '+' : ''}${l.value}`);
+    manual = parseInt(manual) || 0;
+    if (manual !== 0) out.push(`Manual adjustment: ${manual > 0 ? '+' : ''}${manual} (player/GM tweak, factors kept)`);
+    return out;
+}
+
 // Build a compact "Active Modifiers" line for Discord embeds from a summary array
 // plus any extra page-specific modifiers (range, rof, map, wild attack, called shot, etc.)
 function temSummaryToField(extras) {
@@ -1151,6 +1201,8 @@ window.resetTEMModifiers = resetTEMModifiers;
 window.computeStatusPenalty = computeStatusPenalty;
 window.resolveTraitSource = resolveTraitSource;
 window.computeTraitModifier = computeTraitModifier;
+window.buildModifierBreakdown = buildModifierBreakdown;
+window.formatBreakdownLines = formatBreakdownLines;
 window.temSummaryToField = temSummaryToField;
 window.formatCountdown = formatCountdown;
 

@@ -898,7 +898,7 @@
         </div>
         <div class="setting-row" id="map-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Actions this Turn:</span>
-            <select id="map-select" class="admin-input" style="width:180px; pointer-events: auto !important;">
+            <select id="map-select" class="admin-input" style="width:180px; pointer-events: auto !important;" onchange="updateExtraModifiers()">
                 <option value="0">1 Action (No Penalty)</option>
                 <option value="-2">2 Actions (-2 MAP)</option>
                 <option value="-4">3 Actions (-4 MAP)</option>
@@ -909,7 +909,7 @@
             <span>Wild Attack:</span>
             <label
                 style="font-size: 0.9em; display:flex; align-items:center; gap:5px; pointer-events: auto !important;">
-                <input type="checkbox" id="wild-attack-checkbox"> Wild Attack (+2 Hit/Dmg, Vulnerable)
+                <input type="checkbox" id="wild-attack-checkbox" onchange="updateExtraModifiers()"> Wild Attack (+2 Hit/Dmg, Vulnerable)
             </label>
         </div>
         <!-- Shared TEM situational modifiers (rendered from settings.js so the player
@@ -918,8 +918,9 @@
         <div class="setting-row" style="border-top: 1px dashed var(--theme-color); padding-top: 10px;">
             <span>Modifier Adjust:</span>
             <input type="number" id="mod-override-input" value="0" class="admin-input"
-                style="width:80px; text-align:center; pointer-events: auto !important;">
+                style="width:80px; text-align:center; pointer-events: auto !important;" oninput="refreshBreakdownUI()">
         </div>
+        <div id="modifier-breakdown" style="font-size:0.82em; opacity:0.95; text-align:left; margin: 4px 0; min-height:1em;"></div>
         <div class="tn-buttons">
             <button class="die-btn" onclick="confirmRoll()" style="pointer-events: auto !important;">CONFIRM
                 ROLL</button>
@@ -4523,11 +4524,14 @@ function updateDefenderModifierAndStatus() {
     }
 
     defenderDisplay = `Target: ${target.name}` + (defenderModifier !== 0 ? ` (${defenderModifier > 0 ? '+' : ''}${defenderModifier} defender mod)` : "");
+    // Every target/defender change must move the Modifier Adjust box too.
+    try { if (typeof updateExtraModifiers === 'function') updateExtraModifiers(); } catch (e) {}
 }
         window.onActionModeChange = function () {
             let mode = document.getElementById('action-mode-select').value;
             let testRow = document.getElementById('test-options-row');
             testRow.style.display = (mode === 'test') ? 'flex' : 'none';
+            try { if (typeof updateExtraModifiers === 'function') updateExtraModifiers(); } catch (e) {}
         };
 
         async function handleTestOrSupportOutcome(ctx, results, target) {
@@ -4699,6 +4703,7 @@ window.onTargetChange = function () {
     // Part 4 polish: weapon-card effective Toughness hints.
     window.lastTargetId = target ? target.id : null;
     updateAllWeaponHints();
+    try { if (typeof updateExtraModifiers === 'function') updateExtraModifiers(); } catch (e) {}
 };
         // ==========================================
         // PART 4: CALLED SHOT HELPERS
@@ -4726,11 +4731,13 @@ window.onTargetChange = function () {
             if (!cfg || cfg.id === "none") {
                 status.style.display = "none";
                 status.innerHTML = "";
+                try { if (typeof updateExtraModifiers === 'function') updateExtraModifiers(); } catch (e) {}
                 return;
             }
 
             status.style.display = "block";
             status.innerHTML = `Called Shot: <b>${cfg.label}</b>`;
+            try { if (typeof updateExtraModifiers === 'function') updateExtraModifiers(); } catch (e) {}
         };
 
         window.getCurrentCalledShot = function () {
@@ -4757,6 +4764,7 @@ window.onTargetChange = function () {
     }
 
     updateDefenderModifierAndStatus();
+    try { if (typeof updateExtraModifiers === 'function') updateExtraModifiers(); } catch (e) {}
 };
         // ==========================================
         // B3. ROLL CONTEXT + PURE ROLL ENGINE (powers Benny rerolls)
@@ -4778,32 +4786,38 @@ window.onTargetChange = function () {
                 const fSrc = window.resolveTraitSource ? window.resolveTraitSource(charData.fatigue, combatParticipant.fatigue) : (charData.fatigue ?? combatParticipant.fatigue ?? 0);
                 statusPenalty = window.computeStatusPenalty ? window.computeStatusPenalty(wSrc, fSrc, combatParticipant.distracted) : ((-(Math.min(wSrc, 3) + Math.min(fSrc, 2) + (combatParticipant.distracted ? 2 : 0))) || 0);
             }
-            let jokerBonus = isJoker ? 2 : 0;
+            let jokerBonus = 0;
             let wildAttackBonus = 0;
             let applyWildAttackVulnerable = false;
             let storageKey = activeWeaponContext ? getWeaponBonusKey(activeWeaponContext, activeWeaponIndex) : "";
             if (activeWeaponContext && document.getElementById('wild-attack-checkbox').checked) {
-                wildAttackBonus = 2;
+                // +2 already lives in the Modifier Adjust box preview; keep damage
+                // side-effect only so the hit roll doesn't double-count.
                 applyWildAttackVulnerable = true;
                 setPendingDamageBonus(storageKey, { wildAttack: true });
             }
+            // Box is single source for ALL situational preview (range/recoil/aim/
+            // TRB/DT/TEM/defend/armor/called/wild/MAP/defender/joker). Do NOT re-add
+            // map/defender/called/joker/wild here — that was the double-count drift.
+            // Refresh preview first so late target/joker changes land in the box
+            // (manual delta preserved by sole-writer rule).
+            try { if (activeWeaponContext) { updateRecoilPenalty(); } else if (typeof updateExtraModifiers === 'function') { updateExtraModifiers(); } } catch (e) {}
             let baseMod = parseInt(document.getElementById('mod-override-input').value) || 0;
-            let mapPenalty = parseInt(document.getElementById('map-select').value) || 0;
-            let customModifier = baseMod + mapPenalty;
+            let customModifier = baseMod;
             // Part 4: Called Shots.
             // Only attacks use called shots; normal trait rolls must not inherit a stale dropdown value.
+            // Hit mod already in the box; keep dmg/bypass for the damage pipeline.
             const calledShot = (activeWeaponContext && window.getCurrentCalledShot)
                 ? window.getCurrentCalledShot()
                 : { id: "none", hitMod: 0, dmgMod: 0, bypassWorn: false, bypassNatural: false, toughnessOverride: null };
             // B8: include the defender modifier (Vulnerable/Dodge) in the frozen context.
             // Unified addition order via shared helper so all pages match.
-            let totalModifier = window.computeTraitModifier ? window.computeTraitModifier({ traitMod: traitModifier, customModifier: customModifier, statusPenalty: statusPenalty, jokerBonus: jokerBonus, wildAttackBonus: wildAttackBonus, defenderModifier: defenderModifier, calledHitMod: parseInt(calledShot.hitMod) || 0 }) : (traitModifier
+            // NOTE: defender/called/joker/wild/MAP already in customModifier (box).
+            let totalModifier = window.computeTraitModifier ? window.computeTraitModifier({ traitMod: traitModifier, customModifier: customModifier, statusPenalty: statusPenalty, jokerBonus: jokerBonus, wildAttackBonus: wildAttackBonus, defenderModifier: 0, calledHitMod: 0 }) : (traitModifier
                 + customModifier
                 + statusPenalty
                 + jokerBonus
-                + wildAttackBonus
-                + defenderModifier
-                + (parseInt(calledShot.hitMod) || 0));
+                + wildAttackBonus);
             let is3RB = _is3RB || false;
             let isDoubleTap = _isDoubleTap || false;
             let isSupp = _isSupp || false;
@@ -4830,7 +4844,7 @@ window.onTargetChange = function () {
                 storageKey, activeWeaponContext, applyWildAttackVulnerable, jokerBonus,
                 targetId: selectedTarget ? selectedTarget.id : null,
                 targetName: selectedTarget ? selectedTarget.name : "",
-                calledShot: calledShot
+                calledShot: calledShot, traitModifier: traitModifier, statusPenalty: statusPenalty
             };
         }
         function performRoll(ctx) {
@@ -5237,36 +5251,37 @@ Raw: ${d.rawRolls.join(' + ')} = ${d.rawDistance}" ×${d.multiplier} = ${d.multi
 Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                     }
                 }
-                // TEM: list every non-default tactical modifier on the embed (Cover,
-                // Gang Up, The Drop, Illumination, Defend, Running, Range, RoF, MAP,
-                // Wild Attack, Called Shot) so the table can see what was applied.
-                let temExtras = [];
-                if (ctx.activeWeaponContext) {
-                    let rangeSel = document.getElementById('range-select');
-                    if (rangeSel && parseInt(rangeSel.value) !== 0) {
-                        temExtras.push('Range: ' + rangeSel.options[rangeSel.selectedIndex].text);
+                // Full labeled breakdown: every cause that built the Modifier Adjust
+                // box, plus roll-time trait/status, plus manual delta. A "-4" always
+                // shows its label (e.g. Called Shot (Head): -4).
+                try {
+                    const _boxEl = document.getElementById('mod-override-input');
+                    const _computedAtRoll = parseInt(_boxEl.dataset.computed) || 0;
+                    const _manualAtRoll = (parseInt(_boxEl.value) || 0) - _computedAtRoll;
+                    let _bdLines = [];
+                    if (window._lastAttackBreakdown && window.formatBreakdownLines) {
+                        _bdLines = window.formatBreakdownLines(window._lastAttackBreakdown, 0);
+                    } else {
+                        let _temSummary = (typeof getActiveTEMSummary === 'function') ? getActiveTEMSummary() : lastTEMSummary;
+                        _bdLines = (_temSummary || []).slice();
                     }
-                    if (ctx.is3RB) temExtras.push('3-Round Burst (+1)');
-                    if (ctx.isDoubleTap) temExtras.push('Double Tap (+1)');
-                    if (ctx.isSupp) temExtras.push('Suppressive Fire');
-                    let rofSel = document.getElementById('rof-select');
-                    if (rofSel && parseInt(rofSel.value) > 1 && !ctx.is3RB && !ctx.isDoubleTap && !ctx.isSupp) {
-                        temExtras.push('RoF: ' + rofSel.value);
+                    // Roll-time adds (NOT in the box): trait + status.
+                    if (ctx && (ctx.traitModifier || ctx.statusPenalty)) {
+                        if (ctx.traitModifier) _bdLines.push(`Trait modifier: ${ctx.traitModifier > 0 ? '+' : ''}${ctx.traitModifier}`);
+                        if (ctx.statusPenalty) _bdLines.push(`Wounds/Fatigue/Distracted: ${ctx.statusPenalty > 0 ? '+' : ''}${ctx.statusPenalty}`);
                     }
-                    if (document.getElementById('scope-checkbox')?.checked) temExtras.push('Aiming');
-                    if (document.getElementById('wild-attack-checkbox')?.checked) temExtras.push('Wild Attack (+2)');
-                    if (ctx.calledShot && ctx.calledShot.id && ctx.calledShot.id !== 'none') {
-                        temExtras.push('Called Shot: ' + (ctx.calledShot.label || ctx.calledShot.id));
+                    if (_manualAtRoll !== 0) _bdLines.push(`Manual adjustment: ${_manualAtRoll > 0 ? '+' : ''}${_manualAtRoll} (player/GM tweak, factors kept)`);
+                    if (_bdLines.length > 0) {
+                        embed.fields.push({ name: "Modifier Breakdown", value: _bdLines.join('\n'), inline: false });
+                        embed.fields.push({ name: "Modifier Total", value: `Box ${(_computedAtRoll > 0 ? '+' : '') + _computedAtRoll}${_manualAtRoll !== 0 ? ` + manual ${_manualAtRoll > 0 ? '+' : ''}${_manualAtRoll}` : ''} = ${(ctx.totalModifier > 0 ? '+' : '') + ctx.totalModifier} (trait/status included)`, inline: false });
                     }
-                }
-                let mapSel = document.getElementById('map-select');
-                if (mapSel && parseInt(mapSel.value) !== 0) {
-                    temExtras.push('MAP: ' + mapSel.options[mapSel.selectedIndex].text);
-                }
-                let temSummary = (typeof getActiveTEMSummary === 'function') ? getActiveTEMSummary() : lastTEMSummary;
-                let allMods = temExtras.concat(temSummary || []);
-                if (allMods.length > 0) {
-                    embed.fields.push({ name: "Active Modifiers", value: allMods.join('\n'), inline: false });
+                } catch (e) {
+                    let mapSel = document.getElementById('map-select');
+                    let _fb = [];
+                    if (mapSel && parseInt(mapSel.value) !== 0) _fb.push('MAP: ' + mapSel.options[mapSel.selectedIndex].text);
+                    let temSummary = (typeof getActiveTEMSummary === 'function') ? getActiveTEMSummary() : lastTEMSummary;
+                    let allMods = _fb.concat(temSummary || []);
+                    if (allMods.length > 0) embed.fields.push({ name: "Active Modifiers", value: allMods.join('\n'), inline: false });
                 }
                 try {
                     await fetch(globalState.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
@@ -5491,6 +5506,10 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
             // Shared TEM: include the situational modifiers (Cover, Gang Up, The Drop,
             // Illumination, Defend, Running) and the armor min-str penalty so they are
             // not wiped whenever the GM tweaks range/RoF.
+            // FULL preview: every control that changes the roll also changes the box:
+            // range/recoil/aim/TRB/DT/TEM/defend/armor/minStr + called + wild + MAP
+            // + defender (vuln/dodge) + joker. Trait + status stay roll-time adds
+            // (listed in the breakdown/embed, NOT folded into the box).
             let _armorPen = parseInt(charData.derived?.armorPenalty) || 0;
             let _isMelee = activeWeaponContext && isMeleeWeapon(activeWeaponContext);
             let _tem = window.getTEMModifierValues('tn', { isMelee: _isMelee, steadyHands: hasSteadyHands() });
@@ -5507,7 +5526,36 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                 }
             } catch (e) { _targetDefending = false; }
             let _defendMod = (_tem.values.defend && _isMelee && !_targetDefending) ? -4 : 0;
-            applyComputedModifiers(aim.penalty + aim.bonus + trbBonus + dtBonus + _tem.total + _defendMod - _armorPen);
+            let _calledMod = 0, _calledLabel = "";
+            try {
+                const _cs = window.getCurrentCalledShot ? window.getCurrentCalledShot() : null;
+                if (activeWeaponContext && _cs && _cs.id && _cs.id !== "none") { _calledMod = parseInt(_cs.hitMod) || 0; _calledLabel = _cs.label || _cs.id; }
+            } catch (e) { _calledMod = 0; }
+            let _wildMod = (activeWeaponContext && document.getElementById('wild-attack-checkbox')?.checked) ? 2 : 0;
+            let _mapMod = parseInt(document.getElementById('map-select')?.value) || 0;
+            let _defMod = parseInt(defenderModifier) || 0;
+            let _jokerMod = (typeof isJoker !== "undefined" && isJoker) ? 2 : 0;
+            let _bd = null;
+            if (window.buildModifierBreakdown) {
+                const _rangeEl = document.getElementById('range-select');
+                _bd = window.buildModifierBreakdown({
+                    range: rangePenalty, rangeLabel: _rangeEl ? _rangeEl.options[_rangeEl.selectedIndex].text : String(rangePenalty),
+                    recoil: recoilPenalty, aimPenalty: aim.penalty, aimBonus: aim.bonus,
+                    trb: trbBonus, dt: dtBonus,
+                    cover: _tem.values.cover, coverLabel: "", gangUp: _tem.values.gangUp,
+                    drop: _tem.values.drop ? 4 : 0, illum: _tem.values.illum, illumLabel: "",
+                    running: _tem.values.running ? (hasSteadyHands() ? -1 : -2) : 0, steadyHands: hasSteadyHands(),
+                    defendRoll: _defendMod, armorPen: _armorPen ? -_armorPen : 0, minStrPen: 0,
+                    calledHitMod: _calledMod, calledLabel: _calledLabel,
+                    wildAttack: _wildMod, map: _mapMod,
+                    vulnerable: _defMod > 0 ? _defMod : 0, dodge: _defMod < 0 ? _defMod : 0,
+                    joker: _jokerMod
+                });
+                try { window._lastAttackBreakdown = _bd; } catch (e) {}
+            }
+            let _computed = _bd ? _bd.computed : (aim.penalty + aim.bonus + trbBonus + dtBonus + _tem.total + _defendMod - _armorPen + _calledMod + _wildMod + _mapMod + _defMod + _jokerMod);
+            applyComputedModifiers(_computed);
+            refreshBreakdownUI();
         }
         // Shared TEM: read the situational modifier total (Cover, Gang Up, The Drop,
         // Illumination, Running) from the shared panel, plus Defend (-4 roll, melee).
@@ -5528,6 +5576,9 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                 }
             } catch (e) { _tDef = false; }
             if (_tem.values.defend && _isMelee && !_tDef) total -= 4;
+            // Trait-roll preview extras so MAP/Joker also move the box.
+            total += parseInt(document.getElementById('map-select')?.value) || 0;
+            try { if (typeof isJoker !== "undefined" && isJoker) total += 2; } catch (e) {}
             return total;
         }
         // Capture the active TEM summary (non-default settings only) for Discord embeds.
@@ -5557,9 +5608,34 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
             let input = document.getElementById('mod-override-input');
             let manual = parseInt(input.value) - parseInt(input.dataset.computed || 0);
             if (isNaN(manual)) manual = 0;
+            if (!input.dataset.computed) manual = 0;
             input.value = computedVal + manual;
             input.dataset.computed = computedVal;
+            refreshBreakdownUI();
         }
+        // Live labeled breakdown under the box. Box = situational computed +
+        // manual; this list explains every line so "-4" is never bare. Manual
+        // edits re-render via oninput without wiping factors.
+        function refreshBreakdownUI() {
+            try {
+                const el = document.getElementById('modifier-breakdown');
+                if (!el) return;
+                const input = document.getElementById('mod-override-input');
+                const computed = parseInt(input.dataset.computed) || 0;
+                const manual = (parseInt(input.value) || 0) - computed;
+                const bd = window._lastAttackBreakdown && window.buildModifierBreakdown ? window._lastAttackBreakdown : null;
+                let lines = [];
+                if (bd && window.formatBreakdownLines) {
+                    lines = window.formatBreakdownLines(bd, 0);
+                } else if (window.getTEMModifierValues) {
+                    lines = (typeof getActiveTEMSummary === 'function' ? getActiveTEMSummary() : lastTEMSummary) || [];
+                }
+                if (manual !== 0) lines = lines.concat([`Manual adjustment: ${manual > 0 ? '+' : ''}${manual} (player/GM tweak, factors kept)`]);
+                if (!lines.length) { el.innerHTML = `<span style="opacity:0.7;">No modifiers (all defaults).</span>`; return; }
+                el.innerHTML = lines.map(l => `• ${l}`).join('<br>') + `<br><span style="opacity:0.8;">Computed: ${computed > 0 ? '+' : ''}${computed}${manual !== 0 ? ` + manual ${manual > 0 ? '+' : ''}${manual} = <b>${computed + manual > 0 ? '+' : ''}${computed + manual}</b>` : ` = <b>${computed > 0 ? '+' : ''}${computed}</b>`}</span>`;
+            } catch (e) { /* non-fatal */ }
+        }
+        window.refreshBreakdownUI = refreshBreakdownUI;
         function scrollToBottom() { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
         // ==========================================
         // 11. MODAL INTERACTION HANDLERS
