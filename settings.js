@@ -1106,9 +1106,11 @@ function buildModifierBreakdown(o) {
         v = parseInt(v) || 0;
         if (v !== 0 && label) lines.push({ label: label, value: v });
     };
-    if (o.range) push('Range: ' + (o.rangeLabel || o.range), o.range);
+    if (o.range) push('Range', o.range);
+    if (o.rangeLabel && o.range) lines[lines.length-1].label = 'Range (' + o.rangeLabel + ')';
     if (o.recoil) push('Recoil', o.recoil);
-    if (o.aimPenalty) push('Aim (penalty retained)', o.aimPenalty);
+    if (o.minStrPen) push('Weapon Min-Str penalty', o.minStrPen);
+    if (o.aimPenalty) push('Aim (penalty ignored)', o.aimPenalty);
     if (o.aimBonus) push('Aim (+2)', o.aimBonus);
     if (o.trb) push('3-Round Burst (+1 hit)', o.trb);
     if (o.dt) push('Double Tap', o.dt);

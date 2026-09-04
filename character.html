@@ -5538,9 +5538,15 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
             let _bd = null;
             if (window.buildModifierBreakdown) {
                 const _rangeEl = document.getElementById('range-select');
+                // Breakdown lists causes, not nets: Range + Recoil + Min-Str are the
+                // raw penalties; Aim contributes only its mitigation (+4/+6 ignore
+                // or +2 bonus). aim.penalty already contains base, so NEVER pass it
+                // directly (that double-counts). Mitigation = net - base.
+                const _aimMitigation = (aim.penalty - rangePenalty - recoilPenalty - pendingMinStrPenalty) || 0;
                 _bd = window.buildModifierBreakdown({
                     range: rangePenalty, rangeLabel: _rangeEl ? _rangeEl.options[_rangeEl.selectedIndex].text : String(rangePenalty),
-                    recoil: recoilPenalty, aimPenalty: aim.penalty, aimBonus: aim.bonus,
+                    recoil: recoilPenalty, minStrPen: pendingMinStrPenalty || 0,
+                    aimPenalty: _aimMitigation, aimBonus: aim.bonus,
                     trb: trbBonus, dt: dtBonus,
                     cover: _tem.values.cover, coverLabel: "", gangUp: _tem.values.gangUp,
                     drop: _tem.values.drop ? 4 : 0, illum: _tem.values.illum, illumLabel: "",
@@ -5632,7 +5638,10 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                 }
                 if (manual !== 0) lines = lines.concat([`Manual adjustment: ${manual > 0 ? '+' : ''}${manual} (player/GM tweak, factors kept)`]);
                 if (!lines.length) { el.innerHTML = `<span style="opacity:0.7;">No modifiers (all defaults).</span>`; return; }
-                el.innerHTML = lines.map(l => `• ${l}`).join('<br>') + `<br><span style="opacity:0.8;">Computed: ${computed > 0 ? '+' : ''}${computed}${manual !== 0 ? ` + manual ${manual > 0 ? '+' : ''}${manual} = <b>${computed + manual > 0 ? '+' : ''}${computed + manual}</b>` : ` = <b>${computed > 0 ? '+' : ''}${computed}</b>`}</span>`;
+                const _total = computed + manual;
+                const _fmt = (v) => `${v > 0 ? '+' : ''}${v}`;
+                const _totalLine = manual !== 0 ? `Total: ${_fmt(computed)} (computed) + manual ${_fmt(manual)} = <b>${_fmt(_total)}</b>` : `Total: <b>${_fmt(_total)}</b>`;
+                el.innerHTML = lines.map(l => `• ${l}`).join('<br>') + `<br><span style="opacity:0.8;">${_totalLine} — applied to your roll.</span>`;
             } catch (e) { /* non-fatal */ }
         }
         window.refreshBreakdownUI = refreshBreakdownUI;

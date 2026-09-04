@@ -2271,7 +2271,10 @@ window.onTargetDodgeChange = async function () {
                 if (window._lastThreatBreakdown && window.formatBreakdownLines) lines = window.formatBreakdownLines(window._lastThreatBreakdown, 0);
                 if (manual !== 0) lines = lines.concat([`Manual adjustment: ${manual > 0 ? '+' : ''}${manual} (player/GM tweak, factors kept)`]);
                 if (!lines.length) { el.innerHTML = `<span style="opacity:0.7;">No modifiers (all defaults).</span>`; return; }
-                el.innerHTML = lines.map(l => `• ${l}`).join('<br>') + `<br><span style="opacity:0.8;">Computed: ${computed > 0 ? '+' : ''}${computed}${manual !== 0 ? ` + manual ${manual > 0 ? '+' : ''}${manual} = <b>${computed + manual > 0 ? '+' : ''}${computed + manual}</b>` : ` = <b>${computed > 0 ? '+' : ''}${computed}</b>`}</span>`;
+                const _total = computed + manual;
+                const _fmt = (v) => `${v > 0 ? '+' : ''}${v}`;
+                const _totalLine = manual !== 0 ? `Total: ${_fmt(computed)} (computed) + manual ${_fmt(manual)} = <b>${_fmt(_total)}</b>` : `Total: <b>${_fmt(_total)}</b>`;
+                el.innerHTML = lines.map(l => `• ${l}`).join('<br>') + `<br><span style="opacity:0.8;">${_totalLine} — applied to your roll.</span>`;
             } catch (e) {}
         }
         // Shared TEM helpers (settings.js). The TEM panel is injected into #tn-tem-container.
