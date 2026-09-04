@@ -1123,7 +1123,6 @@ function buildModifierBreakdown(o) {
     if (o.running) push('Running' + (o.steadyHands ? ' (Steady Hands −1)' : ' (−2)'), o.running);
     if (o.defendRoll) push('Target Defending (−4 roll, melee)', o.defendRoll);
     if (o.armorPen) push('Armor Min-Str penalty', o.armorPen);
-    if (o.minStrPen) push('Weapon Min-Str penalty', o.minStrPen);
     if (o.calledHitMod) push('Called Shot' + (o.calledLabel ? ' (' + o.calledLabel + ')' : ''), o.calledHitMod);
     if (o.wildAttack) push('Wild Attack (+2)', o.wildAttack);
     if (o.map) push('Multi-Action (MAP)', o.map);
