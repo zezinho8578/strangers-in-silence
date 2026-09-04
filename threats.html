@@ -2701,7 +2701,6 @@ _No auto-application — GM adjudicates who is caught._
             if (_manualAtRoll !== 0) _bdLines.push(`Manual adjustment: ${_manualAtRoll > 0 ? '+' : ''}${_manualAtRoll} (player/GM tweak, factors kept)`);
             if (_bdLines.length) {
                 embed.fields.push({ name: "Modifier Breakdown", value: _bdLines.join('\n'), inline: false });
-                embed.fields.push({ name: "Modifier Total", value: `Box ${(_computedAtRoll > 0 ? '+' : '') + _computedAtRoll}${_manualAtRoll !== 0 ? ` + manual ${_manualAtRoll > 0 ? '+' : ''}${_manualAtRoll}` : ''} = ${(totalModifier > 0 ? '+' : '') + totalModifier} (trait/status included)`, inline: false });
             }
         } catch (e) { /* non-fatal */ }
         if (currentAreaPlan) {

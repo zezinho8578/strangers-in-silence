@@ -5273,7 +5273,6 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                     if (_manualAtRoll !== 0) _bdLines.push(`Manual adjustment: ${_manualAtRoll > 0 ? '+' : ''}${_manualAtRoll} (player/GM tweak, factors kept)`);
                     if (_bdLines.length > 0) {
                         embed.fields.push({ name: "Modifier Breakdown", value: _bdLines.join('\n'), inline: false });
-                        embed.fields.push({ name: "Modifier Total", value: `Box ${(_computedAtRoll > 0 ? '+' : '') + _computedAtRoll}${_manualAtRoll !== 0 ? ` + manual ${_manualAtRoll > 0 ? '+' : ''}${_manualAtRoll}` : ''} = ${(ctx.totalModifier > 0 ? '+' : '') + ctx.totalModifier} (trait/status included)`, inline: false });
                     }
                 } catch (e) {
                     let mapSel = document.getElementById('map-select');
