@@ -5496,7 +5496,10 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
             let trbBonus = is3RB ? 1 : 0;
             let dtBonus = isDT ? ((activeWeaponContext.burst === true) ? 2 : 1) : 0;
             let rangePenalty = parseInt(document.getElementById('range-select').value) || 0;
-            let aim = getAimAdjustments(rangePenalty + recoilPenalty + pendingMinStrPenalty);
+            // SWADE Aim ignores Range/Recoil/Cover/Called Shot/Scale/Speed only —
+            // Min-Str is NEVER mitigated by Aiming, so it stays out of the aim base
+            // and is added raw below (previously aiming erased it entirely).
+            let aim = getAimAdjustments(rangePenalty + recoilPenalty);
             const warning = document.getElementById('recoil-warning');
             if (recoilPenalty !== 0) {
                 warning.style.display = 'block';
@@ -5540,9 +5543,9 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                 const _rangeEl = document.getElementById('range-select');
                 // Breakdown lists causes, not nets: Range + Recoil + Min-Str are the
                 // raw penalties; Aim contributes only its mitigation (+4/+6 ignore
-                // or +2 bonus). aim.penalty already contains base, so NEVER pass it
-                // directly (that double-counts). Mitigation = net - base.
-                const _aimMitigation = (aim.penalty - rangePenalty - recoilPenalty - pendingMinStrPenalty) || 0;
+                // or +2 bonus). Mitigation = net - base (Min-Str excluded from base
+                // so Aiming can never erase it).
+                const _aimMitigation = (aim.penalty - rangePenalty - recoilPenalty) || 0;
                 _bd = window.buildModifierBreakdown({
                     range: rangePenalty, rangeLabel: _rangeEl ? _rangeEl.options[_rangeEl.selectedIndex].text : String(rangePenalty),
                     recoil: recoilPenalty, minStrPen: pendingMinStrPenalty || 0,
@@ -5551,7 +5554,7 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                     cover: _tem.values.cover, coverLabel: "", gangUp: _tem.values.gangUp,
                     drop: _tem.values.drop ? 4 : 0, illum: _tem.values.illum, illumLabel: "",
                     running: _tem.values.running ? (hasSteadyHands() ? -1 : -2) : 0, steadyHands: hasSteadyHands(),
-                    defendRoll: _defendMod, armorPen: _armorPen ? -_armorPen : 0, minStrPen: 0,
+                    defendRoll: _defendMod, armorPen: _armorPen ? -_armorPen : 0,
                     calledHitMod: _calledMod, calledLabel: _calledLabel,
                     wildAttack: _wildMod, map: _mapMod,
                     vulnerable: _defMod > 0 ? _defMod : 0, dodge: _defMod < 0 ? _defMod : 0,
@@ -5559,7 +5562,9 @@ Cap: ${d.cap}" → Final: ${d.finalDistance}"`, inline: false });
                 });
                 try { window._lastAttackBreakdown = _bd; } catch (e) {}
             }
-            let _computed = _bd ? _bd.computed : (aim.penalty + aim.bonus + trbBonus + dtBonus + _tem.total + _defendMod - _armorPen + _calledMod + _wildMod + _mapMod + _defMod + _jokerMod);
+            // _bd.computed already sums Range + Recoil + Min-Str(raw) + Aim
+            // mitigation + everything else. Fallback mirrors it explicitly.
+            let _computed = _bd ? _bd.computed : (aim.penalty + aim.bonus + trbBonus + dtBonus + _tem.total + _defendMod - _armorPen + (pendingMinStrPenalty || 0) + _calledMod + _wildMod + _mapMod + _defMod + _jokerMod);
             applyComputedModifiers(_computed);
             refreshBreakdownUI();
         }
