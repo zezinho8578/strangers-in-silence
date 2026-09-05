@@ -1908,6 +1908,26 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
         function medEffectLabel(effect) {
             return MED_EFFECT_LABELS[effect] || effect;
         }
+        const MED_EFFECT_HELP = {
+            "heal-boost": "Adds its bonus to a Healing roll",
+            "extra-patient": "Adds its bonus and treats one extra wound beyond raises",
+            "golden-hour": "+15 min Golden Hour on one wound, no roll",
+            "stabilize": "Stops Bleeding Out, no roll"
+        };
+        // "+2 " for positive, "-1 " for negative, "" for zero (avoids "0 Stabilize").
+        function medBonusLabel(bonus) {
+            const b = parseInt(bonus) || 0;
+            if (b > 0) return `+${b} `;
+            if (b < 0) return `${b} `;
+            return '';
+        }
+        // Hover text: preset description + plain-language category explanation.
+        function medDescFor(m) {
+            const preset = (globalState.medPresets || []).find(p => p && p.id === m.presetId);
+            const desc = (preset && preset.desc) || '';
+            const help = MED_EFFECT_HELP[m.effect] || '';
+            return ((desc ? desc + ' — ' : '') + 'Category: ' + medEffectLabel(m.effect) + (help ? ' (' + help + ')' : '')).replace(/"/g, '&quot;');
+        }
         // Consume one charge of stock[stockIdx] owned by ownerId. Handles unit
         // rollover (qty--, refill) and row removal. Targeted write so concurrent
         // wound heals can't clobber each other. Returns info or null.
@@ -1939,6 +1959,16 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 charData.medkits = owner.medkits;
             }
             return info;
+        }
+        // GM removes a single medical supply row from the viewed character.
+        async function removeMedkit(idx) {
+            if (!isAdmin) return;
+            if (!Array.isArray(charData.medkits)) return;
+            if (idx < 0 || idx >= charData.medkits.length) return;
+            const removed = charData.medkits.splice(idx, 1)[0];
+            await saveCharacter();
+            renderDiagnostics();
+            logToTerminal(`> [GM] Removed medical supply (${removed.name}) from ${charData.name}.`);
         }
         // GM grants preset units to the currently viewed character (merge by presetId).
         async function grantMedkit() {
@@ -1980,7 +2010,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
                 if ((m.qty || 0) <= 0) return;
                 if (m.effect !== 'heal-boost' && m.effect !== 'extra-patient') return;
                 const extra = m.effect === 'extra-patient' ? ', +1 wound' : '';
-                html += `<option value="${idx}">${m.name} (${(m.bonus > 0 ? '+' : '') + m.bonus}${extra}) ×${m.qty} · ${m.chargesLeft} chg</option>`;
+                html += `<option value="${idx}" title="${medDescFor(m)}">${m.name} (${medBonusLabel(m.bonus)}${medEffectLabel(m.effect)}${extra}) ×${m.qty} · ${m.chargesLeft} chg</option>`;
             });
             medSel.innerHTML = html;
             if (prev !== '' && medSel.querySelector(`option[value="${prev}"]`)) medSel.value = prev;
@@ -2170,14 +2200,20 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             if (!Array.isArray(charData.medkits)) charData.medkits = [];
             let medStockHtml = charData.medkits.length === 0
                 ? `<div style="opacity:0.7; font-size:0.9em;">> NO MEDICAL SUPPLIES.</div>`
-                : charData.medkits.map(m => {
+                : charData.medkits.map((m, idx) => {
                     normalizeMedkit(m);
-                    return `<div style="border-left:2px solid #00ff00; padding-left:8px; margin-bottom:4px; font-size:0.9em;"><b>${m.name}</b> <span style="opacity:0.75;">(${(m.bonus > 0 ? '+' : '') + m.bonus} ${medEffectLabel(m.effect)} · ${m.chargesLeft}/${m.uses} charges × ${m.qty})</span></div>`;
+                    const rmBtn = isAdmin
+                        ? ` <button class="die-btn" style="padding:1px 6px; font-size:0.75em; border-color:#ff3333; color:#ff3333;" onclick="removeMedkit(${idx})">REMOVE</button>`
+                        : '';
+                    return `<div style="border-left:2px solid #00ff00; padding-left:8px; margin-bottom:4px; font-size:0.9em;" title="${medDescFor(m)}"><b>${m.name}</b> <span style="opacity:0.75;">(${medBonusLabel(m.bonus)}${medEffectLabel(m.effect)} · ${m.chargesLeft}/${m.uses} charges × ${m.qty})</span>${rmBtn}</div>`;
                 }).join('');
             let medGrantHtml = '';
             if (isAdmin) {
-                const medOpts = (globalState.medPresets || []).map(p =>
-                    `<option value="${p.id}">${p.name} (${(p.bonus > 0 ? '+' : '') + p.bonus} ${medEffectLabel(p.effect)}, ${p.uses} uses)</option>`).join('');
+                const medOpts = (globalState.medPresets || []).map(p => {
+                    normalizeMedPreset(p);
+                    const tip = (((p.desc || '') ? p.desc + ' — ' : '') + 'Category: ' + medEffectLabel(p.effect) + ' (' + (MED_EFFECT_HELP[p.effect] || '') + ')').replace(/"/g, '&quot;');
+                    return `<option value="${p.id}" title="${tip}">${p.name} (${medBonusLabel(p.bonus)}${medEffectLabel(p.effect)}, ${p.uses} use${p.uses === 1 ? '' : 's'})</option>`;
+                }).join('');
                 medGrantHtml = `<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">
                     <select id="med-grant-select" class="admin-input" style="width:auto; min-width:200px; padding:3px 6px;">${medOpts || '<option value="">-- no medical presets --</option>'}</select>
                     <input type="number" id="med-grant-qty" class="admin-input" value="1" min="1" max="20" style="width:60px; padding:3px; text-align:center;">
@@ -2434,7 +2470,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
           if (medItem) {
             const consumed = await consumeMedCharge(healerId, medItem.idx);
             if (consumed) {
-              usedItemLabel = `${consumed.name} (${(consumed.bonus > 0 ? '+' : '') + consumed.bonus}${consumed.effect === 'extra-patient' ? ', +1 wound' : ''}) — ${consumed.qty > 0 ? `${consumed.chargesLeft} chg × ${consumed.qty} left` : 'DEPLETED'}`;
+              usedItemLabel = `${consumed.name} (${medBonusLabel(consumed.bonus)}${medEffectLabel(consumed.effect)}${consumed.effect === 'extra-patient' ? ', +1 wound' : ''}) — ${consumed.qty > 0 ? `${consumed.chargesLeft} chg × ${consumed.qty} left` : 'DEPLETED'}`;
             } else {
               usedItemLabel = `${medItem.name} (unavailable at use — no charge consumed)`;
             }
@@ -6590,6 +6626,7 @@ ${charData.equippedArmorPenalty > 0 ? `<br><span style="color:#ff9900;">Min Str 
         window.applyGoldenHourAid = applyGoldenHourAid;
         window.stabilizeBleedingOut = stabilizeBleedingOut;
         window.grantMedkit = grantMedkit;
+        window.removeMedkit = removeMedkit;
         window.addCustomMedPreset = addCustomMedPreset;
         window.deleteMedPreset = deleteMedPreset;
         window.updateExtraModifiers = updateExtraModifiers;
