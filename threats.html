@@ -445,6 +445,104 @@
             padding: 5px;
             font-family: inherit;
         }
+
+        /* Codex search / tags / duplicate */
+        #codex-search {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 8px;
+        }
+
+        #codex-filter-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+
+        #codex-filter-row select {
+            flex-grow: 1;
+        }
+
+        #codex-clear-btn {
+            flex-shrink: 0;
+            padding: 4px 8px;
+        }
+
+        #codex-tag-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .tag-chip {
+            font-size: 0.8em;
+            padding: 2px 8px;
+            border: 1px solid var(--theme-color);
+            background: transparent;
+            color: var(--theme-color);
+            cursor: pointer;
+            font-family: inherit;
+            opacity: 0.7;
+        }
+
+        .tag-chip:hover {
+            opacity: 1;
+            background: rgba(255, 153, 0, 0.2);
+        }
+
+        .tag-chip.active {
+            background: var(--theme-color);
+            color: var(--bg-color);
+            opacity: 1;
+            font-weight: bold;
+        }
+
+        #codex-count {
+            font-size: 0.8em;
+            opacity: 0.6;
+            margin-bottom: 8px;
+            text-align: right;
+        }
+
+        .list-item .codex-tags {
+            display: block;
+            font-size: 0.75em;
+            opacity: 0.65;
+            font-weight: normal;
+        }
+
+        .dup-btn {
+            background: transparent;
+            color: var(--theme-color);
+            border: 1px solid var(--theme-color);
+            padding: 0 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85em;
+            margin-left: 8px;
+            opacity: 0.6;
+            line-height: 1.4;
+        }
+
+        .dup-btn:hover {
+            background: var(--theme-color);
+            color: var(--bg-color);
+            opacity: 1;
+        }
+
+        #edit-tags-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+
+        #edit-tags {
+            flex-grow: 1;
+        }
     </style>
 </head>
 
@@ -460,6 +558,18 @@
     <div class="threat-grid">
         <div class="panel-box">
             <h3>THE CODEX</h3>
+            <input type="text" id="codex-search" class="form-input" placeholder="Search name, ability, tag..."
+                autocomplete="off" oninput="onCodexSearchInput(this.value)">
+            <div id="codex-filter-row">
+                <select id="codex-filter-wc" class="form-input" onchange="onCodexWcChange(this.value)">
+                    <option value="all">All (WC + Extras)</option>
+                    <option value="wc">Wild Cards only</option>
+                    <option value="extra">Extras only</option>
+                </select>
+                <button id="codex-clear-btn" class="die-btn" onclick="clearCodexFilters()" title="Clear search and filters">X</button>
+            </div>
+            <div id="codex-tag-chips"></div>
+            <div id="codex-count"></div>
             <div id="codex-list" style="margin-bottom: 15px; max-height: 400px; overflow-y: auto;"></div>
             <button class="die-btn" style="width:100%; margin-bottom: 10px;" onclick="createNewTemplate()">+ CREATE NEW
                 TEMPLATE</button>
@@ -474,6 +584,11 @@
                     <span class="check-box"></span>
                     <span class="check-label">Wild Card</span>
                 </label>
+            </div>
+            <div id="edit-tags-row">
+                <span style="white-space:nowrap; opacity:0.8;">Tags:</span>
+                <input type="text" id="edit-tags" class="form-input" placeholder="e.g. combine, ranged"
+                    onchange="updateActive()" title="Comma-separated, max 8">
             </div>
             <div class="stats-row editor-grid">
                 <div class="form-row"><span>Pace:</span><input type="number" id="edit-pace" class="form-input small"
@@ -1223,17 +1338,164 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
                 localStorage.setItem('wpCollapsed', isCollapsed ? 'false' : 'true');
             });
         })();
+        // ==========================================
+        // CODEX SEARCH / TAGS / DUPLICATE
+        // ==========================================
+        // Filter state persists per-session so switching templates doesn't lose it.
+        let codexQuery = sessionStorage.getItem('codexSearch') || "";
+        let codexTag = sessionStorage.getItem('codexTag') || "all";
+        let codexWC = sessionStorage.getItem('codexWC') || "all";
+        let codexSearchDebounce = null;
+
+        function parseTags(str) {
+            if (!str) return [];
+            const seen = new Set();
+            const out = [];
+            String(str).split(',').forEach(raw => {
+                let t = raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+                if (!t) return;
+                t = t.slice(0, 20);
+                if (!seen.has(t)) { seen.add(t); out.push(t); }
+                if (out.length >= 8) return;
+            });
+            return out.slice(0, 8);
+        }
+
+        function normalizeTags(arr) {
+            if (!Array.isArray(arr)) return [];
+            return parseTags(arr.join(','));
+        }
+
+        function escHtml(s) {
+            return String(s === undefined || s === null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function syncCodexControls() {
+            const searchEl = document.getElementById('codex-search');
+            const wcEl = document.getElementById('codex-filter-wc');
+            if (searchEl && searchEl.value !== codexQuery) searchEl.value = codexQuery;
+            if (wcEl && wcEl.value !== codexWC) wcEl.value = codexWC;
+        }
+
+        window.onCodexSearchInput = function (val) {
+            codexQuery = val || "";
+            if (codexSearchDebounce) clearTimeout(codexSearchDebounce);
+            codexSearchDebounce = setTimeout(() => {
+                sessionStorage.setItem('codexSearch', codexQuery);
+                renderCodex();
+            }, 150);
+        };
+
+        window.onCodexWcChange = function (val) {
+            codexWC = val || "all";
+            sessionStorage.setItem('codexWC', codexWC);
+            renderCodex();
+        };
+
+        window.onCodexTagClick = function (tag) {
+            codexTag = tag || "all";
+            sessionStorage.setItem('codexTag', codexTag);
+            renderCodex();
+        };
+
+        window.clearCodexFilters = function () {
+            codexQuery = ""; codexTag = "all"; codexWC = "all";
+            sessionStorage.removeItem('codexSearch');
+            sessionStorage.setItem('codexTag', 'all');
+            sessionStorage.setItem('codexWC', 'all');
+            syncCodexControls();
+            renderCodex();
+        };
+
+        function renderTagChips(allTags) {
+            const box = document.getElementById('codex-tag-chips');
+            if (!box) return;
+            if (!allTags.length) { box.innerHTML = ''; return; }
+            let html = `<button class="tag-chip ${codexTag === 'all' ? 'active' : ''}" onclick="onCodexTagClick('all')">all</button>`;
+            allTags.forEach(t => {
+                html += `<button class="tag-chip ${codexTag === t ? 'active' : ''}" onclick="onCodexTagClick('${escHtml(t)}')">${escHtml(t)}</button>`;
+            });
+            box.innerHTML = html;
+        }
+
         function renderCodex() {
             const list = document.getElementById('codex-list');
-            list.innerHTML = '';
-            for (let [id, t] of Object.entries(globalState.threatTemplates || {})) {
-                list.innerHTML += `
-<div class="list-item ${id === activeTemplateId ? 'active' : ''}" onclick="loadTemplate('${id}')">
-<span>${t.name}</span>
-<span style="opacity:0.5;">${t.isWildCard ? 'WC' : 'X'}</span>
-</div>`;
+            if (!list) return;
+            syncCodexControls();
+            const templates = globalState.threatTemplates || {};
+            const ids = Object.keys(templates);
+
+            // Collect union of tags for chips (normalized, sorted).
+            const tagSet = new Set();
+            ids.forEach(id => {
+                normalizeTags(templates[id] ? templates[id].tags : []).forEach(t => tagSet.add(t));
+            });
+            const allTags = Array.from(tagSet).sort();
+            if (codexTag !== 'all' && !tagSet.has(codexTag)) codexTag = 'all';
+            renderTagChips(allTags);
+
+            const q = codexQuery.trim().toLowerCase();
+            let shown = 0;
+            let rows = [];
+
+            for (let id of ids) {
+                const t = templates[id] || {};
+                const tags = normalizeTags(t.tags);
+                // Wild Card / Extra filter
+                if (codexWC === 'wc' && !t.isWildCard) continue;
+                if (codexWC === 'extra' && t.isWildCard) continue;
+                // Tag filter
+                if (codexTag !== 'all' && !tags.includes(codexTag)) continue;
+                // Text search across name + abilities + tags
+                if (q) {
+                    const hay = `${t.name || ''} ${t.abilities || ''} ${tags.join(' ')}`.toLowerCase();
+                    if (!hay.includes(q)) continue;
+                }
+                rows.push({ id, name: t.name || 'Unnamed', isWildCard: !!t.isWildCard, tags });
             }
+
+            // Alphabetical, case-insensitive. No recency sort by design.
+            rows.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+            shown = rows.length;
+
+            if (!rows.length) {
+                list.innerHTML = '<div style="opacity:0.6; font-style:italic; padding:10px; text-align:center;">[ NO MATCHES — CLEAR FILTERS ]</div>';
+            } else {
+                list.innerHTML = rows.map(r => `
+<div class="list-item ${r.id === activeTemplateId ? 'active' : ''}" onclick="loadTemplate('${r.id}')">
+<span>${escHtml(r.name)}${r.tags.length ? `<span class="codex-tags">${r.tags.map(escHtml).join(' · ')}</span>` : ''}</span>
+<span style="white-space:nowrap;"><span style="opacity:0.5;">${r.isWildCard ? 'WC' : 'X'}</span><button class="dup-btn" title="Duplicate template" onclick="duplicateTemplate(event, '${r.id}')">⧉</button></span>
+</div>`).join('');
+            }
+
+            const countEl = document.getElementById('codex-count');
+            if (countEl) countEl.textContent = `${shown} / ${ids.length} SHOWN`;
         }
+
+        window.duplicateTemplate = async function (e, id) {
+            if (e) { e.stopPropagation(); }
+            const src = globalState.threatTemplates ? globalState.threatTemplates[id] : null;
+            if (!src) return;
+            const copy = JSON.parse(JSON.stringify(src));
+            copy.tags = normalizeTags(copy.tags);
+            copy.name = String(src.name || 'Threat').slice(0, 52) + ' (Copy)';
+            const newId = "threat_" + Date.now();
+            activeTemplateId = newId;
+            activeThreat = copy;
+            normalizeArmorData(activeThreat);
+            if (!activeThreat.attributes) activeThreat.attributes = JSON.parse(JSON.stringify(defaultAttributes));
+            if (!activeThreat.skills) activeThreat.skills = JSON.parse(JSON.stringify(defaultSkills));
+            if (!activeThreat.weapons) activeThreat.weapons = [];
+            if (!activeThreat.weakPoint) {
+                activeThreat.weakPoint = { enabled: false, name: "Weak Point", hitPenalty: -4, bypassWorn: true, bypassNatural: true, toughnessOverride: null, notes: "" };
+            }
+            activeThreat.calledShotConfig = normalizeCsConfig(activeThreat.calledShotConfig);
+            renderEditor(); renderCodex();
+            await set(ref(db, `campaignState/threatTemplates/${newId}`), copy);
+            logToTerminal(`> TEMPLATE DUPLICATED: ${escHtml(copy.name)}`);
+        };
         function populateWeaponDropdown() {
             const select = document.getElementById('preset-weapon-select');
             select.innerHTML = '<option value="">-- Select Master Preset --</option>';
@@ -1256,6 +1518,7 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
                 name: "New Threat", isWildCard: false, pace: 6, parry: 5, toughness: 5,
                 naturalArmor: 0, wornArmor: 0, armor: 0, scale: 0,
                 heavyArmor: false, armorType: "General", ballisticProtection: 0, forceField: 0,
+                tags: [],
                 weakPoint: {
                     enabled: false,
                     name: "Weak Point",
@@ -1275,6 +1538,7 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
             activeTemplateId = id;
             activeThreat = JSON.parse(JSON.stringify(globalState.threatTemplates[id]));
             normalizeArmorData(activeThreat);
+            activeThreat.tags = normalizeTags(activeThreat.tags);
             if (!activeThreat.attributes) activeThreat.attributes = JSON.parse(JSON.stringify(defaultAttributes));
             if (!activeThreat.skills) activeThreat.skills = JSON.parse(JSON.stringify(defaultSkills));
             if (!activeThreat.weapons) activeThreat.weapons = [];
@@ -1378,6 +1642,7 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
             document.getElementById('editor-panel').style.display = 'block';
             document.getElementById('edit-name').value = activeThreat.name || "";
             document.getElementById('edit-wildcard').checked = activeThreat.isWildCard;
+            document.getElementById('edit-tags').value = normalizeTags(activeThreat.tags).join(', ');
             document.getElementById('edit-pace').value = activeThreat.pace || 6;
             document.getElementById('edit-parry').value = activeThreat.parry || 5;
             document.getElementById('edit-toughness').value = activeThreat.toughness || 5;
@@ -1473,6 +1738,7 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
             if (!activeThreat) return;
             activeThreat.name = document.getElementById('edit-name').value;
             activeThreat.isWildCard = document.getElementById('edit-wildcard').checked;
+            activeThreat.tags = parseTags(document.getElementById('edit-tags').value);
             activeThreat.pace = parseInt(document.getElementById('edit-pace').value) || 6;
             activeThreat.parry = parseInt(document.getElementById('edit-parry').value) || 5;
             activeThreat.toughness = parseInt(document.getElementById('edit-toughness').value) || 5;
@@ -1639,6 +1905,21 @@ Weak Point: Tongue is Toughness 5 to sever.`, weapons: [{ name: "Bite (Ceiling)"
                 "hl2_ichthyosaur": { name: "Ichthyosaur", isWildCard: true, pace: 2, parry: 6, toughness: 8, naturalArmor: 1, wornArmor: 0, armor: 1, ballisticProtection: 0, forceField: 0, scale: 0, heavyArmor: false, armorType: "General", attributes: { Agility: "d8", Smarts: "d4", Spirit: "d8", Strength: "d10", Vigor: "d8" }, skills: { Athletics: "d10", Fighting: "d8", Notice: "d8", Stealth: "d8" }, abilities: `Aquatic: Pace 10 in water.
 Drag: Raise on bite pulls target underwater (hold breath).`, weapons: [{ name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] }
             };
+            const seedTags = {
+                "hl2_headcrab": ["xen", "headcrab"], "hl2_headcrab_fast": ["xen", "headcrab"],
+                "hl2_headcrab_poison": ["xen", "headcrab"], "hl2_zombie": ["undead", "zombie"],
+                "hl2_zombie_fast": ["undead", "zombie"], "hl2_zombie_poison": ["undead", "zombie"],
+                "hl2_antlion": ["xen", "beast"], "hl2_antlion_guard": ["xen", "beast"],
+                "hl2_scanner": ["combine", "construct"], "hl2_manhack": ["combine", "construct"],
+                "hl2_rollermine": ["combine", "construct"], "hl2_metrocop": ["combine", "infantry"],
+                "hl2_combine_soldier": ["combine", "infantry"], "hl2_combine_shotgunner": ["combine", "infantry"],
+                "hl2_combine_elite": ["combine", "infantry"], "hl2_gunship": ["combine", "vehicle", "heavy"],
+                "hl2_strider": ["combine", "vehicle", "heavy"], "hl2_barnacle": ["xen", "ambush"],
+                "hl2_ichthyosaur": ["xen", "aquatic"]
+            };
+            for (const [sid, tags] of Object.entries(seedTags)) {
+                if (hl2Threats[sid]) hl2Threats[sid].tags = tags;
+            }
             await update(ref(db, 'campaignState/threatTemplates'), hl2Threats);
             logToTerminal("> OVERWATCH BESTIARY FULLY INTEGRATED.");
         };
