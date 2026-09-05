@@ -613,6 +613,15 @@
             <button class="die-btn" onclick="resolveYesNo(false)">NO — KEEP</button>
         </div>
     </div>
+    <!-- ROUND END: fresh deal (SWADE default) or keep last round's order -->
+    <div id="round-modal" class="picker-modal">
+        <h3>ROUND COMPLETE</h3>
+        <p id="round-modal-message" style="font-size:0.95em;"></p>
+        <div style="display:flex; gap:15px; justify-content:center; margin-top:15px; flex-wrap:wrap;">
+            <button class="die-btn" onclick="resolveRoundEnd(true)">DEAL INITIATIVE (NEW ROUND)</button>
+            <button class="die-btn" onclick="resolveRoundEnd(false)">KEEP TURN ORDER</button>
+        </div>
+    </div>
     <script src="/embeds.js"></script>
     <script src="/settings.js"></script>
     <script type="module">
@@ -809,6 +818,9 @@
             checkGatekeeper();
             if (globalState.combatActive && globalState.combat) {
                 renderCombatUI();
+                // GM-only: deal waiting newcomers in (covers + ADD EXTRA and
+                // Threat Registry deployments). Converges: no cardless = no-op.
+                if (isAdmin) dealCardsToNewcomers();
             }
         });
         function checkGatekeeper() {
@@ -1197,6 +1209,7 @@
             }
             logToWebhook(`ROUND ${combat.round} INITIATIVE`, desc);
         };
+        let roundEndPending = false;
         window.nextTurn = async function () {
             let combat = globalState.combat;
             // If a Joker is currently interrupting, end the interrupt and resume normal turn order
@@ -1231,17 +1244,14 @@
                 nextIdx++;
             }
             if (nextIdx >= combat.participants.length) {
-                alert("Round Complete! Deal initiative for the next round.");
-                if (combat.round === undefined || combat.round === null) combat.round = 1;
-                else combat.round += 1;
-                combat.participants.forEach(p => p.bleedingOutResolvedThisTurn = false);
-                let firstValid = combat.participants.findIndex(p => p.card && !p.card.isJoker && !p.incapacitated && !p.onHold);
-                combat.activeTurnIndex = firstValid >= 0 ? firstValid : 0;
-                await update(ref(db, 'campaignState/combat'), {
-                    activeTurnIndex: combat.activeTurnIndex,
-                    round: combat.round
-                });
-                if (isAdmin) postTurnOrderEmbed(globalState.combat);
+                // Round complete. SWADE default is a fresh deal each round, but the
+                // GM may keep last round's order instead — ask every time.
+                if (!isAdmin || roundEndPending) return;
+                roundEndPending = true;
+                const completedRound = (combat.round === undefined || combat.round === null) ? 1 : combat.round;
+                document.getElementById('round-modal-message').innerText =
+                    `Round ${completedRound} complete. Deal fresh initiative for round ${completedRound + 1} (SWADE default), or keep this round's turn order?`;
+                document.getElementById('round-modal').style.display = 'block';
                 return;
             } else {
                 combat.activeTurnIndex = nextIdx;
@@ -1250,6 +1260,35 @@
             }
             await set(ref(db, 'campaignState/combat/activeTurnIndex'), combat.activeTurnIndex);
             if (isAdmin) postTurnOrderEmbed(globalState.combat);
+        };
+        // ROUND END resolution: redeal fresh initiative (SWADE default) or carry
+        // last round's order into the new round. GM chooses every round.
+        window.resolveRoundEnd = async function (redeal) {
+            document.getElementById('round-modal').style.display = 'none';
+            roundEndPending = false;
+            const combat = globalState.combat;
+            if (!combat || !combat.participants) return;
+            if (combat.round === undefined || combat.round === null) combat.round = 1;
+            else combat.round += 1;
+            combat.participants.forEach(p => { p.bleedingOutResolvedThisTurn = false; });
+            if (redeal) {
+                await update(ref(db, 'campaignState/combat'), {
+                    round: combat.round,
+                    participants: combat.participants
+                });
+                globalState.combat.round = combat.round;
+                await window.dealInitiative();
+            } else {
+                const firstValid = combat.participants.findIndex(p => p.card && !p.card.isJoker && !p.incapacitated && !p.onHold);
+                combat.activeTurnIndex = firstValid >= 0 ? firstValid : 0;
+                await update(ref(db, 'campaignState/combat'), {
+                    activeTurnIndex: combat.activeTurnIndex,
+                    round: combat.round,
+                    participants: combat.participants
+                });
+                if (isAdmin) postTurnOrderEmbed(globalState.combat);
+                logToWebhook(`ROUND ${combat.round} (ORDER KEPT)`, `Turn order carried over from last round — no new deal.`);
+            }
         };
         // ADDED: Functions to handle Joker interrupts
         window.jokerTakeTurn = async function (index) {
@@ -1377,6 +1416,108 @@
             await set(ref(db, 'campaignState/combat'), combat);
             logToWebhook("NEW ACTION CARD", `${p.name} spent a Benny to redraw. Discarded **${oldCard.label}**, drew **${p.card.label}**. Turn order re-sorted.`);
         };
+        // ==========================================
+        // MID-ROUND REINFORCEMENTS — auto-deal Action Cards to newcomers.
+        // Fresh combatants (manual + ADD EXTRA or Threat Registry deployments,
+        // both of which arrive card:null) are dealt in as long as everyone else
+        // already holds a card: squad-mates copy their squad's card (B14),
+        // everyone else draws (Hesitant / Quick / Level Headed honored, NPCs
+        // auto-pick, no modals). Order re-sorts; the current turn holder is
+        // preserved by id. GM-only so exactly one client acts.
+        // ==========================================
+        let newcomerDealing = false;
+        async function dealCardsToNewcomers() {
+            if (!isAdmin || newcomerDealing) return;
+            try {
+                const combat = globalState.combat;
+                if (!combat || !globalState.combatActive) return;
+                if (!combat.participants || combat.participants.length === 0) return;
+                if (!combat.participants.some(p => p.card)) return; // nothing dealt yet — wait for DEAL INITIATIVE
+                if (!combat.participants.some(p => !p.card)) return;
+                newcomerDealing = true;
+                // Re-check the live snapshot in case a parallel write landed first.
+                const c = globalState.combat;
+                const cardless = c.participants.filter(p => !p.card);
+                if (cardless.length === 0) return;
+                if (!c.deck) c.deck = createDeck();
+                const groupOn = c.groupExtras !== false;
+                const dealt = [];
+                let villainJoker = false;
+                let reshuffled = false;
+                const ensureDeck = () => { if (!c.deck || c.deck.length === 0) reshuffled = true; };
+                for (const p of cardless) {
+                    const squadMate = (groupOn && p.groupId && !p.isWildCard && !p.isPlayer)
+                        ? c.participants.find(q => q !== p && q.groupId === p.groupId && q.card)
+                        : null;
+                    if (squadMate) {
+                        p.card = squadMate.card;
+                        p.jokerRound = squadMate.jokerRound || null;
+                    } else {
+                        const f = p.incapacitated ? {} : (p.initFlags || {});
+                        let finalCard = null;
+                        if (f.hesitant) {
+                            ensureDeck(); const a = drawCard(c);
+                            ensureDeck(); const b = drawCard(c);
+                            const drawn = [a, b];
+                            const jokerCard = drawn.find(x => x.isJoker);
+                            finalCard = jokerCard ? jokerCard : pickLowest(drawn);
+                        } else if (f.improvedLevelHeaded || f.levelHeaded) {
+                            const count = f.improvedLevelHeaded ? 3 : 2;
+                            const drawn = [];
+                            for (let i = 0; i < count; i++) { ensureDeck(); drawn.push(drawCard(c)); }
+                            drawn.sort((a, b) => (b.rank !== a.rank) ? b.rank - a.rank : b.suit - a.suit);
+                            finalCard = drawn[0]; // newcomers are NPCs: auto-keep best, no picker modal
+                        } else {
+                            ensureDeck();
+                            finalCard = drawCard(c);
+                        }
+                        if (f.quick && finalCard && !finalCard.isJoker && finalCard.rank <= 5) {
+                            ensureDeck();
+                            finalCard = drawCard(c); // NPCs always take the redraw
+                        }
+                        p.card = finalCard;
+                        p.jokerRound = null;
+                        if (finalCard.isJoker) {
+                            c.needsReshuffle = true;
+                            p.jokerRound = c.round;
+                            if (p.isWildCard && !p.isPlayer) villainJoker = true;
+                        }
+                    }
+                    dealt.push(`${p.name} — ${p.card.label}`);
+                }
+                if (villainJoker) c.gmPool = (c.gmPool || 0) + 1;
+                // Re-sort into turn order, preserving the current turn holder by id.
+                const keepId = (idx) => (idxValid(idx) && c.participants[idx]) ? c.participants[idx].id : null;
+                const activeId = keepId(c.activeTurnIndex);
+                const jokerId = keepId(c.jokerActiveIndex);
+                const holdId = keepId(c.holdActiveIndex);
+                c.participants.sort((a, b) => {
+                    const rankA = a.card ? a.card.rank : -1;
+                    const rankB = b.card ? b.card.rank : -1;
+                    const suitA = a.card ? a.card.suit : -1;
+                    const suitB = b.card ? b.card.suit : -1;
+                    if (rankB !== rankA) return rankB - rankA;
+                    return suitB - suitA;
+                });
+                const byId = (id, fallback) => {
+                    if (!id) return fallback;
+                    const i = c.participants.findIndex(x => x.id === id);
+                    return i !== -1 ? i : fallback;
+                };
+                c.activeTurnIndex = byId(activeId, 0);
+                if (idxValid(c.jokerActiveIndex)) c.jokerActiveIndex = byId(jokerId, -1);
+                if (idxValid(c.holdActiveIndex)) c.holdActiveIndex = byId(holdId, -1);
+                await set(ref(db, 'campaignState/combat'), c);
+                let desc = dealt.join('\n');
+                if (reshuffled) desc += '\n*Deck ran dry mid-deal — reshuffled automatically.*';
+                if (villainJoker) desc += '\n*Villain Joker: GM Pool +1!*';
+                logToWebhook('REINFORCEMENTS DEALT IN', desc);
+            } catch (e) {
+                console.warn('dealCardsToNewcomers:', e);
+            } finally {
+                newcomerDealing = false;
+            }
+        }
         window.addNpc = async function () {
             let name = prompt("Enter NPC/Group Name:");
             if (!name) return;
