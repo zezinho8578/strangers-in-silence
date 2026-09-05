@@ -74,7 +74,8 @@
     }
 
     // HEAL (Healing skill) — healer treats patient's wounds.
-    function heal(healerName, patientName, die, traitHistory, wildHistory, totalMod, bestTotal, healed, woundsRemaining) {
+    // itemLabel (optional): "Trauma Kit (+2) — 3 chg × 1 left".
+    function heal(healerName, patientName, die, traitHistory, wildHistory, totalMod, bestTotal, healed, woundsRemaining, itemLabel) {
         const embed = {
             title: `${healerName} attempts Healing on ${patientName}`,
             description: `**Result: ${bestTotal}** (Healing vs TN 4)\n**Healed ${healed} Wound(s)** — ${woundsRemaining} remain.`,
@@ -83,7 +84,17 @@
         };
         const mf = modField(totalMod);
         if (mf) embed.fields.push(mf);
+        if (itemLabel) embed.fields.push({ name: "Medical supply", value: itemLabel, inline: false });
         return embed;
+    }
+
+    // STABILIZED via Coagulant Injector (no roll).
+    function stabilized(patientName, itemName) {
+        return {
+            title: `${patientName} stabilized`,
+            description: `Bleeding stopped via **${itemName}** (no roll). Still Incapacitated.`,
+            color: 0x00ff00
+        };
     }
 
     // NATURAL HEALING (Vigor) — GM-awarded, once per 5 in-game days.
@@ -317,6 +328,7 @@
         // builders
         traitRoll,
         heal,
+        stabilized,
         naturalHealing,
         soak,
         unshake,
