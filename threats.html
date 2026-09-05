@@ -534,14 +534,48 @@
 
         #edit-tags-row {
             display: flex;
-            gap: 10px;
-            align-items: center;
+            gap: 12px;
+            align-items: flex-start;
             margin-bottom: 15px;
             font-size: 0.9em;
         }
 
-        #edit-tags {
+        #edit-tags-box {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
             flex-grow: 1;
+        }
+
+        .tag-group-label {
+            font-size: 0.75em;
+            opacity: 0.6;
+            letter-spacing: 1px;
+            margin-right: 6px;
+            min-width: 90px;
+        }
+
+        .tag-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 12px;
+            align-items: center;
+        }
+
+        .tag-check {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            user-select: none;
+        }
+
+        .tag-check input[type="checkbox"] {
+            accent-color: var(--theme-color);
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -587,8 +621,7 @@
             </div>
             <div id="edit-tags-row">
                 <span style="white-space:nowrap; opacity:0.8;">Tags:</span>
-                <input type="text" id="edit-tags" class="form-input" placeholder="e.g. combine, ranged"
-                    onchange="updateActive()" title="Comma-separated, max 8">
+                <div id="edit-tags-box"></div>
             </div>
             <div class="stats-row editor-grid">
                 <div class="form-row"><span>Pace:</span><input type="number" id="edit-pace" class="form-input small"
@@ -1347,23 +1380,35 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
         let codexWC = sessionStorage.getItem('codexWC') || "all";
         let codexSearchDebounce = null;
 
-        function parseTags(str) {
-            if (!str) return [];
-            const seen = new Set();
-            const out = [];
-            String(str).split(',').forEach(raw => {
-                let t = raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
-                if (!t) return;
-                t = t.slice(0, 20);
-                if (!seen.has(t)) { seen.add(t); out.push(t); }
-                if (out.length >= 8) return;
-            });
-            return out.slice(0, 8);
-        }
+        // Fixed objective taxonomy — GM checks boxes, no free text.
+        // Kept flat in storage (threat.tags: string[]) for backward compat.
+        const CODEX_TAG_GROUPS = [
+            { label: "ALLEGIANCE", tags: ["combine", "resistance", "xen", "undead"] },
+            { label: "RANGE", tags: ["melee", "ranged"] },
+            { label: "FORM", tags: ["infantry", "beast", "vehicle", "heavy", "construct", "flying", "aquatic"] }
+        ];
+        const ALLOWED_TAGS = CODEX_TAG_GROUPS.flatMap(g => g.tags);
+        const TAG_ORDER = Object.fromEntries(ALLOWED_TAGS.map((t, i) => [t, i]));
+        // Migrate old free-text tags to the fixed set; unmapped values are dropped.
+        const LEGACY_TAG_MAP = { headcrab: "beast", zombie: "infantry", ambush: null };
 
         function normalizeTags(arr) {
             if (!Array.isArray(arr)) return [];
-            return parseTags(arr.join(','));
+            const seen = new Set();
+            const out = [];
+            arr.forEach(raw => {
+                let t = String(raw || "").trim().toLowerCase();
+                if (!t) return;
+                if (t in LEGACY_TAG_MAP) {
+                    const mapped = LEGACY_TAG_MAP[t];
+                    if (!mapped) return;
+                    t = mapped;
+                }
+                if (!ALLOWED_TAGS.includes(t)) return;
+                if (!seen.has(t)) { seen.add(t); out.push(t); }
+            });
+            out.sort((a, b) => TAG_ORDER[a] - TAG_ORDER[b]);
+            return out;
         }
 
         function escHtml(s) {
@@ -1371,6 +1416,42 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
+
+        // Build the grouped checkbox editor once; sync checks on each renderEditor().
+        function buildTagsEditor() {
+            const box = document.getElementById('edit-tags-box');
+            if (!box || box.dataset.built) return;
+            box.innerHTML = CODEX_TAG_GROUPS.map(g => `
+                <div style="display:flex; align-items:flex-start; gap:6px;">
+                    <span class="tag-group-label">${g.label}</span>
+                    <div class="tag-group">
+                        ${g.tags.map(t => `
+                            <label class="tag-check">
+                                <input type="checkbox" data-tag="${t}" onchange="syncTagsFromInputs()">
+                                <span>${t}</span>
+                            </label>`).join('')}
+                    </div>
+                </div>`).join('');
+            box.dataset.built = "1";
+        }
+
+        function syncTagsEditor() {
+            buildTagsEditor();
+            const current = new Set(normalizeTags(activeThreat ? activeThreat.tags : []));
+            document.querySelectorAll('#edit-tags-box input[data-tag]').forEach(el => {
+                el.checked = current.has(el.dataset.tag);
+            });
+        }
+
+        window.syncTagsFromInputs = function () {
+            if (!activeThreat) return;
+            const checked = [];
+            document.querySelectorAll('#edit-tags-box input[data-tag]:checked').forEach(el => {
+                checked.push(el.dataset.tag);
+            });
+            activeThreat.tags = normalizeTags(checked);
+            renderCodex();
+        };
 
         function syncCodexControls() {
             const searchEl = document.getElementById('codex-search');
@@ -1409,12 +1490,15 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
             renderCodex();
         };
 
-        function renderTagChips(allTags) {
+        function renderTagChips(presentTags) {
             const box = document.getElementById('codex-tag-chips');
             if (!box) return;
-            if (!allTags.length) { box.innerHTML = ''; return; }
+            const present = presentTags instanceof Set ? presentTags : new Set(presentTags || []);
+            // Fixed taxonomy order; only show tags present in data (plus "all").
+            const ordered = ALLOWED_TAGS.filter(t => present.has(t));
+            if (!ordered.length) { box.innerHTML = ''; return; }
             let html = `<button class="tag-chip ${codexTag === 'all' ? 'active' : ''}" onclick="onCodexTagClick('all')">all</button>`;
-            allTags.forEach(t => {
+            ordered.forEach(t => {
                 html += `<button class="tag-chip ${codexTag === t ? 'active' : ''}" onclick="onCodexTagClick('${escHtml(t)}')">${escHtml(t)}</button>`;
             });
             box.innerHTML = html;
@@ -1427,14 +1511,14 @@ function storeThreatAttackContext(hit, results, calledShotOverride = null) {
             const templates = globalState.threatTemplates || {};
             const ids = Object.keys(templates);
 
-            // Collect union of tags for chips (normalized, sorted).
+            // Collect present tags; chips follow fixed taxonomy order.
             const tagSet = new Set();
             ids.forEach(id => {
                 normalizeTags(templates[id] ? templates[id].tags : []).forEach(t => tagSet.add(t));
             });
-            const allTags = Array.from(tagSet).sort();
+            const allTags = ALLOWED_TAGS.filter(t => tagSet.has(t));
             if (codexTag !== 'all' && !tagSet.has(codexTag)) codexTag = 'all';
-            renderTagChips(allTags);
+            renderTagChips(tagSet);
 
             const q = codexQuery.trim().toLowerCase();
             let shown = 0;
@@ -1642,7 +1726,7 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
             document.getElementById('editor-panel').style.display = 'block';
             document.getElementById('edit-name').value = activeThreat.name || "";
             document.getElementById('edit-wildcard').checked = activeThreat.isWildCard;
-            document.getElementById('edit-tags').value = normalizeTags(activeThreat.tags).join(', ');
+            syncTagsEditor();
             document.getElementById('edit-pace').value = activeThreat.pace || 6;
             document.getElementById('edit-parry').value = activeThreat.parry || 5;
             document.getElementById('edit-toughness').value = activeThreat.toughness || 5;
@@ -1738,7 +1822,7 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
             if (!activeThreat) return;
             activeThreat.name = document.getElementById('edit-name').value;
             activeThreat.isWildCard = document.getElementById('edit-wildcard').checked;
-            activeThreat.tags = parseTags(document.getElementById('edit-tags').value);
+            syncTagsFromInputs();
             activeThreat.pace = parseInt(document.getElementById('edit-pace').value) || 6;
             activeThreat.parry = parseInt(document.getElementById('edit-parry').value) || 5;
             activeThreat.toughness = parseInt(document.getElementById('edit-toughness').value) || 5;
@@ -1906,16 +1990,16 @@ Weak Point: Tongue is Toughness 5 to sever.`, weapons: [{ name: "Bite (Ceiling)"
 Drag: Raise on bite pulls target underwater (hold breath).`, weapons: [{ name: "Jaws", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", heavyWeapon: false, damageType: "Melee", icon: defaultWeaponIcon }] }
             };
             const seedTags = {
-                "hl2_headcrab": ["xen", "headcrab"], "hl2_headcrab_fast": ["xen", "headcrab"],
-                "hl2_headcrab_poison": ["xen", "headcrab"], "hl2_zombie": ["undead", "zombie"],
-                "hl2_zombie_fast": ["undead", "zombie"], "hl2_zombie_poison": ["undead", "zombie"],
-                "hl2_antlion": ["xen", "beast"], "hl2_antlion_guard": ["xen", "beast"],
-                "hl2_scanner": ["combine", "construct"], "hl2_manhack": ["combine", "construct"],
-                "hl2_rollermine": ["combine", "construct"], "hl2_metrocop": ["combine", "infantry"],
-                "hl2_combine_soldier": ["combine", "infantry"], "hl2_combine_shotgunner": ["combine", "infantry"],
-                "hl2_combine_elite": ["combine", "infantry"], "hl2_gunship": ["combine", "vehicle", "heavy"],
-                "hl2_strider": ["combine", "vehicle", "heavy"], "hl2_barnacle": ["xen", "ambush"],
-                "hl2_ichthyosaur": ["xen", "aquatic"]
+                "hl2_headcrab": ["xen", "melee", "beast"], "hl2_headcrab_fast": ["xen", "melee", "beast"],
+                "hl2_headcrab_poison": ["xen", "melee", "beast"], "hl2_zombie": ["undead", "melee", "infantry"],
+                "hl2_zombie_fast": ["undead", "melee", "infantry"], "hl2_zombie_poison": ["undead", "melee", "infantry"],
+                "hl2_antlion": ["xen", "melee", "beast"], "hl2_antlion_guard": ["xen", "melee", "beast", "heavy"],
+                "hl2_scanner": ["combine", "construct", "flying"], "hl2_manhack": ["combine", "melee", "construct", "flying"],
+                "hl2_rollermine": ["combine", "melee", "construct"], "hl2_metrocop": ["combine", "melee", "ranged", "infantry"],
+                "hl2_combine_soldier": ["combine", "ranged", "infantry"], "hl2_combine_shotgunner": ["combine", "ranged", "infantry"],
+                "hl2_combine_elite": ["combine", "ranged", "infantry"], "hl2_gunship": ["combine", "ranged", "vehicle", "heavy", "construct", "flying"],
+                "hl2_strider": ["combine", "melee", "ranged", "vehicle", "heavy", "construct"], "hl2_barnacle": ["xen", "melee", "beast"],
+                "hl2_ichthyosaur": ["xen", "melee", "beast", "aquatic"]
             };
             for (const [sid, tags] of Object.entries(seedTags)) {
                 if (hl2Threats[sid]) hl2Threats[sid].tags = tags;
