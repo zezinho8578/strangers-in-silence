@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MARKSMANSHIP // FIRING RANGE</title>
+    <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -397,7 +398,7 @@
                 </div>
             </div>
             <button class="btn" id="roll-submit">ENTER RANGE</button>
-            <div><button class="btn-mini" id="armory-refresh" type="button">RE-SYNC WEAPONS</button></div>
+            <div><button class="btn-mini" id="armory-refresh" type="button">RE-SYNC WEAPONS</button> <button class="btn-mini" id="menu-dash-btn" type="button">RETURN TO DASHBOARD</button></div>
         </div>
 
         <div id="game-screen" class="screen">
@@ -2249,6 +2250,9 @@
             window.location.href = '../dashboard.html';
         });
         document.getElementById('back-to-dash').addEventListener('click', () => {
+            window.location.href = '../dashboard.html';
+        });
+        document.getElementById('menu-dash-btn').addEventListener('click', () => {
             window.location.href = '../dashboard.html';
         });
         const muteBtn = document.getElementById('mute-btn');
