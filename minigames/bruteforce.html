@@ -481,6 +481,7 @@
                 <div id="difficulty-display">THREAT LVL: <span id="diff-text">NORMAL</span></div>
                 <div id="timer-display">60</div>
                 <div>
+                    <button class="btn-mini" id="dash-btn" type="button">DASHBOARD</button>
                     <button class="btn-mini" id="mute-btn" type="button">SOUND: ON</button>
                     <button class="btn-mini" id="abort-btn" type="button">ABORT</button>
                 </div>
@@ -509,6 +510,8 @@
                 <div><span>Best Misses</span><span id="result-best-miss">—</span></div>
             </div>
             <button class="btn" id="play-again">CRACK ANOTHER PASSWORD</button>
+            <br>
+            <button class="btn" id="back-to-dash" type="button">RETURN TO DASHBOARD</button>
         </div>
     </div>
 
@@ -970,6 +973,15 @@
             document.getElementById('roll-input').style.borderColor = '';
             showScreen('roll-screen');
             document.getElementById('roll-input').focus();
+        });
+        document.getElementById('dash-btn').addEventListener('click', () => {
+            state.active = false;
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            window.location.href = '../dashboard.html';
+        });
+        document.getElementById('back-to-dash').addEventListener('click', () => {
+            window.location.href = '../dashboard.html';
         });
         const muteBtn = document.getElementById('mute-btn');
         function updateMuteBtn() {
