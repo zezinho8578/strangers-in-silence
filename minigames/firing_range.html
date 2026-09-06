@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MARKSMANSHIP // FIRING RANGE</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --primary: #00ff41;
+            --primary-dim: #006622;
+            --primary-glow: #00ff41;
+            --bg: #0a0a0a;
+            --bg-panel: rgba(0, 10, 0, 0.9);
+            --target: #ff0040;
+            --target-glow: #ff0040;
+            --warning: #ffaa00;
+            --civ: #e8e8e8;
+            --energy: #00ccff;
+        }
+
+        body {
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(0, 40, 0, 0.3) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(0, 20, 40, 0.2) 0%, transparent 50%);
+            color: var(--primary);
+            font-family: 'Courier New', 'Lucida Console', monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow-x: hidden;
+            user-select: none;
+            padding: 12px 0;
+        }
+
+        #crt_overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.12) 0px,
+                rgba(0, 0, 0, 0.12) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            92% { opacity: 1; }
+            93% { opacity: 0.97; }
+            94% { opacity: 1; }
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        #scanline {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            height: 80px;
+            background: linear-gradient(
+                transparent 0%,
+                rgba(0, 255, 65, 0.03) 50%,
+                transparent 100%
+            );
+            animation: scanline 6s linear infinite;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #game-container {
+            animation: flicker 5s infinite;
+            border: 1px solid var(--primary);
+            padding: 25px;
+            background: var(--bg-panel);
+            width: 95%;
+            max-width: 900px;
+            position: relative;
+            box-shadow:
+                0 0 40px rgba(0, 255, 65, 0.15),
+                inset 0 0 40px rgba(0, 255, 65, 0.03),
+                inset 0 1px 0 rgba(0, 255, 65, 0.2);
+        }
+
+        #game-container::before,
+        #game-container::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: var(--primary);
+            border-style: solid;
+        }
+        #game-container::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+        #game-container::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        #boot-screen { text-align: left; min-height: 380px; padding: 20px; font-size: 13px; }
+        .boot-line { opacity: 0; margin-bottom: 6px; transition: opacity 0.08s; line-height: 1.6; }
+        .boot-line.visible { opacity: 1; }
+        .boot-line .highlight { color: var(--target); }
+        .boot-line .good { color: var(--primary); }
+
+        @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+        .cursor { display: inline-block; width: 8px; height: 14px; background: var(--primary); animation: blink 1s infinite; vertical-align: middle; margin-left: 4px; }
+
+        #roll-screen { text-align: center; padding: 20px 14px; }
+        #roll-screen h1 { font-size: 22px; margin-bottom: 12px; text-shadow: 0 0 10px var(--primary-glow); letter-spacing: 3px; font-weight: normal; }
+        #roll-screen p { font-size: 12px; margin-bottom: 12px; color: var(--primary-dim); }
+        #roll-screen .tiny { font-size: 10px; letter-spacing: 1px; }
+
+        .armory-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; margin: 12px auto; max-width: 720px; }
+        .armory-grid .full { grid-column: 1 / -1; }
+        .field-label { font-size: 10px; letter-spacing: 2px; color: var(--primary-dim); text-transform: uppercase; margin-bottom: 4px; }
+
+        #roll-input, #shooter-input {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 20px;
+            padding: 10px 14px;
+            text-align: center;
+            width: 110px;
+            outline: none;
+        }
+        #shooter-input { width: 100%; font-size: 15px; text-align: left; letter-spacing: 1px; }
+        #roll-input:focus, #shooter-input:focus, #weapon-select:focus {
+            box-shadow: 0 0 15px var(--primary-glow), inset 0 0 10px rgba(0, 255, 65, 0.1);
+        }
+        #weapon-select {
+            width: 100%;
+            background: #000;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 13px;
+            padding: 10px;
+            outline: none;
+        }
+        #weapon-card {
+            border: 1px dashed var(--primary-dim);
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.7;
+            min-height: 118px;
+            text-align: left;
+        }
+        #weapon-card .wname { font-size: 14px; letter-spacing: 1px; text-shadow: 0 0 8px var(--primary-glow); }
+        #weapon-card .warn { color: var(--warning); }
+        #weapon-card .bad { color: var(--target); }
+
+        .mode-row { display: flex; gap: 8px; }
+        .mode-btn {
+            flex: 1;
+            background: transparent;
+            border: 1px solid var(--primary-dim);
+            color: var(--primary-dim);
+            font-family: inherit;
+            font-size: 12px;
+            padding: 10px 6px;
+            cursor: pointer;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .mode-btn.active { border-color: var(--primary); color: var(--primary); box-shadow: 0 0 12px rgba(0,255,65,0.3); }
+
+        .btn {
+            display: inline-block;
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 13px;
+            padding: 12px 35px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .btn:hover { background: var(--primary); color: var(--bg); box-shadow: 0 0 20px var(--primary-glow); }
+        .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        .btn-mini {
+            display: inline-block;
+            background: transparent;
+            border: 1px solid var(--primary-dim);
+            color: var(--primary-dim);
+            font-family: inherit;
+            font-size: 10px;
+            padding: 4px 9px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            margin-left: 6px;
+        }
+        .btn-mini:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-mini.muted { color: var(--warning); border-color: var(--warning); }
+
+        #game-screen { text-align: center; }
+        #game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--primary-dim); flex-wrap: wrap; gap: 8px; }
+        #difficulty-display { font-size: 11px; color: var(--warning); text-transform: uppercase; letter-spacing: 2px; text-align: left; }
+        #timer-display { font-size: 28px; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
+        #timer-display.warning { color: var(--target); animation: blink 0.5s infinite; }
+
+        #hud-row { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; letter-spacing: 1px; margin-bottom: 8px; flex-wrap: wrap; }
+        .hud-box { border: 1px solid var(--primary-dim); padding: 6px 10px; flex: 1 1 0; min-width: 90px; background: rgba(0,20,0,0.5); }
+        .hud-box b { display: block; font-size: 17px; text-shadow: 0 0 8px var(--primary-glow); }
+        #ammo-box.low b { color: var(--target); text-shadow: 0 0 8px var(--target-glow); }
+
+        #wave-banner { border: 1px solid var(--primary); padding: 7px 10px; margin-bottom: 8px; font-size: 12px; letter-spacing: 2px; background: rgba(0,255,65,0.05); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+
+        #range-wrap {
+            position: relative;
+            border: 1px solid var(--primary-dim);
+            background:
+                radial-gradient(circle at 50% 0%, rgba(0, 60, 0, 0.12) 0%, transparent 60%),
+                linear-gradient(rgba(0, 255, 65, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 65, 0.03) 1px, transparent 1px),
+                rgba(0, 12, 0, 0.7);
+            background-size: 100% 100%, 32px 32px, 32px 32px, 100% 100%;
+            height: 380px;
+            overflow: hidden;
+            cursor: crosshair;
+            touch-action: manipulation;
+        }
+        .lane { position: absolute; left: 0; right: 0; border-top: 1px dashed rgba(0,255,65,0.25); }
+        .lane-tag { position: absolute; left: 6px; top: 4px; font-size: 9px; letter-spacing: 2px; color: var(--primary-dim); z-index: 1; pointer-events: none; }
+        #lane-close { top: 0; height: 34%; }
+        #lane-mid { top: 34%; height: 33%; }
+        #lane-far { top: 67%; height: 33%; border-bottom: none; }
+
+        .target {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            cursor: crosshair;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            transition: transform 0.08s;
+        }
+        .target .core {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            font-size: 10px;
+        }
+        .t-paper .core { border: 2px solid var(--primary); background: radial-gradient(circle, rgba(0,255,65,0.25) 0 22%, rgba(0,0,0,0.6) 23% 38%, rgba(0,255,65,0.18) 39% 55%, rgba(0,0,0,0.6) 56%); box-shadow: 0 0 10px rgba(0,255,65,0.4); }
+        .t-popup .core { border-radius: 4px; border: 2px solid var(--primary); background: rgba(0,60,0,0.7); box-shadow: 0 0 10px rgba(0,255,65,0.4); }
+        .t-hostile .core { border-radius: 4px; border: 2px solid var(--target); color: var(--target); background: rgba(60,0,10,0.7); box-shadow: 0 0 12px rgba(255,0,64,0.5); transform: rotate(45deg); }
+        .t-hostile .core span { transform: rotate(-45deg); }
+        .t-civ .core { border-radius: 4px; border: 2px solid var(--civ); color: var(--civ); background: rgba(40,40,40,0.75); box-shadow: 0 0 10px rgba(255,255,255,0.3); }
+        .t-armored .core { border-radius: 6px; border: 3px double var(--warning); color: var(--warning); background: repeating-linear-gradient(45deg, rgba(60,40,0,0.7) 0 6px, rgba(20,14,0,0.7) 6px 12px); box-shadow: 0 0 12px rgba(255,170,0,0.45); }
+        .t-shield .core { border-radius: 6px; border: 3px double var(--energy); color: var(--energy); background: rgba(0,30,40,0.75); box-shadow: 0 0 14px rgba(0,204,255,0.55); }
+        .t-bullseye .core { border: 2px solid var(--primary); background: radial-gradient(circle, var(--target) 0 14%, #000 15% 30%, var(--primary) 31% 46%, #000 47%); box-shadow: 0 0 12px rgba(0,255,65,0.5); }
+        .t-drone .core { border-radius: 50%; border: 2px solid var(--energy); color: var(--energy); background: rgba(0,30,40,0.8); box-shadow: 0 0 14px rgba(0,204,255,0.6); animation: dronebob 1.2s ease-in-out infinite; }
+        @keyframes dronebob { 0%,100% { margin-top: -3px; } 50% { margin-top: 3px; } }
+        .target.hitflash .core { background: #fff !important; box-shadow: 0 0 18px #fff !important; }
+        .target.damaged .core { filter: brightness(1.5); }
+
+        #crosshair { position: absolute; z-index: 5; pointer-events: none; transform: translate(-50%,-50%); display: none; }
+        #crosshair .ch-dot { position: absolute; left: -2px; top: -2px; width: 4px; height: 4px; background: var(--target); border-radius: 50%; box-shadow: 0 0 8px var(--target-glow); }
+        #crosshair .ch-ring { position: absolute; border: 1px solid var(--target); border-radius: 50%; box-shadow: 0 0 8px rgba(255,0,64,0.5), inset 0 0 8px rgba(255,0,64,0.25); transform: translate(-50%,-50%); left: 0; top: 0; }
+        @media (hover: none) { #crosshair { display: none !important; } #range-wrap { cursor: pointer; } }
+
+        .float-pts { position: absolute; z-index: 6; font-size: 13px; font-weight: bold; pointer-events: none; text-shadow: 0 0 8px currentColor; animation: floatup 0.9s ease-out forwards; }
+        @keyframes floatup { 0% { opacity: 1; margin-top: 0; } 100% { opacity: 0; margin-top: -34px; } }
+        .muzzle { position: absolute; z-index: 6; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: radial-gradient(circle, #fff 0 20%, var(--warning) 35%, transparent 70%); pointer-events: none; animation: muzzlefade 0.18s ease-out forwards; }
+        @keyframes muzzlefade { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.8); } }
+
+        #feed { text-align: left; font-size: 11px; line-height: 1.6; min-height: 66px; border: 1px dashed var(--primary-dim); padding: 6px 10px; margin-top: 8px; background: rgba(0,0,0,0.4); }
+        #feed .f-sim { color: var(--energy); }
+        #feed .f-bad { color: var(--target); }
+        #feed .f-good { color: var(--primary); }
+        #feed .f-warn { color: var(--warning); }
+
+        #range-controls { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; justify-content: center; }
+        #reload-btn { width: auto; margin-top: 0; }
+        #game-footer { margin-top: 10px; font-size: 10px; color: var(--primary-dim); text-transform: uppercase; letter-spacing: 2px; }
+
+        #result-screen { text-align: center; padding: 20px 12px; }
+        #result-screen h1 { font-size: 24px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 3px; }
+        #result-screen.success h1 { color: var(--primary); text-shadow: 0 0 20px var(--primary-glow); }
+        #result-screen.failure h1 { color: var(--target); text-shadow: 0 0 20px var(--target-glow); }
+        .result-stats { text-align: left; margin: 14px auto; max-width: 380px; font-size: 13px; }
+        .result-stats div { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--primary-dim); }
+        .result-stats span:first-child { color: var(--primary-dim); text-transform: uppercase; font-size: 11px; letter-spacing: 1px; }
+        #wave-medals { max-width: 520px; margin: 0 auto; font-size: 12px; text-align: left; line-height: 1.9; border: 1px dashed var(--primary-dim); padding: 8px 12px; }
+        .medal-GOLD { color: var(--warning); } .medal-SILVER { color: var(--civ); } .medal-BRONZE { color: #cc8844; } .medal-NONE { color: var(--primary-dim); }
+
+        #board-tabs { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+        #board-table { width: 100%; max-width: 560px; margin: 10px auto 0; border-collapse: collapse; font-size: 12px; }
+        #board-table th, #board-table td { border: 1px solid var(--primary-dim); padding: 5px 7px; text-align: left; }
+        #board-table th { color: var(--primary-dim); font-size: 10px; letter-spacing: 1px; }
+        #board-status { font-size: 11px; color: var(--primary-dim); margin-top: 6px; min-height: 16px; }
+
+        @media (max-width: 700px) {
+            #game-container { padding: 14px; }
+            .armory-grid { grid-template-columns: 1fr; }
+            #range-wrap { height: 330px; }
+            #timer-display { font-size: 22px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #game-container, #scanline { animation: none; }
+            .t-drone .core { animation: none; }
+            .float-pts { animation-duration: 0.01s; }
+        }
+    </style>
+</head>
+<body>
+    <div id="crt_overlay"></div>
+    <div id="scanline"></div>
+
+    <div id="game-container">
+        <div id="boot-screen" class="screen active">
+            <div class="boot-line">> MARKSMANSHIP v1.0 // LAMBDA FIRING RANGE</div>
+            <div class="boot-line">> NEURAL LINK ESTABLISHED</div>
+            <div class="boot-line">> RANGE: 3 LANES // CLOSE / MID / FAR</div>
+            <div class="boot-line">> ARMORY SYNC: <span class="good">16 PRESETS + OWNED WEAPONS</span></div>
+            <div class="boot-line">> TARGETS: PAPER / POP-UP / HOSTILE / <span class="highlight">CIV (HOLD FIRE)</span> / ARMORED / BULLSEYE / DRONE</div>
+            <div class="boot-line">> SCORING: DISTANCE x1/x1.5/x2 // RAISE +50% // STREAK BONUS</div>
+            <div class="boot-line">> <span class="good">STATUS: AWAITING OPERATOR INPUT</span><span class="cursor"></span></div>
+        </div>
+
+        <div id="roll-screen" class="screen">
+            <h1>FIRING RANGE</h1>
+            <p>INPUT SHOOTING SKILL CHECK (1–20)</p>
+            <p class="tiny">FAILED [1-3] = HARD &nbsp;│&nbsp; SUCCESS [4-7] = NORMAL &nbsp;│&nbsp; RAISE [8+] = EASY</p>
+            <div class="armory-grid">
+                <div>
+                    <div class="field-label">Shooting roll</div>
+                    <input type="number" id="roll-input" min="1" max="20" placeholder="?">
+                </div>
+                <div>
+                    <div class="field-label">Shooter (leaderboard)</div>
+                    <input type="text" id="shooter-input" maxlength="12" placeholder="OPERATOR">
+                </div>
+                <div class="full">
+                    <div class="field-label">Weapon (presets + owned)</div>
+                    <select id="weapon-select"></select>
+                </div>
+                <div class="full"><div id="weapon-card">Loading armory…</div></div>
+                <div class="full">
+                    <div class="field-label">Scoring mode</div>
+                    <div class="mode-row">
+                        <button class="mode-btn active" id="mode-arcade" type="button">ARCADE</button>
+                        <button class="mode-btn" id="mode-sim" type="button">SIM MODE (SWADE DICE)</button>
+                    </div>
+                    <p class="tiny" style="margin-top:6px;">SIM rolls Shooting d8 + Wild d6 vs TN4 with range/recoil mods, then damage vs Toughness/Armor. Hits still score on the arcade board (SIM flag saved).</p>
+                </div>
+            </div>
+            <button class="btn" id="roll-submit">ENTER RANGE</button>
+            <div><button class="btn-mini" id="armory-refresh" type="button">RE-SYNC OWNED</button></div>
+        </div>
+
+        <div id="game-screen" class="screen">
+            <div id="game-header">
+                <div id="difficulty-display">THREAT LVL: <span id="diff-text">NORMAL</span><br><span id="weapon-text" style="color:var(--primary);"></span></div>
+                <div id="timer-display">75</div>
+                <div>
+                    <button class="btn-mini" id="dash-btn" type="button">DASHBOARD</button>
+                    <button class="btn-mini" id="mute-btn" type="button">SOUND: ON</button>
+                    <button class="btn-mini" id="abort-btn" type="button">ABORT</button>
+                </div>
+            </div>
+            <div id="hud-row">
+                <div class="hud-box">SCORE<b id="hud-score">0</b></div>
+                <div class="hud-box">WAVE<b id="hud-wave">1/5</b></div>
+                <div class="hud-box" id="ammo-box">AMMO<b id="hud-ammo">—</b></div>
+                <div class="hud-box">STREAK<b id="hud-streak">0</b></div>
+                <div class="hud-box">ACC<b id="hud-acc">—</b></div>
+            </div>
+            <div id="wave-banner"><span id="wave-text">W1/5: QUALIFICATION</span><span id="reload-text"></span></div>
+            <div id="range-wrap">
+                <div class="lane" id="lane-close"><span class="lane-tag">CLOSE x1</span></div>
+                <div class="lane" id="lane-mid"><span class="lane-tag">MID x1.5</span></div>
+                <div class="lane" id="lane-far"><span class="lane-tag">FAR x2</span></div>
+                <div id="crosshair"><div class="ch-ring" id="ch-ring"></div><div class="ch-dot"></div></div>
+            </div>
+            <div id="feed"></div>
+            <div id="range-controls">
+                <button class="btn" id="reload-btn" type="button">RELOAD [R]</button>
+            </div>
+            <div id="game-footer">CLICK / TAP TARGETS TO FIRE // R = RELOAD // WHITE CIV = HOLD FIRE // TIMER NEVER STOPS</div>
+        </div>
+
+        <div id="result-screen" class="screen">
+            <h1 id="result-title">COURSE COMPLETE</h1>
+            <div class="result-stats">
+                <div><span>Threat Level</span><span id="result-diff">NORMAL</span></div>
+                <div><span>Shooting Roll</span><span id="result-roll">5</span></div>
+                <div><span>Weapon</span><span id="result-weapon">—</span></div>
+                <div><span>Mode</span><span id="result-mode">ARCADE</span></div>
+                <div><span>Score</span><span id="result-score">0</span></div>
+                <div><span>Rating</span><span id="result-rating">—</span></div>
+                <div><span>Hits / Shots</span><span id="result-acc">0/0</span></div>
+                <div><span>Best Streak</span><span id="result-streak">0</span></div>
+                <div><span>Status</span><span id="result-status">—</span></div>
+                <div><span>Best Score</span><span id="result-best-score">—</span></div>
+                <div><span>Best Acc</span><span id="result-best-acc">—</span></div>
+            </div>
+            <div id="wave-medals"></div>
+            <div id="board-tabs">
+                <button class="mode-btn active" id="tab-local" type="button">LOCAL TOP-10</button>
+                <button class="mode-btn" id="tab-shared" type="button">SHARED TOP-10</button>
+            </div>
+            <table id="board-table"><thead><tr><th>#</th><th>SHOOTER</th><th>WEAPON</th><th>SCORE</th><th>ACC</th><th>MODE</th></tr></thead><tbody id="board-body"></tbody></table>
+            <div id="board-status"></div>
+            <button class="btn" id="play-again">RUN THE COURSE AGAIN</button>
+            <br>
+            <button class="btn" id="back-to-dash" type="button">RETURN TO DASHBOARD</button>
+        </div>
+    </div>
+
+    <script>
+        const AudioEngine = {
+            ctx: null,
+            muted: false,
+            init() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+            beep(freq = 440, dur = 0.1, vol = 0.08, type = 'square') {
+                if (!this.ctx || this.muted) return;
+                try {
+                    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+                    o.type = type;
+                    o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    g.gain.setValueAtTime(vol, this.ctx.currentTime);
+                    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+                    o.connect(g); g.connect(this.ctx.destination);
+                    o.start(); o.stop(this.ctx.currentTime + dur);
+                } catch (e) {}
+            },
+            click() { this.beep(800, 0.04, 0.04); },
+            shot() { this.beep(160, 0.12, 0.14, 'sawtooth'); this.beep(1200, 0.03, 0.05); },
+            dry() { this.beep(300, 0.05, 0.06, 'square'); },
+            reload() { this.beep(500, 0.06, 0.07, 'triangle'); setTimeout(() => this.beep(700, 0.06, 0.07, 'triangle'), 120); },
+            ping() { this.beep(1400, 0.09, 0.08, 'triangle'); },
+            error() { this.beep(180, 0.15, 0.08, 'sawtooth'); },
+            lock() { this.beep(1047, 0.12, 0.1, 'triangle'); },
+            win() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.beep(f, 0.18, 0.12), i * 120)); },
+            lose() { [350, 300, 250, 180].forEach((f, i) => setTimeout(() => this.beep(f, 0.2, 0.1, 'sawtooth'), i * 120)); }
+        };
+
+        const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
+        const FIREBASE_DB_URL = 'https://strangers-in-silence-default-rtdb.firebaseio.com';
+
+        const DIFF = {
+            HARD:   { name: 'HARD',   time: 60, uptime: 0.9,  speed: 1.35, spreadMult: 1.25, par: 1800, maxAlive: 4 },
+            NORMAL: { name: 'NORMAL', time: 75, uptime: 1.4,  speed: 1.0,  spreadMult: 1.0,  par: 1500, maxAlive: 4 },
+            EASY:   { name: 'EASY',   time: 90, uptime: 2.1,  speed: 0.7,  spreadMult: 0.8,  par: 1200, maxAlive: 5 }
+        };
+        const TRIGGER_COOLDOWN_MS = 180;
+        const INPUT_COOLDOWN_MS = 400;
+
+        const DEFAULT_ARMORY = [
+            { id: "crowbar", name: "Crowbar", range: "Melee", damage: "Str+d4", ap: "1", rof: "1", shots: "—", minStr: "d4", damageType: "Melee", icon: "https://i.imgur.com/niLzrfW.png" },
+            { id: "stunstick", name: "Stunstick", range: "Melee", damage: "Str+d6", ap: "1", rof: "1", shots: "Charge 20", minStr: "d4", damageType: "Melee", icon: "https://i.imgur.com/pMPZprv.png" },
+            { id: "usp-match", name: "USP Match Pistol", range: "12/24/48", damage: "2d6", ap: "0", rof: "1", shots: "18", minStr: "d4", damageType: "Ballistic", icon: "https://i.imgur.com/sAz8rBR.png" },
+            { id: "magnum-357", name: "357 Magnum", range: "15/30/60", damage: "2d10", ap: "2", rof: "1", shots: "6", minStr: "d6", damageType: "Ballistic", icon: "https://i.imgur.com/cLsJTiP.png" },
+            { id: "mp7", name: "MP7 Submachine Gun", range: "12/24/48", damage: "2d6", ap: "1", rof: "3", shots: "30", minStr: "d6", burst: true, damageType: "Ballistic", icon: "https://i.imgur.com/oAbqfGW.png" },
+            { id: "spas12", name: "SPAS-12 Shotgun", range: "6/12/24", damage: "3d6", ap: "0", rof: "1", shots: "6", minStr: "d8", damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" },
+            { id: "spas12-double", name: "SPAS-12 (Double Shot)", range: "6/12/24", damage: "5d6", ap: "0", rof: "1", shots: "2", minStr: "d8", damageType: "Ballistic", icon: "https://i.imgur.com/8ewEl7D.png" },
+            { id: "ar2", name: "AR2 Pulse Rifle", range: "18/36/72", damage: "2d8", ap: "2", rof: "3", shots: "30", minStr: "d6", burst: true, damageType: "Ballistic", icon: "https://i.imgur.com/3rgRKGo.png" },
+            { id: "ar2-orb", name: "AR2 Energy Orb", range: "24/48/96", damage: "Special", ap: "Ignore Armor", rof: "1", shots: "1", minStr: "d6", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/4lFt2CC.png" },
+            { id: "crossbow", name: "Crossbow", range: "24/48/96", damage: "3d10", ap: "4", rof: "1", shots: "1", minStr: "d8", damageType: "Ballistic", icon: "https://i.imgur.com/2oHfVXb.png" },
+            { id: "rpg", name: "RPG Launcher", range: "36/72/144", damage: "6d10", ap: "6", rof: "1", shots: "1", minStr: "d8", heavyWeapon: true, damageType: "Ballistic", icon: "https://i.imgur.com/yyVsqkD.png" },
+            { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "1", shots: "1", minStr: "d6", damageType: "Ballistic", icon: "https://i.imgur.com/9a4Uprg.png" },
+            { id: "mine", name: "SLAM Mine", range: "Contact", damage: "5d6", ap: "3", rof: "1", shots: "1", minStr: "d4", damageType: "Ballistic", icon: "https://i.imgur.com/38WpCXz.png" },
+            { id: "grav-punt", name: "Gravity Gun (Punt)", range: "6/12/24", damage: "Varies", ap: "Varies", rof: "1", shots: "—", minStr: "d6", damageType: "Ballistic", icon: "https://i.imgur.com/fAMbiF1.png" },
+            { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "2", shots: "Unlimited", minStr: "d6", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/vhkAPmf.png" },
+            { id: "bugbait", name: "Bugbait", range: "12/24/48", damage: "Special", ap: "—", rof: "1", shots: "1", minStr: "d4", damageType: "Ballistic", icon: "https://i.imgur.com/gwitRFd.png" }
+        ];
+
+        // __PURE_LOGIC_START__
+        // Dependency-free range logic (no DOM/audio/storage). Extracted by regression checks.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function () {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function parseRangeBrackets(rangeStr) {
+            const m = String(rangeStr || '').match(/(\d+)\s*\/\s*(\d+)\s*\/\s*(\d+)/);
+            if (m) return { short: parseInt(m[1], 10), med: parseInt(m[2], 10), long: parseInt(m[3], 10) };
+            return { short: 12, med: 24, long: 48 };
+        }
+        function isMeleeRange(rangeStr) {
+            return /melee|contact/i.test(String(rangeStr || ''));
+        }
+        function parseDamageDice(dmgStr) {
+            const s = String(dmgStr || '').trim();
+            if (/special|varies/i.test(s)) return { dice: [{ count: 2, sides: 6 }], modifier: 0, approx: true };
+            const clean = s.replace(/str\s*\+?/i, '1d6+');
+            const dice = [];
+            let modifier = 0;
+            const tokens = clean.match(/[+-]?\s*\d*d\d+|[+-]?\s*\d+/gi) || [];
+            for (let tok of tokens) {
+                tok = tok.replace(/\s/g, '');
+                let sign = 1;
+                if (tok[0] === '-') { sign = -1; tok = tok.slice(1); }
+                else if (tok[0] === '+') { tok = tok.slice(1); }
+                const dm = tok.match(/^(\d*)d(\d+)$/i);
+                if (dm) {
+                    dice.push({ count: (parseInt(dm[1], 10) || 1) * sign, sides: parseInt(dm[2], 10) });
+                } else {
+                    const v = parseInt(tok, 10);
+                    if (!isNaN(v)) modifier += v * sign;
+                }
+            }
+            if (!dice.length) dice.push({ count: 2, sides: 6 });
+            return { dice, modifier, approx: false };
+        }
+        function damageAvg(dmgStr) {
+            const p = parseDamageDice(dmgStr);
+            let avg = p.modifier;
+            for (const d of p.dice) avg += Math.abs(d.count) * ((d.sides + 1) / 2) * (d.count < 0 ? -1 : 1);
+            return Math.max(1, avg);
+        }
+        function parseAp(apStr) {
+            const s = String(apStr === undefined || apStr === null ? '0' : apStr);
+            if (/ignore/i.test(s)) return { value: 99, ignore: true };
+            const m = s.match(/-?\d+/);
+            return { value: m ? parseInt(m[0], 10) : 0, ignore: false };
+        }
+        function parseRof(rof) {
+            const n = parseInt(String(rof === undefined || rof === null ? '1' : rof), 10);
+            if (isNaN(n)) return 1;
+            return Math.min(4, Math.max(1, n));
+        }
+        function parseMag(shots) {
+            const s = String(shots === undefined || shots === null ? '—' : shots);
+            if (/unlimited|—|varies/i.test(s)) return Infinity;
+            const m = s.match(/\d+/);
+            if (!m) return Infinity;
+            return Math.max(1, parseInt(m[0], 10));
+        }
+        function parseMinStr(minStr) {
+            const m = String(minStr || 'd4').match(/d(\d+)/i);
+            return m ? parseInt(m[1], 10) : 4;
+        }
+        const SPREAD_BASE = {
+            'usp-match': [10, 17, 28], 'magnum-357': [8, 13, 21], 'mp7': [13, 21, 33],
+            'ar2': [12, 18, 27], 'spas12': [15, 32, 58], 'spas12-double': [17, 36, 64],
+            'crossbow': [6, 8, 11], 'rpg': [11, 13, 15], 'grenade': [14, 18, 24],
+            'ar2-orb': [7, 9, 12], 'grav-charged': [9, 13, 19], 'grav-punt': [16, 30, 52],
+            'bugbait': [18, 30, 46], 'crowbar': [30, 80, 110], 'stunstick': [28, 76, 104], 'mine': [26, 70, 100]
+        };
+        function weaponToRangeParams(w) {
+            w = w || {};
+            const brackets = parseRangeBrackets(w.range);
+            const ap = parseAp(w.ap);
+            const rof = parseRof(w.rof);
+            const mag = parseMag(w.shots);
+            const minDie = parseMinStr(w.minStr);
+            const avg = damageAvg(w.damage);
+            const id = w.id || 'custom';
+            const spread = SPREAD_BASE[id] || [12, 20, 32];
+            const isEnergy = String(w.damageType || '') === 'Energy';
+            const heavy = !!w.heavyWeapon;
+            const splash = (id === 'rpg' || id === 'grenade' || id === 'mine');
+            let reloadMs = 1500;
+            if (mag === 1) reloadMs = (id === 'rpg') ? 3000 : 2000;
+            else if (mag <= 2) reloadMs = 2200;
+            else if (mag <= 6) reloadMs = 1800;
+            else if (mag >= 30) reloadMs = 2000;
+            if (id === 'spas12' || id === 'spas12-double') reloadMs = 2500;
+            if (id === 'crossbow') reloadMs = 2200;
+            return {
+                id, name: w.name || id, brackets, melee: isMeleeRange(w.range),
+                apValue: ap.value, apIgnore: ap.ignore, pellets: rof, magSize: mag,
+                reloadMs, dmgAvg: avg, minStrDie: minDie, heavy, isEnergy, splash,
+                damageStr: String(w.damage || '2d6'), rangeStr: String(w.range || ''),
+                damageType: w.damageType || 'Ballistic',
+                spreadClose: spread[0], spreadMid: spread[1], spreadFar: spread[2]
+            };
+        }
+        const TARGET_DEFS = {
+            paper:    { toughness: 4, armor: 0, hp: 1, base: 50 },
+            popup:    { toughness: 5, armor: 0, hp: 1, base: 100 },
+            hostile:  { toughness: 5, armor: 0, hp: 1, base: 150 },
+            civ:      { toughness: 0, armor: 0, hp: 1, base: -100, noShoot: true },
+            armored:  { toughness: 8, armor: 2, hp: 2, base: 250 },
+            shield:   { toughness: 8, armor: 2, hp: 2, base: 250, heavy: true },
+            bullseye: { toughness: 5, armor: 0, hp: 1, base: 200, precision: true },
+            drone:    { toughness: 6, armor: 0, hp: 1, base: 300, moving: true, shieldEnergy: true }
+        };
+        const WAVE_NAMES = ['QUALIFICATION', 'SPEED DRILL', 'DISCIPLINE', 'ARMOR TRIAL', 'LONG RANGE'];
+        const WAVE_KINDS = [
+            ['paper', 'paper', 'paper', 'paper', 'paper', 'paper', 'paper', 'paper'],
+            ['popup', 'popup', 'popup', 'popup', 'popup', 'popup'],
+            ['hostile', 'civ', 'hostile', 'hostile', 'civ', 'hostile', 'civ', 'hostile'],
+            ['armored', 'armored', 'shield', 'armored', 'armored'],
+            ['bullseye', 'bullseye', 'drone', 'bullseye', 'drone', 'shield']
+        ];
+        const WAVE_LANES = [
+            ['close', 'close', 'mid', 'mid', 'close', 'mid', 'far', 'close'],
+            ['close', 'mid', 'close', 'far', 'mid', 'close'],
+            ['close', 'mid', 'mid', 'far', 'close', 'mid', 'far', 'close'],
+            ['mid', 'close', 'mid', 'far', 'close'],
+            ['far', 'far', 'mid', 'far', 'mid', 'close']
+        ];
+        function genCourse(seed, diffName) {
+            const rnd = mulberry32(seed >>> 0);
+            const waves = [];
+            for (let w = 0; w < 5; w++) {
+                const kinds = WAVE_KINDS[w];
+                const lanes = WAVE_LANES[w];
+                const targets = [];
+                for (let i = 0; i < kinds.length; i++) {
+                    targets.push({
+                        kind: kinds[i],
+                        lane: lanes[i % lanes.length],
+                        x: Math.round(12 + rnd() * 76),
+                        seed: Math.floor(rnd() * 1e9)
+                    });
+                }
+                waves.push({ name: WAVE_NAMES[w], targets });
+            }
+            return { diff: diffName || 'NORMAL', waves };
+        }
+        function laneMult(lane) {
+            return lane === 'far' ? 2 : lane === 'mid' ? 1.5 : 1;
+        }
+        function arcadeHitProb(params, kind, lane, recoil, diffName) {
+            const def = TARGET_DEFS[kind] || TARGET_DEFS.paper;
+            if (def.noShoot) return 0.97; // civs are easy to (wrongly) hit
+            let base = lane === 'close' ? 0.95 : lane === 'mid' ? 0.86 : 0.72;
+            const spread = lane === 'close' ? params.spreadClose : lane === 'mid' ? params.spreadMid : params.spreadFar;
+            base -= (spread - 10) * 0.006;
+            if (kind === 'bullseye') base -= 0.12;
+            if (kind === 'drone') base -= 0.18;
+            if (params.melee && lane !== 'close') base -= 0.55;
+            base -= (recoil || 0) * 0.18;
+            if (diffName === 'HARD') base -= 0.06;
+            if (diffName === 'EASY') base += 0.06;
+            return Math.min(0.98, Math.max(0.05, base));
+        }
+        function rollAce(sides, rand) {
+            rand = rand || Math.random;
+            let total = 0;
+            let r = 1 + Math.floor(rand() * sides);
+            total += r;
+            let guard = 0;
+            while (r === sides && guard++ < 6) { r = 1 + Math.floor(rand() * sides); total += r; }
+            return total;
+        }
+        function simShootingRoll(mods, rand) {
+            const skill = rollAce(8, rand);
+            const wild = rollAce(6, rand);
+            const best = Math.max(skill, wild);
+            return { skill, wild, best, total: best + mods, hit: (best + mods) >= 4, raise: (best + mods) >= 8 };
+        }
+        function rollDamageDice(dmgStr, rand) {
+            rand = rand || Math.random;
+            const p = parseDamageDice(dmgStr);
+            let total = p.modifier;
+            const parts = [];
+            for (const d of p.dice) {
+                const n = Math.abs(d.count);
+                for (let i = 0; i < n; i++) {
+                    const r = rollAce(d.sides, rand);
+                    total += r * (d.count < 0 ? -1 : 1);
+                    parts.push('d' + d.sides + ':' + r);
+                }
+            }
+            return { total, parts: parts.join('+'), modifier: p.modifier };
+        }
+        // Pure per-pellet resolution shared by game + tests.
+        // opts: {sim:boolean, recoil, rand}
+        function resolveShotPure(params, kind, lane, diffName, opts) {
+            opts = opts || {};
+            const rand = opts.rand || Math.random;
+            const def = TARGET_DEFS[kind] || TARGET_DEFS.paper;
+            if (def.noShoot) {
+                return { hit: true, civFault: true, killed: true, absorbed: false, raise: false, prob: 1, mods: 0, breakdown: 'CIVILIAN HIT (hold fire)' };
+            }
+            let lanePen = lane === 'close' ? 0 : lane === 'mid' ? -2 : -4;
+            let recoilPen = -Math.round((opts.recoil || 0) * 2);
+            let strPen = (params.minStrDie > 6) ? -1 : 0;
+            if (params.melee && lane !== 'close') lanePen -= 4;
+            const mods = lanePen + recoilPen + strPen;
+            if (!opts.sim) {
+                const prob = arcadeHitProb(params, kind, lane, opts.recoil || 0, diffName);
+                const roll = rand();
+                const hit = roll < prob;
+                if (!hit) return { hit: false, killed: false, absorbed: false, raise: false, prob, mods, breakdown: 'miss (arcade spread)' };
+                // Arcade armor gating (no dice): weak guns need 2 taps on armor.
+                if (kind === 'shield' && !params.heavy && params.apValue < 4 && !params.apIgnore) {
+                    return { hit: true, killed: false, absorbed: true, raise: false, prob, mods, breakdown: 'ping vs gun-shield (need Heavy or AP 4+)' };
+                }
+                if (kind === 'armored' && !params.apIgnore && !(params.apValue >= 2 && params.dmgAvg >= 10)) {
+                    return { hit: true, killed: false, absorbed: false, chip: true, raise: false, prob, mods, breakdown: 'chip vs armor (2 taps)' };
+                }
+                if (kind === 'drone' && def.shieldEnergy && !params.isEnergy && !params.heavy && !params.apIgnore) {
+                    return { hit: true, killed: false, absorbed: false, chip: true, raise: false, prob, mods, breakdown: 'shield absorbs (energy/heavy bypasses)' };
+                }
+                return { hit: true, killed: true, absorbed: false, raise: false, prob, mods, breakdown: 'hit' };
+            }
+            const s = simShootingRoll(mods, rand);
+            if (!s.hit) return { hit: false, killed: false, absorbed: false, raise: false, prob: 0, mods, sim: s, breakdown: 'shoot ' + s.skill + '/wild ' + s.wild + ' ' + (mods >= 0 ? '+' : '') + mods + ' = ' + s.total + ' vs TN4 MISS' };
+            const dmg = rollDamageDice(params.damageStr, rand);
+            let total = dmg.total;
+            let raiseNote = '';
+            if (s.raise) { const rb = rollAce(6, rand); total += rb; raiseNote = ' +raise d6:' + rb; }
+            const apEff = params.apIgnore ? 99 : params.apValue;
+            const effT = def.toughness + Math.max(0, def.armor - apEff);
+            if (kind === 'shield' && !params.heavy && params.apValue < 4 && !params.apIgnore) {
+                return { hit: true, killed: false, absorbed: true, raise: s.raise, prob: 0, mods, sim: s, dmg, breakdown: 'dmg ' + total + ' vs T' + def.toughness + '+shield -> IMMUNE (need Heavy/AP4+)' };
+            }
+            if (total < effT) {
+                return { hit: true, killed: false, absorbed: true, raise: s.raise, prob: 0, mods, sim: s, dmg, breakdown: 'shoot ' + s.total + ' HIT, dmg ' + total + ' vs effT ' + effT + ' ABSORBED' };
+            }
+            return { hit: true, killed: true, absorbed: false, raise: s.raise, prob: 0, mods, sim: s, dmg, breakdown: 'shoot ' + s.total + ' HIT' + (s.raise ? ' RAISE' : '') + ', dmg ' + total + raiseNote + ' vs effT ' + effT + ' PENETRATES' };
+        }
+        function scoreShotPure(kind, lane, raise, streak) {
+            const def = TARGET_DEFS[kind] || TARGET_DEFS.paper;
+            if (def.noShoot) return -100;
+            let pts = def.base * laneMult(lane);
+            if (raise) pts *= 1.5;
+            if ((streak || 0) >= 5) pts *= 1 + Math.min(0.5, Math.floor(streak / 5) * 0.1);
+            return Math.round(pts);
+        }
+        // __PURE_LOGIC_END__
+
+        let ARMORY = [];
+        let simMode = false;
+
+        function loadArmory() {
+            const map = new Map();
+            DEFAULT_ARMORY.forEach(w => map.set(w.id, Object.assign({}, w, { _owned: false })));
+            try {
+                const db = JSON.parse(localStorage.getItem('localFallbackDB') || 'null');
+                if (db) {
+                    if (Array.isArray(db.presets)) {
+                        db.presets.forEach(p => {
+                            if (!p) return;
+                            const k = p.id || ('preset-' + p.name);
+                            if (k && !map.has(k)) map.set(k, Object.assign({}, p, { _owned: false }));
+                        });
+                    }
+                    if (db.characters) {
+                        Object.values(db.characters).forEach(c => {
+                            if (c && Array.isArray(c.weapons)) {
+                                c.weapons.forEach(w => {
+                                    if (!w || (!w.id && !w.name)) return;
+                                    const k = w.id || ('owned-' + String(w.name).toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+                                    if (!map.has(k)) map.set(k, Object.assign({}, w, { id: k, _owned: true }));
+                                });
+                            }
+                        });
+                    }
+                }
+            } catch (e) {}
+            return Array.from(map.values());
+        }
+
+        function weaponNote(p) {
+            const notes = [];
+            if (p.melee) notes.push('MELEE/CONTACT: far lanes nearly unhittable');
+            if (p.splash) notes.push('SPLASH: hits neighbors in lane');
+            if (p.apIgnore) notes.push('Ignores armor');
+            if (p.heavy) notes.push('Heavy weapon (beats gun-shields)');
+            if (p.isEnergy) notes.push('Energy (bypasses drone shield)');
+            if (p.magSize === Infinity) notes.push('No reload');
+            if (p.pellets > 1) notes.push(p.pellets + ' projectiles / trigger');
+            return notes.join(' · ') || 'Standard sidearm profile';
+        }
+
+        function renderArmoryOptions() {
+            ARMORY = loadArmory();
+            const sel = document.getElementById('weapon-select');
+            const prev = sel.value;
+            sel.innerHTML = '';
+            ARMORY.forEach(w => {
+                const o = document.createElement('option');
+                o.value = w.id;
+                o.textContent = (w._owned ? '[OWNED] ' : '') + w.name + ' — ' + (w.range || '?') + ' / ' + (w.damage || '?') + ' / AP ' + (w.ap || '0') + ' / RoF ' + (w.rof || '1');
+                sel.appendChild(o);
+            });
+            if (prev && ARMORY.some(w => w.id === prev)) sel.value = prev;
+            else sel.value = 'usp-match';
+            renderWeaponCard();
+        }
+
+        function renderWeaponCard() {
+            const id = document.getElementById('weapon-select').value;
+            const w = ARMORY.find(x => x.id === id) || ARMORY[0];
+            const card = document.getElementById('weapon-card');
+            if (!w) { card.textContent = 'No weapons found.'; return; }
+            const p = weaponToRangeParams(w);
+            const magTxt = p.magSize === Infinity ? '∞ (no reload)' : p.magSize + ' (' + (p.reloadMs / 1000).toFixed(1) + 's reload)';
+            card.innerHTML =
+                '<div class="wname">' + escapeHtml(p.name) + (w._owned ? ' [OWNED]' : '') + '</div>' +
+                '<div>RANGE ' + escapeHtml(p.rangeStr) + ' &nbsp;│&nbsp; DMG ' + escapeHtml(p.damageStr) + ' (avg ' + p.dmgAvg.toFixed(1) + ') &nbsp;│&nbsp; AP ' + (p.apIgnore ? 'Ignore' : p.apValue) + ' &nbsp;│&nbsp; RoF ' + p.pellets + '</div>' +
+                '<div>MAG ' + magTxt + ' &nbsp;│&nbsp; MIN-STR ' + 'd' + p.minStrDie + ' &nbsp;│&nbsp; TYPE ' + escapeHtml(p.damageType) + (p.heavy ? ' HEAVY' : '') + '</div>' +
+                '<div>SPREAD C/M/F: ' + p.spreadClose + '/' + p.spreadMid + '/' + p.spreadFar + 'px &nbsp;│&nbsp; ' + escapeHtml(weaponNote(p)) + '</div>' +
+                (p.melee ? '<div class="bad">WARNING: melee/contact weapon — MID/FAR lanes suffer −4 and huge spread. Bring a gun for best scores.</div>' : '') +
+                (/special|varies/i.test(p.damageStr) ? '<div class="warn">NOTE: Special/Varies damage simulated as 2d6 arcade / SIM-approx.</div>' : '');
+        }
+
+        function escapeHtml(s) {
+            return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        let state = {
+            diff: null, weapon: null, params: null,
+            score: 0, shotsFired: 0, pelletsFired: 0, pelletsHit: 0,
+            streak: 0, bestStreak: 0, ammo: 0, reloading: false,
+            waveIdx: 0, waveScores: [0, 0, 0, 0, 0],
+            targets: [], nextTid: 1, events: [],
+            timeLeft: 0, endTime: 0, timer: null, raf: null, lastTick: 0,
+            roll: 0, shooter: 'OPERATOR', active: false,
+            lastTriggerAt: 0, lastInputAt: 0, recoil: 0, swayT: 0,
+            elapsed: 0, feed: [], _ended: false, boardTab: 'local', sharedCache: null
+        };
+
+        const WAVE_DUR = [15, 15, 15, 15, 999];
+
+        function feedMsg(html, cls) {
+            state.feed.push({ html, cls: cls || '' });
+            if (state.feed.length > 5) state.feed.shift();
+            const el = document.getElementById('feed');
+            el.innerHTML = state.feed.map(f => '<div class="f-' + f.cls + '">' + f.html + '</div>').join('');
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function runBoot() {
+            const lines = document.querySelectorAll('#boot-screen .boot-line');
+            let delay = 0;
+            lines.forEach(line => {
+                setTimeout(() => { line.classList.add('visible'); AudioEngine.click(); }, delay);
+                delay += 300 + Math.random() * 120;
+            });
+            setTimeout(() => {
+                showScreen('roll-screen');
+                renderArmoryOptions();
+                const inp = document.getElementById('roll-input');
+                if (inp) inp.focus();
+                try {
+                    const u = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser') || '';
+                    if (u) document.getElementById('shooter-input').value = String(u).toUpperCase().slice(0, 12);
+                } catch (e) {}
+            }, delay + 350);
+        }
+
+        function submitArmory() {
+            AudioEngine.init();
+            const v = parseInt(document.getElementById('roll-input').value, 10);
+            if (isNaN(v) || v < 1 || v > 20) {
+                document.getElementById('roll-input').style.borderColor = '#ff0040';
+                AudioEngine.error();
+                return;
+            }
+            const wid = document.getElementById('weapon-select').value;
+            const w = ARMORY.find(x => x.id === wid);
+            if (!w) { AudioEngine.error(); return; }
+            state.roll = v;
+            state.weapon = w;
+            state.params = weaponToRangeParams(w);
+            const nm = document.getElementById('shooter-input').value.trim();
+            state.shooter = (nm || 'OPERATOR').toUpperCase().slice(0, 12);
+            const diff = v <= 3 ? DIFF.HARD : v <= 7 ? DIFF.NORMAL : DIFF.EASY;
+            startGame(diff);
+        }
+
+        function buildSpawnPlan(diff, seed) {
+            const course = genCourse(seed, diff.name);
+            const events = [];
+            let t = 0.8;
+            for (let w = 0; w < 5; w++) {
+                const waveDur = WAVE_DUR[w];
+                const list = course.waves[w].targets;
+                const spacing = w === 1 ? 1.7 : w === 2 ? 1.5 : 2.0;
+                list.forEach((td, i) => {
+                    events.push({ at: t + i * spacing + Math.random() * 0.5, wave: w, kind: td.kind, lane: td.lane, x: td.x });
+                });
+                t += (w === 4) ? 0 : waveDur;
+            }
+            events.sort((a, b) => a.at - b.at);
+            return events;
+        }
+
+        function laneSize(kind, lane) {
+            let base = 46;
+            if (kind === 'bullseye') base = 40;
+            if (kind === 'drone') base = 42;
+            if (kind === 'popup' || kind === 'hostile' || kind === 'civ') base = 48;
+            if (kind === 'armored' || kind === 'shield') base = 52;
+            if (lane === 'mid') base *= 0.82;
+            if (lane === 'far') base *= 0.62;
+            if (state.diff.name === 'HARD') base *= 0.88;
+            if (state.diff.name === 'EASY') base *= 1.12;
+            return Math.round(base);
+        }
+
+        function targetLabel(kind) {
+            if (kind === 'paper') return '◎';
+            if (kind === 'popup') return '▲';
+            if (kind === 'hostile') return '<span>H</span>';
+            if (kind === 'civ') return 'CIV';
+            if (kind === 'armored') return '▣';
+            if (kind === 'shield') return '⬢';
+            if (kind === 'bullseye') return '';
+            if (kind === 'drone') return '◈';
+            return '?';
+        }
+
+        function spawnTarget(ev) {
+            const wrap = document.getElementById('range-wrap');
+            const id = state.nextTid++;
+            const size = laneSize(ev.kind, ev.lane);
+            const el = document.createElement('div');
+            el.className = 'target t-' + ev.kind;
+            el.dataset.tid = id;
+            el.style.width = size + 'px';
+            el.style.height = size + 'px';
+            const laneEl = document.getElementById('lane-' + ev.lane);
+            const laneTop = laneEl.offsetTop;
+            const laneH = laneEl.offsetHeight;
+            const y = laneTop + laneH * (0.3 + Math.random() * 0.45);
+            el.style.left = ev.x + '%';
+            el.style.top = y + 'px';
+            el.innerHTML = '<div class="core">' + targetLabel(ev.kind) + '</div>';
+            el.addEventListener('pointerdown', e => { e.stopPropagation(); fireAt(id, e); });
+            wrap.appendChild(el);
+            const persistent = (ev.kind === 'paper' || ev.kind === 'armored' || ev.kind === 'shield' || ev.kind === 'bullseye');
+            const t = {
+                id, kind: ev.kind, lane: ev.lane, wave: ev.wave, el,
+                hp: (TARGET_DEFS[ev.kind] || {}).hp || 1,
+                born: state.elapsed,
+                expires: persistent ? state.elapsed + 25 : state.elapsed + state.diff.uptime * (ev.kind === 'drone' ? 7 : 1) + 2,
+                vx: ev.kind === 'drone' ? (Math.random() < 0.5 ? -1 : 1) * (26 + Math.random() * 22) * state.diff.speed : 0,
+                x: ev.x
+            };
+            state.targets.push(t);
+        }
+
+        function removeTarget(id, silent) {
+            const i = state.targets.findIndex(t => t.id === id);
+            if (i === -1) return;
+            const t = state.targets[i];
+            try { t.el.remove(); } catch (e) {}
+            state.targets.splice(i, 1);
+        }
+
+        function clearTargets() {
+            document.querySelectorAll('#range-wrap .target').forEach(n => n.remove());
+            document.querySelectorAll('#range-wrap .float-pts').forEach(n => n.remove());
+            document.querySelectorAll('#range-wrap .muzzle').forEach(n => n.remove());
+            state.targets = [];
+        }
+
+        function updateHud() {
+            document.getElementById('hud-score').textContent = state.score;
+            document.getElementById('hud-wave').textContent = Math.min(5, state.waveIdx + 1) + '/5';
+            document.getElementById('hud-ammo').textContent = state.params && state.params.magSize === Infinity ? '∞' : (state.reloading ? '…' : state.ammo);
+            document.getElementById('ammo-box').classList.toggle('low', !!state.params && state.params.magSize !== Infinity && state.ammo <= Math.max(1, Math.ceil(state.params.magSize * 0.25)));
+            document.getElementById('hud-streak').textContent = state.streak;
+            const acc = state.pelletsFired ? Math.round(100 * state.pelletsHit / state.pelletsFired) : null;
+            document.getElementById('hud-acc').textContent = acc === null ? '—' : acc + '%';
+            document.getElementById('wave-text').textContent = 'W' + Math.min(5, state.waveIdx + 1) + '/5: ' + WAVE_NAMES[Math.min(4, state.waveIdx)] + (simMode ? ' [SIM]' : '');
+            document.getElementById('reload-text').textContent = state.reloading ? 'RELOADING…' : '';
+        }
+
+        function floatText(x, y, txt, color) {
+            const wrap = document.getElementById('range-wrap');
+            const d = document.createElement('div');
+            d.className = 'float-pts';
+            d.style.left = x + 'px';
+            d.style.top = y + 'px';
+            d.style.color = color;
+            d.textContent = txt;
+            wrap.appendChild(d);
+            setTimeout(() => { try { d.remove(); } catch (e) {} }, 950);
+        }
+
+        function muzzleAt(x, y) {
+            const wrap = document.getElementById('range-wrap');
+            const d = document.createElement('div');
+            d.className = 'muzzle';
+            d.style.left = x + 'px';
+            d.style.top = y + 'px';
+            wrap.appendChild(d);
+            setTimeout(() => { try { d.remove(); } catch (e) {} }, 200);
+        }
+
+        function rangePoint(e) {
+            const wrap = document.getElementById('range-wrap');
+            const r = wrap.getBoundingClientRect();
+            let cx, cy;
+            if (e && e.clientX !== undefined) { cx = e.clientX; cy = e.clientY; }
+            else { cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+            return { x: cx - r.left, y: cy - r.top, rect: r };
+        }
+
+        function inputReady() {
+            const now = Date.now();
+            if (now - state.lastInputAt < INPUT_COOLDOWN_MS) return false;
+            state.lastInputAt = now;
+            return true;
+        }
+
+        function fireAt(tid, e) {
+            if (!state.active) return;
+            const now = Date.now();
+            if (now - state.lastTriggerAt < TRIGGER_COOLDOWN_MS) return;
+            if (state.reloading) { AudioEngine.dry(); return; }
+            state.lastTriggerAt = now;
+            AudioEngine.init();
+
+            const p = state.params;
+            if (p.magSize !== Infinity && state.ammo <= 0) {
+                AudioEngine.dry();
+                feedMsg('DRY — press R / RELOAD', 'warn');
+                doReload();
+                return;
+            }
+            if (p.magSize !== Infinity) state.ammo--;
+
+            state.shotsFired++;
+            state.recoil = Math.min(1, state.recoil + 0.22 + p.pellets * 0.03);
+            AudioEngine.shot();
+
+            const pt = rangePoint(e);
+            muzzleAt(pt.x, pt.y);
+            // Container shake on heavy guns (skip if reduced motion)
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && (p.dmgAvg >= 15 || p.pellets > 1)) {
+                const gc = document.getElementById('game-container');
+                gc.style.transform = 'translateX(' + (Math.random() * 4 - 2) + 'px)';
+                setTimeout(() => { gc.style.transform = ''; }, 60);
+            }
+
+            const target = tid === null || tid === undefined ? null : state.targets.find(t => t.id === tid) || null;
+            const aimKind = target ? target.kind : 'paper';
+            const aimLane = target ? target.lane : 'mid';
+            let anyKill = false;
+
+            for (let i = 0; i < p.pellets; i++) {
+                state.pelletsFired++;
+                const res = resolveShotPure(p, aimKind, aimLane, state.diff.name, { sim: simMode, recoil: state.recoil });
+                if (!target) {
+                    registerMiss(pt, 'MISS — no target');
+                    continue;
+                }
+                if (res.civFault) {
+                    state.pelletsHit++;
+                    state.score -= 100;
+                    state.waveScores[target.wave] -= 100;
+                    state.streak = 0;
+                    AudioEngine.error();
+                    target.el.classList.add('hitflash');
+                    floatText(pt.x, pt.y, '-100 CIV!', '#e8e8e8');
+                    feedMsg('CIVILIAN HIT (−100, streak reset) — HOLD FIRE on white', 'bad');
+                    removeTarget(target.id);
+                    updateHud();
+                    continue;
+                }
+                if (!res.hit) {
+                    registerMiss(pt, simMode && res.breakdown ? res.breakdown : null);
+                    continue;
+                }
+                // Hit landed on the aimed target
+                state.pelletsHit++;
+                if (res.absorbed) {
+                    state.streak = 0;
+                    AudioEngine.ping();
+                    target.el.classList.add('damaged');
+                    setTimeout(() => { try { target.el.classList.remove('damaged'); } catch (err) {} }, 300);
+                    const pts = 10;
+                    state.score += pts;
+                    state.waveScores[target.wave] += pts;
+                    floatText(pt.x, pt.y, 'PING +' + pts, '#ffaa00');
+                    feedMsg(escapeHtml(res.breakdown) + ' (+' + pts + ')', 'warn');
+                    if (simMode) feedMsg('SIM: ' + escapeHtml(res.breakdown), 'sim');
+                    updateHud();
+                    continue;
+                }
+                if (res.chip && !res.killed) {
+                    // Arcade armor chip: first tap damages, second kills
+                    target.hp -= 1;
+                    target.el.classList.add('damaged');
+                    AudioEngine.ping();
+                    if (target.hp <= 0) {
+                        killTarget(target, pt, res);
+                        anyKill = true;
+                    } else {
+                        const pts = 25;
+                        state.score += pts;
+                        state.waveScores[target.wave] += pts;
+                        state.streak++;
+                        state.bestStreak = Math.max(state.bestStreak, state.streak);
+                        floatText(pt.x, pt.y, 'CHIP +' + pts, '#ffaa00');
+                        feedMsg('Armor chip (+' + pts + ') — one more on target', 'warn');
+                        updateHud();
+                    }
+                    continue;
+                }
+                killTarget(target, pt, res);
+                anyKill = true;
+                break; // remaining pellets of this trigger don't double-kill same target
+            }
+
+            // Splash (RPG/grenade/mine): damage neighbors in same lane
+            if (target && p.splash && anyKill) {
+                const splashables = state.targets.filter(t => t.id !== target.id && t.lane === target.lane && t.kind !== 'civ');
+                let splashed = 0;
+                splashables.slice(0, 2).forEach(t => {
+                    const pts = Math.max(10, Math.round(scoreShotPure(t.kind, t.lane, false, state.streak) / 2));
+                    state.score += pts;
+                    state.waveScores[t.wave] += pts;
+                    try {
+                        const r = t.el.getBoundingClientRect();
+                        const wr = document.getElementById('range-wrap').getBoundingClientRect();
+                        floatText(r.left - wr.left + r.width / 2, r.top - wr.top, 'SPLASH +' + pts, '#ffaa00');
+                    } catch (err) {}
+                    feedMsg('Splash hits ' + t.kind + ' (+' + pts + ')', 'warn');
+                    removeTarget(t.id);
+                    splashed++;
+                });
+                if (splashed) AudioEngine.ping();
+            }
+
+            if (p.magSize !== Infinity && state.ammo <= 0) doReload();
+            updateHud();
+        }
+
+        function registerMiss(pt, note) {
+            state.streak = 0;
+            if (note && String(note).indexOf('SIM:') !== 0 && simMode) feedMsg('SIM: ' + escapeHtml(note || 'miss'), 'sim');
+            else if (note && simMode) feedMsg(escapeHtml(note), 'sim');
+            floatText(pt.x, pt.y, 'MISS', '#ff0040');
+            updateHud();
+        }
+
+        function killTarget(target, pt, res) {
+            res = res || {};
+            state.streak++;
+            state.bestStreak = Math.max(state.bestStreak, state.streak);
+            const pts = scoreShotPure(target.kind, target.lane, !!res.raise, state.streak);
+            state.score += pts;
+            state.waveScores[target.wave] += pts;
+            AudioEngine.lock();
+            target.el.classList.add('hitflash');
+            const tid = target.id;
+            floatText(pt.x, pt.y, '+' + pts + (res.raise ? ' RAISE!' : ''), res.raise ? '#ffaa00' : '#00ff41');
+            if (simMode && res.breakdown) feedMsg('SIM: ' + escapeHtml(res.breakdown) + ' → +' + pts, 'sim');
+            else feedMsg(target.kind.toUpperCase() + ' down (' + target.lane + ')' + (res.raise ? ' RAISE' : '') + ' +' + pts, 'good');
+            setTimeout(() => removeTarget(tid), 120);
+            updateHud();
+        }
+
+        function doReload() {
+            if (!state.active || state.reloading) return;
+            if (state.params.magSize === Infinity) return;
+            state.reloading = true;
+            AudioEngine.reload();
+            feedMsg('Reloading ' + state.params.name + '…', '');
+            updateHud();
+            setTimeout(() => {
+                if (!state.active && state.timer === null) { state.reloading = false; return; }
+                state.ammo = state.params.magSize;
+                state.reloading = false;
+                state.recoil = Math.max(0, state.recoil - 0.4);
+                feedMsg('Reloaded (' + state.ammo + ' rds)', 'good');
+                updateHud();
+            }, state.params.reloadMs);
+        }
+
+        function startTimer() {
+            state.endTime = Date.now() + state.diff.time * 1000;
+            state.timeLeft = state.diff.time;
+            updTimer();
+            state.timer = setInterval(tickTimer, 250);
+        }
+
+        function tickTimer() {
+            if (!state.active || state.timer === null) return;
+            const remain = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
+            if (remain !== state.timeLeft) {
+                state.timeLeft = remain;
+                updTimer();
+                if (state.timeLeft <= 10 && state.timeLeft > 0) AudioEngine.beep(900, 0.04, 0.06);
+            }
+            if (state.timeLeft <= 0) endGame(true);
+        }
+
+        function updTimer() {
+            const el = document.getElementById('timer-display');
+            el.textContent = state.timeLeft;
+            el.classList.toggle('warning', state.timeLeft <= 10);
+        }
+
+        function loop(ts) {
+            if (state.timer === null) { state.raf = null; return; }
+            if (!state.lastTick) state.lastTick = ts;
+            const dt = Math.min(0.05, (ts - state.lastTick) / 1000);
+            state.lastTick = ts;
+            state.swayT += dt;
+            state.elapsed = state.diff.time - state.timeLeft;
+            state.recoil = Math.max(0, state.recoil - dt * 1.4);
+
+            // Wave advance by elapsed
+            let acc = 0;
+            for (let w = 0; w < 5; w++) {
+                acc += WAVE_DUR[w];
+                if (state.elapsed < acc) { state.waveIdx = w; break; }
+                state.waveIdx = Math.min(4, w + 1);
+            }
+
+            // Spawn due events
+            while (state.events.length && state.events[0].at <= state.elapsed) {
+                const ev = state.events.shift();
+                if (state.targets.length < state.diff.maxAlive + 2) spawnTarget(ev);
+                else state.events.push({ at: ev.at + 0.8, wave: ev.wave, kind: ev.kind, lane: ev.lane, x: ev.x });
+            }
+
+            // Move drones + expire old targets
+            const wrap = document.getElementById('range-wrap');
+            const W = wrap.clientWidth || 600;
+            for (let i = state.targets.length - 1; i >= 0; i--) {
+                const t = state.targets[i];
+                if (t.kind === 'drone') {
+                    t.x += (t.vx * dt / W) * 100;
+                    if (t.x < 6) { t.x = 6; t.vx = Math.abs(t.vx); }
+                    if (t.x > 94) { t.x = 94; t.vx = -Math.abs(t.vx); }
+                    t.el.style.left = t.x + '%';
+                }
+                if (state.elapsed >= t.expires) {
+                    const persistent = (t.kind === 'paper' || t.kind === 'armored' || t.kind === 'shield' || t.kind === 'bullseye');
+                    if (!persistent && (t.kind === 'popup' || t.kind === 'hostile' || t.kind === 'civ' || t.kind === 'drone')) {
+                        feedMsg(t.kind.toUpperCase() + ' expired (' + t.lane + ')', '');
+                    }
+                    removeTarget(t.id);
+                }
+            }
+
+            // Crosshair spread ring follows recoil + lane base
+            const ch = document.getElementById('crosshair');
+            if (ch.style.display === 'block' && state.params) {
+                const base = (state.params.spreadClose + state.params.spreadMid + state.params.spreadFar) / 3;
+                const d = Math.round(base + state.recoil * 34);
+                document.getElementById('ch-ring').style.width = d + 'px';
+                document.getElementById('ch-ring').style.height = d + 'px';
+            }
+            updateHud();
+            state.raf = requestAnimationFrame(loop);
+        }
+
+        function startGame(diff) {
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            clearTargets();
+            state.diff = diff;
+            state.score = 0;
+            state.shotsFired = 0;
+            state.pelletsFired = 0;
+            state.pelletsHit = 0;
+            state.streak = 0;
+            state.bestStreak = 0;
+            state.ammo = state.params.magSize;
+            state.reloading = false;
+            state.waveIdx = 0;
+            state.waveScores = [0, 0, 0, 0, 0];
+            state.nextTid = 1;
+            state.events = buildSpawnPlan(diff, (Math.random() * 1e9) | 0);
+            state.lastTick = 0;
+            state.elapsed = 0;
+            state.recoil = 0;
+            state.swayT = 0;
+            state.feed = [];
+            state._ended = false;
+            state.lastTriggerAt = 0;
+            state.lastInputAt = 0;
+            state.sharedCache = null;
+            state.active = true;
+            document.getElementById('feed').innerHTML = '';
+            document.getElementById('penalty-note') && (document.getElementById('penalty-note').textContent = '');
+            showScreen('game-screen');
+            document.getElementById('diff-text').textContent = diff.name + (simMode ? ' // SIM' : ' // ARCADE');
+            document.getElementById('weapon-text').textContent = state.params.name + ' — ' + state.params.damageStr + ' / AP ' + (state.params.apIgnore ? 'Ignore' : state.params.apValue) + ' / RoF ' + state.params.pellets;
+            feedMsg('Course live: ' + state.params.name + ' (' + (simMode ? 'SIM dice' : 'arcade') + '). WHITE = HOLD FIRE.', 'good');
+            if (state.params.melee) feedMsg('Melee weapon: stay effective CLOSE; MID/FAR heavily penalized.', 'warn');
+            updateHud();
+            startTimer();
+            state.raf = requestAnimationFrame(loop);
+        }
+
+        const STATS_PREFIX = 'firing_range_stats_';
+        const BOARD_PREFIX = 'firing_range_board_';
+        function loadStats(name) {
+            try {
+                const s = JSON.parse(localStorage.getItem(STATS_PREFIX + name) || 'null');
+                if (s && typeof s.bestScore === 'number' && typeof s.bestAcc === 'number') return s;
+            } catch (e) {}
+            return { bestScore: null, bestAcc: null };
+        }
+        function saveStats(diff, score, acc) {
+            const s = loadStats(diff.name);
+            if (s.bestScore === null || score > s.bestScore) s.bestScore = score;
+            if (s.bestAcc === null || acc > s.bestAcc) s.bestAcc = acc;
+            try { localStorage.setItem(STATS_PREFIX + diff.name, JSON.stringify(s)); } catch (e) {}
+        }
+        function loadBoard(name) {
+            try {
+                const b = JSON.parse(localStorage.getItem(BOARD_PREFIX + name) || 'null');
+                if (Array.isArray(b)) return b.filter(e => e && typeof e.score === 'number').slice(0, 10);
+            } catch (e) {}
+            return [];
+        }
+        function saveBoardEntry(name, entry) {
+            const b = loadBoard(name);
+            b.push(entry);
+            b.sort((a, b2) => b2.score - a.score);
+            const top = b.slice(0, 10);
+            try { localStorage.setItem(BOARD_PREFIX + name, JSON.stringify(top)); } catch (e) {}
+            return top;
+        }
+
+        async function fetchSharedBoard(name) {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 4000);
+            try {
+                const resp = await fetch(FIREBASE_DB_URL + '/firingRangeBoards/' + name + '.json', { signal: ctrl.signal });
+                clearTimeout(t);
+                if (!resp.ok) throw new Error('http ' + resp.status);
+                const data = await resp.json();
+                if (!data) return [];
+                const arr = Object.values(data).filter(e => e && typeof e.score === 'number');
+                arr.sort((a, b) => b.score - a.score);
+                return arr.slice(0, 10);
+            } catch (e) {
+                clearTimeout(t);
+                throw e;
+            }
+        }
+
+        async function pushSharedBoard(name, entry) {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 4000);
+            try {
+                await fetch(FIREBASE_DB_URL + '/firingRangeBoards/' + name + '.json', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(entry),
+                    signal: ctrl.signal
+                });
+                clearTimeout(t);
+                return true;
+            } catch (e) {
+                clearTimeout(t);
+                return false;
+            }
+        }
+
+        function medalFor(score, diffName) {
+            const par = DIFF[diffName].par / 5;
+            if (score >= par * 0.9) return 'GOLD';
+            if (score >= par * 0.6) return 'SILVER';
+            if (score >= par * 0.35) return 'BRONZE';
+            return 'NONE';
+        }
+
+        function renderBoard() {
+            const body = document.getElementById('board-body');
+            const status = document.getElementById('board-status');
+            document.getElementById('tab-local').classList.toggle('active', state.boardTab === 'local');
+            document.getElementById('tab-shared').classList.toggle('active', state.boardTab === 'shared');
+            body.innerHTML = '';
+            if (state.boardTab === 'local') {
+                const b = loadBoard(state.diff.name);
+                status.textContent = b.length ? 'LOCAL BOARD — stored on this terminal.' : 'LOCAL BOARD — no entries yet. Be the first.';
+                b.forEach((e, i) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + escapeHtml(e.name) + '</td><td>' + escapeHtml(e.weapon) + '</td><td>' + e.score + '</td><td>' + e.acc + '%</td><td>' + escapeHtml(e.sim ? 'SIM' : 'ARC') + '</td>';
+                    body.appendChild(tr);
+                });
+            } else {
+                status.textContent = 'SHARED BOARD — syncing with Firebase…';
+                body.innerHTML = '';
+                fetchSharedBoard(state.diff.name).then(arr => {
+                    state.sharedCache = arr;
+                    if (state.boardTab !== 'shared') return;
+                    if (!arr.length) status.textContent = 'SHARED BOARD — empty or offline. Local board still saved.';
+                    else status.textContent = 'SHARED BOARD — live from Firebase (' + arr.length + ' entries).';
+                    const tb = document.getElementById('board-body');
+                    tb.innerHTML = '';
+                    arr.forEach((e, i) => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + escapeHtml(e.name) + '</td><td>' + escapeHtml(e.weapon) + '</td><td>' + e.score + '</td><td>' + e.acc + '%</td><td>' + escapeHtml(e.sim ? 'SIM' : 'ARC') + '</td>';
+                        tb.appendChild(tr);
+                    });
+                }).catch(() => {
+                    if (state.boardTab !== 'shared') return;
+                    status.textContent = 'SHARED BOARD — OFFLINE. Showing local fallback.';
+                    state.boardTab = 'local';
+                    renderBoard();
+                });
+            }
+        }
+
+        function endGame(completed) {
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            if (!state.active && state._ended) return;
+            state.active = false;
+            state._ended = true;
+            setTimeout(() => { state._ended = false; }, 500);
+            clearTargets();
+
+            const acc = state.pelletsFired ? Math.round(100 * state.pelletsHit / state.pelletsFired) : 0;
+            const won = state.score >= state.diff.par;
+            won ? AudioEngine.win() : AudioEngine.lose();
+
+            const rs = document.getElementById('result-screen');
+            rs.className = 'screen active ' + (won ? 'success' : 'failure');
+            document.getElementById('result-title').textContent = won ? 'RANGE QUALIFIED' : 'WASHOUT — BELOW PAR';
+            document.getElementById('result-diff').textContent = state.diff.name;
+            document.getElementById('result-roll').textContent = state.roll;
+            document.getElementById('result-weapon').textContent = state.params.name;
+            document.getElementById('result-mode').textContent = simMode ? 'SIM (SWADE DICE)' : 'ARCADE';
+            document.getElementById('result-score').textContent = state.score + ' (par ' + state.diff.par + ')';
+            const rating = state.score >= state.diff.par * 1.5 ? 'EXPERT' : won ? 'QUALIFIED' : acc >= 50 ? 'NEEDS PRACTICE' : 'WASHOUT';
+            document.getElementById('result-rating').textContent = rating;
+            document.getElementById('result-acc').textContent = state.pelletsHit + '/' + state.pelletsFired + ' (' + acc + '%)';
+            document.getElementById('result-streak').textContent = state.bestStreak;
+            document.getElementById('result-status').textContent = won ? 'RANGE QUALIFIED' : 'BELOW PAR — RUN IT AGAIN';
+
+            saveStats(state.diff, state.score, acc);
+            const entry = { name: state.shooter, weapon: state.params.name, weaponId: state.params.id, score: state.score, acc, sim: simMode, date: new Date().toISOString().slice(0, 10) };
+            saveBoardEntry(state.diff.name, entry);
+            pushSharedBoard(state.diff.name, entry).then(ok => {
+                if (state.boardTab === 'shared') renderBoard();
+            });
+            const s = loadStats(state.diff.name);
+            document.getElementById('result-best-score').textContent = s.bestScore === null ? '—' : String(s.bestScore);
+            document.getElementById('result-best-acc').textContent = s.bestAcc === null ? '—' : s.bestAcc + '%';
+
+            const medals = document.getElementById('wave-medals');
+            medals.innerHTML = '<div style="letter-spacing:2px;color:var(--warning);margin-bottom:4px;">CHALLENGES (SINGLE COURSE — 5 WAVES):</div>' +
+                WAVE_NAMES.map((n, i) => {
+                    const m = medalFor(state.waveScores[i], state.diff.name);
+                    return '<div>W' + (i + 1) + ' ' + n + ': ' + state.waveScores[i] + ' pts — <span class="medal-' + m + '">' + m + '</span></div>';
+                }).join('');
+
+            state.boardTab = 'local';
+            renderBoard();
+            showScreen('result-screen');
+            sendWebhook(won, acc, rating);
+        }
+
+        async function sendWebhook(won, acc, rating) {
+            const s = loadStats(state.diff.name);
+            const board = loadBoard(state.diff.name).slice(0, 3).map((e, i) => (i + 1) + '. ' + e.name + ' ' + e.score + ' (' + e.weapon + ')').join('\n') || '—';
+            const waveLine = WAVE_NAMES.map((n, i) => 'W' + (i + 1) + ' ' + state.waveScores[i]).join(' │ ');
+            const embed = {
+                title: '🎯 FIRING RANGE RESULT',
+                color: won ? 0x00ff41 : 0xff0040,
+                fields: [
+                    { name: 'Outcome', value: won ? '✅ RANGE QUALIFIED' : '❌ WASHOUT', inline: true },
+                    { name: 'Threat Level', value: state.diff.name, inline: true },
+                    { name: 'Shooting Roll', value: String(state.roll), inline: true },
+                    { name: 'Shooter', value: state.shooter, inline: true },
+                    { name: 'Weapon', value: state.params.name + ' (' + state.params.damageStr + ' / AP ' + (state.params.apIgnore ? 'Ignore' : state.params.apValue) + ' / RoF ' + state.params.pellets + ')', inline: true },
+                    { name: 'Mode', value: simMode ? 'SIM (SWADE dice)' : 'ARCADE', inline: true },
+                    { name: 'Score', value: String(state.score) + ' (par ' + state.diff.par + ')', inline: true },
+                    { name: 'Accuracy', value: state.pelletsHit + '/' + state.pelletsFired + ' (' + acc + '%)', inline: true },
+                    { name: 'Best Streak', value: String(state.bestStreak), inline: true },
+                    { name: 'Rating', value: rating, inline: true },
+                    { name: 'Waves', value: waveLine, inline: false },
+                    { name: 'Best Score (' + state.diff.name + ')', value: s.bestScore === null ? '—' : String(s.bestScore), inline: true },
+                    { name: 'Top-3 Local (' + state.diff.name + ')', value: board, inline: false }
+                ],
+                footer: { text: 'Marksmanship // Firing Range' },
+                timestamp: new Date().toISOString()
+            };
+            try {
+                await fetch(WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+            } catch (e) { console.error('Webhook error:', e); }
+        }
+
+        document.getElementById('roll-submit').addEventListener('click', submitArmory);
+        document.getElementById('roll-input').addEventListener('keypress', e => { if (e.key === 'Enter') submitArmory(); });
+        document.getElementById('weapon-select').addEventListener('change', () => { AudioEngine.click(); renderWeaponCard(); });
+        document.getElementById('armory-refresh').addEventListener('click', () => { AudioEngine.click(); renderArmoryOptions(); feedMsgSafe('Armory re-synced (' + ARMORY.length + ' weapons).'); });
+        function feedMsgSafe(t) { try { AudioEngine.click(); } catch (e) {} const c = document.getElementById('weapon-card'); c.innerHTML += '<div style="color:var(--warning);">' + escapeHtml(t) + '</div>'; }
+        document.getElementById('mode-arcade').addEventListener('click', () => {
+            simMode = false;
+            document.getElementById('mode-arcade').classList.add('active');
+            document.getElementById('mode-sim').classList.remove('active');
+            AudioEngine.click();
+        });
+        document.getElementById('mode-sim').addEventListener('click', () => {
+            simMode = true;
+            document.getElementById('mode-sim').classList.add('active');
+            document.getElementById('mode-arcade').classList.remove('active');
+            AudioEngine.click();
+        });
+        document.getElementById('tab-local').addEventListener('click', () => { state.boardTab = 'local'; renderBoard(); AudioEngine.click(); });
+        document.getElementById('tab-shared').addEventListener('click', () => { state.boardTab = 'shared'; renderBoard(); AudioEngine.click(); });
+
+        document.getElementById('range-wrap').addEventListener('pointerdown', e => {
+            if (e.target.closest && e.target.closest('.target')) return;
+            fireAt(null, e);
+        });
+        document.getElementById('range-wrap').addEventListener('mousemove', e => {
+            const ch = document.getElementById('crosshair');
+            if (!state.active) { ch.style.display = 'none'; return; }
+            const pt = rangePoint(e);
+            ch.style.display = 'block';
+            ch.style.left = pt.x + 'px';
+            ch.style.top = pt.y + 'px';
+        });
+        document.getElementById('range-wrap').addEventListener('mouseleave', () => {
+            document.getElementById('crosshair').style.display = 'none';
+        });
+        document.getElementById('reload-btn').addEventListener('click', () => { AudioEngine.init(); doReload(); });
+        document.addEventListener('keydown', e => {
+            if (document.getElementById('game-screen').classList.contains('active')) {
+                if (e.key === 'r' || e.key === 'R') { AudioEngine.init(); doReload(); }
+            }
+            if (document.getElementById('roll-screen').classList.contains('active') && e.key === 'Enter' && e.target.id !== 'roll-input') submitArmory();
+        });
+
+        document.getElementById('play-again').addEventListener('click', () => {
+            document.getElementById('roll-input').value = '';
+            document.getElementById('roll-input').style.borderColor = '';
+            showScreen('roll-screen');
+            renderArmoryOptions();
+            document.getElementById('roll-input').focus();
+        });
+        const abortBtn = document.getElementById('abort-btn');
+        abortBtn.addEventListener('click', () => {
+            if (!state.active && state.timer === null) return;
+            state.active = false;
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            clearTargets();
+            AudioEngine.click();
+            document.getElementById('roll-input').value = '';
+            document.getElementById('roll-input').style.borderColor = '';
+            showScreen('roll-screen');
+            renderArmoryOptions();
+            document.getElementById('roll-input').focus();
+        });
+        document.getElementById('dash-btn').addEventListener('click', () => {
+            state.active = false;
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            window.location.href = '../dashboard.html';
+        });
+        document.getElementById('back-to-dash').addEventListener('click', () => {
+            window.location.href = '../dashboard.html';
+        });
+        const muteBtn = document.getElementById('mute-btn');
+        function updateMuteBtn() {
+            muteBtn.textContent = AudioEngine.muted ? 'SOUND: OFF' : 'SOUND: ON';
+            muteBtn.classList.toggle('muted', AudioEngine.muted);
+        }
+        try { AudioEngine.muted = localStorage.getItem('firing_range_muted') === '1'; } catch (e) {}
+        updateMuteBtn();
+        muteBtn.addEventListener('click', () => {
+            AudioEngine.muted = !AudioEngine.muted;
+            try { localStorage.setItem('firing_range_muted', AudioEngine.muted ? '1' : '0'); } catch (e) {}
+            updateMuteBtn();
+            if (!AudioEngine.muted) AudioEngine.click();
+        });
+        document.addEventListener('click', () => AudioEngine.init(), { once: true });
+        document.addEventListener('visibilitychange', () => {
+            if (!state.active || state.timer === null) return;
+            if (!document.hidden) {
+                clearInterval(state.timer);
+                state.timer = setInterval(tickTimer, 250);
+                tickTimer();
+            }
+        });
+
+        runBoot();
+    </script>
+</body>
+</html>

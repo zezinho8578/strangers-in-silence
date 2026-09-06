@@ -539,7 +539,7 @@
             </div>
 
             <div id="game-footer">
-                STRIKES CARRY ACROSS PHASES // TIMER NEVER STOPS
+                STRIKES CARRY ACROSS PHASES // CLOCK PAUSES BETWEEN PHASES
             </div>
         </div>
 
@@ -587,7 +587,7 @@
         const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
 
         const DIFF = {
-            HARD:   { name: 'HARD',   wires: 6, time: 60,  needle: 1.5,  window: 0.10, strikesMax: 1, codeMode: 'formula' },
+            HARD:   { name: 'HARD',   wires: 6, time: 60,  needle: 1.5,  window: 0.14, strikesMax: 1, codeMode: 'formula' },
             NORMAL: { name: 'NORMAL', wires: 5, time: 90,  needle: 1.0,  window: 0.16, strikesMax: 2, codeMode: 'formula' },
             EASY:   { name: 'EASY',   wires: 4, time: 120, needle: 0.65, window: 0.24, strikesMax: 3, codeMode: 'worked'  }
         };
@@ -785,7 +785,10 @@
                 void rowEl.offsetWidth;
                 rowEl.classList.add('shake', 'fail');
                 setTimeout(() => rowEl.classList.remove('shake', 'fail'), 450);
-                registerStrike('WRONG WIRE (EXPECTED ' + expected + ')');
+                // EASY names the expected wire as a teaching aid; higher
+                // difficulties only say WRONG so deduction stays meaningful.
+                const hint = state.diff.name === 'EASY' ? ' (EXPECTED ' + expected + ')' : '';
+                registerStrike('WRONG WIRE' + hint);
             }
         }
 
@@ -907,7 +910,7 @@
                 const b = document.createElement('button');
                 b.type = 'button';
                 b.textContent = k;
-                b.addEventListener('click', () => codeKey(k));
+                b.addEventListener('click', () => { b.blur(); codeKey(k); });
                 pad.appendChild(b);
             });
         }
@@ -1111,10 +1114,13 @@
 
         document.getElementById('roll-submit').addEventListener('click', submitRoll);
         document.getElementById('roll-input').addEventListener('keypress', e => { if (e.key === 'Enter') submitRoll(); });
-        document.getElementById('discharge-btn').addEventListener('click', () => { AudioEngine.init(); tryDischarge(); });
+        document.getElementById('discharge-btn').addEventListener('click', (e) => { AudioEngine.init(); if (e && e.currentTarget) e.currentTarget.blur(); tryDischarge(); });
         document.addEventListener('keydown', e => {
             if (!document.getElementById('game-screen').classList.contains('active')) return;
-            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') && e.target.id !== 'discharge-btn') return;
+            // Only the roll-screen input swallows keys. Pad/discharge buttons
+            // are blurred on click (see below) so held focus can never eat
+            // gameplay keys or double-fire via native Space activation.
+            if (e.target && e.target.tagName === 'INPUT') return;
             if (state.phase === 2 && (e.key === ' ' || e.key === 'Enter')) {
                 e.preventDefault();
                 AudioEngine.init();
