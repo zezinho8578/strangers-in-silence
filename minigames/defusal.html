@@ -295,7 +295,6 @@
             line-height: 1.7;
         }
         #manual-box .manual-title { letter-spacing: 2px; color: var(--warning); margin-bottom: 4px; }
-        #manual-box .spent { opacity: 0.35; text-decoration: line-through; }
 
         #wire-list { display: flex; flex-direction: column; gap: 8px; }
         .wire {
@@ -399,15 +398,14 @@
         }
         #code-pad button:hover { background: var(--primary); color: var(--bg); box-shadow: 0 0 14px var(--primary-glow); }
 
-        #phase-hint {
+        .phase-hint {
             font-size: 10px;
             letter-spacing: 2px;
             color: var(--primary-dim);
             text-transform: uppercase;
             margin: 12px 0 0;
         }
-        #phase-hint b { color: var(--target); }
-
+        .phase-hint b { color: var(--target); }
         #game-footer {
             margin-top: 15px;
             font-size: 10px;
@@ -516,7 +514,7 @@
                 </div>
                 <div id="manual-box"></div>
                 <div id="wire-list"></div>
-                <div id="phase-hint">APPLY MANUAL TOP-DOWN EACH STEP // CLICK WIRES IN ORDER</div>
+                <div class="phase-hint">APPLY MANUAL TOP-DOWN EACH STEP // CLICK WIRES IN ORDER</div>
             </div>
 
             <div id="phase-discharge" class="phase" style="display:none;">
@@ -528,14 +526,14 @@
                     </div>
                     <button class="btn" id="discharge-btn" type="button">DISCHARGE [SPACE]</button>
                 </div>
-                <div id="phase-hint">STOP THE NEEDLE INSIDE GREEN // MISS = STRIKE + 5s</div>
+                <div class="phase-hint">STOP THE NEEDLE INSIDE GREEN // MISS = STRIKE + 5s</div>
             </div>
 
             <div id="phase-code" class="phase" style="display:none;">
                 <div id="code-slots"></div>
                 <div id="code-hint"></div>
                 <div id="code-pad"></div>
-                <div id="phase-hint">DERIVE 4 DIGITS FROM THE SERIAL // WRONG CODE = STRIKE + 5s</div>
+                <div class="phase-hint">DERIVE 4 DIGITS FROM THE SERIAL // WRONG CODE = STRIKE + 5s</div>
             </div>
 
             <div id="game-footer">
@@ -593,6 +591,7 @@
         };
         const STRIKE_PENALTY_SEC = 5;
         const INPUT_COOLDOWN_MS = 400;
+        const DISCHARGE_ARM_MS = 750;
 
         // __PURE_LOGIC_START__
         // Pure device logic: no DOM, no audio, no storage. The regression
@@ -678,7 +677,7 @@
         let state = {
             diff: null, device: null, order: [], wireProgress: 0, cutSet: {},
             phase: 1, phasesCleared: 0, strikes: 0,
-            needleT: 0, needleCenter: 0.5, codeEntry: '', code: '',
+            needleT: 0, needleCenter: 0.5, dischargeArmedAt: 0, codeEntry: '', code: '',
             timeLeft: 0, endTime: 0, timer: null, raf: null, lastTick: 0,
             roll: 0, active: false, lastInputAt: 0, _ended: false
         };
@@ -792,20 +791,17 @@
             }
         }
 
-        // Strike through the manual rule that just fired, as a progress cue.
+        // Tally which manual rule fired per correct cut, as a progress cue.
         function markManualRule(color) {
             const box = document.getElementById('manual-box');
             const idx = state.wireProgress - 1;
             const firedId = firedRuleId(state.device, state.order.slice(0, idx), color);
             if (!firedId) return;
             const el = box.querySelector('[data-rule="' + firedId + '"]');
-            if (el && !el.classList.contains('spent')) {
-                // Only grey it out once every rule has fired at least once is
-                // overkill; mark per-use with a counter instead.
-                const n = (parseInt(el.dataset.used || '0', 10) || 0) + 1;
-                el.dataset.used = n;
-                el.innerHTML = el.innerHTML.replace(/ \[x\d+\]$/, '') + ' [x' + n + ']';
-            }
+            if (!el) return;
+            const n = (parseInt(el.dataset.used || '0', 10) || 0) + 1;
+            el.dataset.used = n;
+            el.innerHTML = el.innerHTML.replace(/ \[x\d+\]$/, '') + ' [x' + n + ']';
         }
 
         function firedRuleId(dev, alreadyCut, color) {
@@ -824,11 +820,13 @@
             setPhase(2);
             state.needleT = Math.random();
             state.needleCenter = 0.3 + Math.random() * 0.4;
+            state.dischargeArmedAt = Date.now() + DISCHARGE_ARM_MS;
             const w = document.getElementById('cap-window');
             const half = state.diff.window / 2;
             w.style.left = ((state.needleCenter - half) * 100) + '%';
             w.style.width = (state.diff.window * 100) + '%';
-            flashPenalty('> CAPACITOR EXPOSED // DISCHARGE IN THE GREEN');
+            renderNeedle();
+            flashPenalty('> CAPACITOR EXPOSED // PROBE ARMING...');
         }
 
         function needlePos() {
@@ -845,6 +843,13 @@
 
         function tryDischarge() {
             if (!state.active || state.phase !== 2) return;
+            // Probe arms shortly after phase entry so an instant mash can't
+            // luck into a window the player never saw. Checked before the
+            // input gate so blocked mashes don't eat the cooldown either.
+            if (Date.now() < state.dischargeArmedAt) {
+                flashPenalty('> PROBE ARMING... HOLD');
+                return;
+            }
             if (!inputReady()) return;
             const p = needlePos();
             const half = state.diff.window / 2;
@@ -862,7 +867,7 @@
                 bar.classList.remove('shake');
                 void bar.offsetWidth;
                 bar.classList.add('shake');
-                registerStrike('DISCHARGE OUTSIDE WINDOW');
+                registerStrike('DISCHARGE ' + (p < state.needleCenter ? 'EARLY' : 'LATE'));
             }
         }
 
@@ -993,12 +998,12 @@
             state.phasesCleared = 0;
             state.strikes = 0;
             state.needleT = 0;
+            state.dischargeArmedAt = 0;
             state.codeEntry = '';
             state.code = '';
             state.lastInputAt = 0;
             state.lastTick = 0;
             state._ended = false;
-            state._held = false;
             state.active = true;
             document.getElementById('penalty-flash').textContent = '';
             document.getElementById('diff-text').textContent = diff.name + ' // ' + diff.strikesMax + (diff.strikesMax === 1 ? ' STRIKE' : ' STRIKES') + ' MAX';
