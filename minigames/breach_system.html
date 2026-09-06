@@ -38,7 +38,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow: auto;
+            overflow-y: auto;
+            overflow-x: hidden;
             user-select: none;
         }
 
@@ -94,6 +95,7 @@
             max-width: 850px;
             max-height: calc(100dvh - 20px);
             overflow-y: auto;
+            overflow-x: hidden;
             position: relative;
             box-shadow: 
                 0 0 40px rgba(0, 255, 65, 0.15),
@@ -129,12 +131,18 @@
             min-height: 380px; 
             padding: 20px;
             font-size: 13px;
+            overflow: hidden;
+            max-width: 100%;
         }
         .boot-line { 
             opacity: 0; 
             margin-bottom: 6px; 
             transition: opacity 0.08s;
             line-height: 1.6;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            max-width: 100%;
         }
         .boot-line.visible { opacity: 1; }
         .boot-line .highlight { color: var(--source); }
@@ -602,7 +610,96 @@
             lose() { [350, 300, 250, 180].forEach((f, i) => setTimeout(() => this.beep(f, 0.2, 0.1, 'sawtooth'), i * 120)); }
         };
 
-        function getWebhook(){ try{const db=JSON.parse(localStorage.getItem('localFallbackDB')||'null'); if(db&&db.webhook) return db.webhook;}catch(e){} return window.WEBHOOK_URL||localStorage.getItem('discord-webhook')||''; }
+        const FIREBASE_DB_URL = 'https://strangers-in-silence-default-rtdb.firebaseio.com';
+        function cleanWebhook(v){
+            try {
+                if (v === undefined || v === null) return '';
+                if (typeof v === 'object') {
+                    v = v.url || v.value || v.webhook || v.discordWebhook || '';
+                    if (typeof v === 'object') return '';
+                }
+                let s = String(v || '').trim();
+                if (s.length >= 2 && ((s[0] === '"' && s[s.length-1] === '"') || (s[0] === "'" && s[s.length-1] === "'"))) s = s.slice(1, -1).trim();
+                if (!s) return '';
+                if (!/^https:\/\//i.test(s)) return '';
+                return s;
+            } catch (e) { return ''; }
+        }
+        function readLocalWebhook(){
+            try {
+                const raw = localStorage.getItem('localFallbackDB');
+                if (raw) {
+                    try {
+                        const db = JSON.parse(raw);
+                        if (db) {
+                            const c = cleanWebhook(db.webhook);
+                            if (c) return c;
+                            if (db.campaignState && db.campaignState.webhook) {
+                                const c2 = cleanWebhook(db.campaignState.webhook);
+                                if (c2) return c2;
+                            }
+                        }
+                    } catch (e) {}
+                }
+            } catch (e) {}
+            try { const w = cleanWebhook(window.WEBHOOK_URL); if (w) return w; } catch (e) {}
+            try {
+                const keys = ['discord-webhook', 'WEBHOOK_URL'];
+                for (const k of keys) {
+                    try { const c = cleanWebhook(localStorage.getItem(k)); if (c) return c; } catch (e) {}
+                    try { const c2 = cleanWebhook(sessionStorage.getItem(k)); if (c2) return c2; } catch (e) {}
+                }
+            } catch (e) {}
+            return '';
+        }
+        let _webhookCache = '';
+        let _webhookCacheAt = 0;
+        async function fetchRemoteWebhook(){
+            const now = Date.now();
+            if (_webhookCache && (now - _webhookCacheAt) < 60000) return _webhookCache;
+            try {
+                const ctrl = new AbortController();
+                const to = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, 3000);
+                let resp = null;
+                try { resp = await fetch(FIREBASE_DB_URL + '/campaignState/webhook.json', { signal: ctrl.signal }); }
+                finally { clearTimeout(to); }
+                if (!resp || !resp.ok) return _webhookCache || '';
+                let data = null;
+                try { data = await resp.json(); } catch (e) { return _webhookCache || ''; }
+                const cleaned = cleanWebhook(data);
+                if (cleaned) {
+                    _webhookCache = cleaned;
+                    _webhookCacheAt = now;
+                    try {
+                        if (!readLocalWebhook()) { try { localStorage.setItem('discord-webhook', cleaned); } catch (e) {} }
+                    } catch (e) {}
+                    return cleaned;
+                }
+            } catch (e) {}
+            return _webhookCache || '';
+        }
+        async function getWebhook(){
+            const local = readLocalWebhook();
+            if (local) return local;
+            try {
+                const remote = await fetchRemoteWebhook();
+                if (remote) return remote;
+            } catch (e) {}
+            return '';
+        }
+        function markWebhookStatus(ok){
+            try {
+                let el = document.getElementById('webhook-status');
+                if (!el) {
+                    el = document.createElement('div');
+                    el.id = 'webhook-status';
+                    el.style.cssText = 'margin-top:10px;font-size:11px;letter-spacing:2px;opacity:0.8;';
+                    const rs = document.getElementById('result-screen');
+                    if (rs) rs.appendChild(el);
+                }
+                el.textContent = ok ? 'RESULT LOGGED' : 'LOG OFFLINE';
+            } catch (e) {}
+        }
         function sanitizeUser(u){ try{ let s=String(u||'').toUpperCase().slice(0,12).replace(/[@`_*~>|]/g,'').replace(/[^A-Z0-9 _-]/g,'').trim(); if(!/^[A-Z0-9 _-]{1,12}$/.test(s)) return 'OPERATOR'; return s||'OPERATOR'; }catch(e){ return 'OPERATOR'; } }
         function currentOperator(){ return sanitizeUser(sessionStorage.getItem('currentUser')||localStorage.getItem('currentUser')||''); }
 
@@ -1101,8 +1198,8 @@
         }
 
         async function sendWebhook(won) {
-            const wh = getWebhook();
-            if (!wh) return;
+            const wh = await getWebhook();
+            if (!wh) { try { console.warn('webhook missing, skipping result post'); } catch (e) {} markWebhookStatus(false); return; }
             const embed = {
                 title: '🔌 NETWORK BREACH RESULT',
                 color: won ? 0x00ff41 : 0xff0040,
@@ -1118,14 +1215,16 @@
                 footer: {text: 'Breach System'},
                 timestamp: new Date().toISOString()
             };
-            if (window.Embeds && window.Embeds.post) { await window.Embeds.post(wh, embed); return; }
             try {
-                await fetch(wh, {
+                if (window.Embeds && window.Embeds.post) { await window.Embeds.post(wh, embed); markWebhookStatus(true); return; }
+                const resp = await fetch(wh, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({embeds: [embed]})
                 });
-            } catch (e) { console.warn('result post failed'); }
+                if (!resp.ok) console.warn('result post rejected');
+                markWebhookStatus(resp.ok);
+            } catch (e) { console.warn('result post failed'); markWebhookStatus(false); }
         }
 
         function showScreen(id) {

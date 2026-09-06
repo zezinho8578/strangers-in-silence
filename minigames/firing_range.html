@@ -32,6 +32,7 @@
             justify-content: center;
             align-items: center;
             overflow-x: hidden;
+            overflow-y: auto;
             user-select: none;
             padding: 12px 0;
         }
@@ -85,6 +86,10 @@
             background: var(--bg-panel);
             width: 95%;
             max-width: 900px;
+            max-height: calc(100vh - 24px);
+            max-height: calc(100dvh - 24px);
+            overflow-y: auto;
+            overflow-x: hidden;
             position: relative;
             box-shadow:
                 0 0 40px rgba(0, 255, 65, 0.15),
@@ -107,8 +112,8 @@
         .screen { display: none; }
         .screen.active { display: block; }
 
-        #boot-screen { text-align: left; min-height: 380px; padding: 20px; font-size: 13px; }
-        .boot-line { opacity: 0; margin-bottom: 6px; transition: opacity 0.08s; line-height: 1.6; }
+        #boot-screen { text-align: left; min-height: 380px; padding: 20px; font-size: 13px; overflow: hidden; max-width: 100%; }
+        .boot-line { opacity: 0; margin-bottom: 6px; transition: opacity 0.08s; line-height: 1.6; white-space: normal; overflow-wrap: anywhere; word-break: break-word; max-width: 100%; }
         .boot-line.visible { opacity: 1; }
         .boot-line .highlight { color: var(--target); }
         .boot-line .good { color: var(--primary); }
@@ -347,7 +352,7 @@
             <div class="boot-line">> RANGE: 3 LANES // CLOSE / MID / FAR</div>
             <div class="boot-line">> ARMORY SYNC: <span class="good">UNIFIED WEAPON LIST</span></div>
             <div class="boot-line">> TARGETS: PAPER / POP-UP / HOSTILE / <span class="highlight">CIV (HOLD FIRE)</span> / ARMORED / BULLSEYE / DRONE</div>
-            <div class="boot-line">> SCORING: DISTANCE x1/x1.5/x2 // RAISE +50% // STREAK BONUS</div>
+            <div class="boot-line">> SCORING: DISTANCE x1/x1.5/x2 // RAISE +50% // STREAK BONUS // ESCAPED −15 // EXPERT 1.5xPAR+60%ACC</div>
             <div class="boot-line">> <span class="good">STATUS: AWAITING OPERATOR INPUT</span><span class="cursor"></span></div>
         </div>
 
@@ -413,7 +418,7 @@
             <div id="range-controls">
                 <button class="btn" id="reload-btn" type="button">RELOAD [R]</button>
             </div>
-            <div id="game-footer">CLICK / TAP TARGETS TO FIRE // R = RELOAD // WHITE CIV = HOLD FIRE // TIMER NEVER STOPS</div>
+            <div id="game-footer">CLICK / TAP TARGETS TO FIRE // R = RELOAD // CIV = HOLD FIRE (WALKS FREE) // ESCAPED −15 + STREAK LOST // EXPERT = 1.5xPAR + 60% ACC // TIMER NEVER STOPS</div>
         </div>
 
         <div id="result-screen" class="screen">
@@ -428,11 +433,13 @@
                 <div><span>Rating</span><span id="result-rating">—</span></div>
                 <div><span>Hits / Shots</span><span id="result-acc">0/0</span></div>
                 <div><span>Best Streak</span><span id="result-streak">0</span></div>
+                <div><span>Targets Escaped</span><span id="result-escaped">0</span></div>
                 <div><span>Status</span><span id="result-status">—</span></div>
                 <div><span>Best Score</span><span id="result-best-score">—</span></div>
                 <div><span>Best Acc</span><span id="result-best-acc">—</span></div>
             </div>
             <div id="wave-medals"></div>
+            <div id="result-rules" style="max-width:520px;margin:8px auto 0;font-size:10px;letter-spacing:1px;color:var(--primary-dim);line-height:1.7;">ESCAPED TARGET −15 + STREAK LOST (CIVS WALK FREE) // DISCIPLINE BONUS CUT TO +50 IF ANY ESCAPED // TIME BONUS HALVED IF ANY ESCAPED // EXPERT = 1.5x PAR + 60% ACC</div>
             <div id="board-tabs">
                 <span class="field-label">SHARED TOP-10</span>
             </div>
@@ -487,13 +494,90 @@
                 return db;
             } catch (e) { getFallbackDB._cache = null; return null; }
         }
-        function getWebhook() {
+        function cleanWebhook(v) {
+            try {
+                if (v === undefined || v === null) return '';
+                if (typeof v === 'object') {
+                    v = v.url || v.value || v.webhook || v.discordWebhook || '';
+                    if (typeof v === 'object') return '';
+                }
+                let s = String(v || '').trim();
+                if (s.length >= 2 && ((s[0] === '"' && s[s.length - 1] === '"') || (s[0] === "'" && s[s.length - 1] === "'"))) s = s.slice(1, -1).trim();
+                if (!s) return '';
+                if (!/^https:\/\//i.test(s)) return '';
+                return s;
+            } catch (e) { return ''; }
+        }
+        function readLocalWebhook() {
             try {
                 const db = getFallbackDB();
-                if (db && db.webhook) return db.webhook;
+                if (db) {
+                    const c = cleanWebhook(db.webhook);
+                    if (c) return c;
+                    if (db.campaignState && db.campaignState.webhook) {
+                        const c2 = cleanWebhook(db.campaignState.webhook);
+                        if (c2) return c2;
+                    }
+                }
             } catch (e) {}
-            if (typeof window.WEBHOOK_URL === 'string' && window.WEBHOOK_URL) return window.WEBHOOK_URL;
+            try { const w = cleanWebhook(window.WEBHOOK_URL); if (w) return w; } catch (e) {}
+            try {
+                const keys = ['discord-webhook', 'WEBHOOK_URL'];
+                for (const k of keys) {
+                    try { const c = cleanWebhook(localStorage.getItem(k)); if (c) return c; } catch (e) {}
+                    try { const c2 = cleanWebhook(sessionStorage.getItem(k)); if (c2) return c2; } catch (e) {}
+                }
+            } catch (e) {}
             return '';
+        }
+        let _webhookCache = '';
+        let _webhookCacheAt = 0;
+        async function fetchRemoteWebhook() {
+            const now = Date.now();
+            if (_webhookCache && (now - _webhookCacheAt) < 60000) return _webhookCache;
+            try {
+                const ctrl = new AbortController();
+                const to = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, 3000);
+                let resp = null;
+                try { resp = await fetch(FIREBASE_DB_URL + '/campaignState/webhook.json', { signal: ctrl.signal }); }
+                finally { clearTimeout(to); }
+                if (!resp || !resp.ok) return _webhookCache || '';
+                let data = null;
+                try { data = await resp.json(); } catch (e) { return _webhookCache || ''; }
+                const cleaned = cleanWebhook(data);
+                if (cleaned) {
+                    _webhookCache = cleaned;
+                    _webhookCacheAt = now;
+                    try {
+                        if (!readLocalWebhook()) { try { localStorage.setItem('discord-webhook', cleaned); } catch (e) {} }
+                    } catch (e) {}
+                    return cleaned;
+                }
+            } catch (e) {}
+            return _webhookCache || '';
+        }
+        async function getWebhook() {
+            const local = readLocalWebhook();
+            if (local) return local;
+            try {
+                const remote = await fetchRemoteWebhook();
+                if (remote) return remote;
+            } catch (e) {}
+            return '';
+        }
+        function markWebhookStatus(ok) {
+            try {
+                let el = document.getElementById('webhook-status');
+                if (!el) {
+                    el = document.createElement('div');
+                    el.id = 'webhook-status';
+                    el.style.cssText = 'margin-top:10px;font-size:11px;letter-spacing:2px;opacity:0.8;';
+                    const rs = document.getElementById('result-screen');
+                    if (rs) rs.appendChild(el);
+                }
+                el.textContent = ok ? 'RESULT LOGGED' : 'LOG OFFLINE';
+            } catch (e) {}
+            try { showToast(ok ? 'Result logged to Discord' : 'Log offline — no webhook'); } catch (e) {}
         }
         function sanitizeShooter(s) {
             let v = String(s === undefined || s === null ? '' : s).toUpperCase().slice(0, 24);
@@ -518,10 +602,15 @@
             if (msg) setTimeout(() => { try { if (t.textContent === String(msg)) t.textContent = ''; } catch (e) {} }, 4000);
         }
 
+        // Difficulty pressure tuning (Issue 3): short uptimes force fast target
+        // acquisition; HARD drones are faster (speed 1.5). EXPERT also gates on
+        // accuracy (see endGame). EASY stays completable with longer windows.
+        const EXPERT_MIN_ACC = 60;
+        const ESCAPED_PENALTY = 15;
         const DIFF = {
-            HARD:   { name: 'HARD',   time: 60, uptime: 0.9,  speed: 1.35, spreadMult: 1.25, par: 1800, maxAlive: 4 },
-            NORMAL: { name: 'NORMAL', time: 75, uptime: 1.4,  speed: 1.0,  spreadMult: 1.0,  par: 1500, maxAlive: 4 },
-            EASY:   { name: 'EASY',   time: 90, uptime: 2.1,  speed: 0.7,  spreadMult: 0.8,  par: 1200, maxAlive: 5 }
+            HARD:   { name: 'HARD',   time: 60, uptime: 0.7,  speed: 1.5, spreadMult: 1.25, par: 1800, maxAlive: 4 },
+            NORMAL: { name: 'NORMAL', time: 75, uptime: 1.0,  speed: 1.0,  spreadMult: 1.0,  par: 1500, maxAlive: 4 },
+            EASY:   { name: 'EASY',   time: 90, uptime: 1.4,  speed: 0.7,  spreadMult: 0.8,  par: 1200, maxAlive: 5 }
         };
         const TRIGGER_COOLDOWN_MS = 180;
 
@@ -1097,6 +1186,7 @@
             score: 0, shotsFired: 0, pelletsFired: 0, pelletsHit: 0,
             streak: 0, bestStreak: 0, kills: 0, ammo: 0, reloading: false,
             waveIdx: 0, waveScores: [0, 0, 0, 0, 0], bonusScores: [0, 0, 0, 0, 0], civHits: [0, 0, 0, 0, 0],
+            expired: 0, expiredByWave: [0, 0, 0, 0, 0],
             targets: [], nextTid: 1, events: [],
             timeLeft: 0, endTime: 0, timer: null, raf: null, lastTick: 0,
             roll: 0, shooter: 'OPERATOR', active: false,
@@ -1304,11 +1394,15 @@
             wrap.appendChild(el);
             const persistent = (ev.kind === 'paper' || ev.kind === 'armored' || ev.kind === 'shield' || ev.kind === 'bullseye');
             const wrapH = wrap.clientHeight || 380;
+            // Late-wave pressure: targets vanish faster on W4/W5 (0.85/0.75).
+            // Persistent plates no longer linger 25s; grace cut 2s -> 1s so
+            // mouse users can't shoot at leisure.
+            const waveMult = (ev.wave >= 4) ? 0.75 : (ev.wave === 3) ? 0.85 : 1;
             const t = {
                 id, kind: ev.kind, lane: ev.lane, wave: ev.wave, el,
                 hp: (TARGET_DEFS[ev.kind] || {}).hp || 1,
                 born: state.elapsed,
-                expires: persistent ? state.elapsed + 25 : state.elapsed + state.diff.uptime * (ev.kind === 'drone' ? 7 : 1) + 2,
+                expires: persistent ? state.elapsed + 10 * waveMult + state.diff.uptime + 1 : state.elapsed + state.diff.uptime * waveMult * (ev.kind === 'drone' ? 7 : 1) + 1,
                 vx: ev.kind === 'drone' ? (Math.random() < 0.5 ? -1 : 1) * (26 + Math.random() * 22) * state.diff.speed : 0,
                 x: ev.x, xPct: ev.x, yPct: wrapH ? (y / wrapH) : 0, dead: false
             };
@@ -1680,20 +1774,30 @@
             if (newWave !== state.waveIdx) {
                 // Leaving a discipline wave with zero CIV hits earns a bonus.
                 // Bonuses stored separately so medals grade pure waveScores only.
+                // Escapes void/reduce the bonus: slow play doesn't get paid.
                 const prev = state.waveIdx;
                 if (WAVE_KINDS[prev] && WAVE_KINDS[prev].indexOf('civ') !== -1 && state.civHits[prev] === 0) {
-                    const bonus = 150;
-                    state.score += bonus;
-                    state.bonusScores[prev] += bonus;
-                    feedMsg('DISCIPLINE BONUS +' + bonus + ' (W' + (prev + 1) + ' clean)', 'good');
+                    const escapedPrev = (state.expiredByWave && state.expiredByWave[prev]) || 0;
+                    if (escapedPrev === 0) {
+                        const bonus = 150;
+                        state.score += bonus;
+                        state.bonusScores[prev] += bonus;
+                        feedMsg('DISCIPLINE BONUS +' + bonus + ' (W' + (prev + 1) + ' clean)', 'good');
+                    } else {
+                        const bonus = 50;
+                        state.score += bonus;
+                        state.bonusScores[prev] += bonus;
+                        feedMsg('DISCIPLINE BONUS +' + bonus + ' (W' + (prev + 1) + ' civ-clean but ' + escapedPrev + ' escaped — reduced)', 'warn');
+                    }
                 }
                 state.waveIdx = newWave;
             }
 
-            // Spawn due events
+            // Spawn due events (late waves overlap +1 to force target switching).
             while (state.events.length && state.events[0].at <= state.elapsed) {
                 const ev = state.events.shift();
-                if (state.targets.length < state.diff.maxAlive + 2) spawnTarget(ev);
+                const cap = state.diff.maxAlive + 2 + (state.waveIdx >= 3 ? 1 : 0);
+                if (state.targets.length < cap) spawnTarget(ev);
                 else insertEventSorted({ at: ev.at + 0.8, wave: ev.wave, kind: ev.kind, lane: ev.lane, x: ev.x });
             }
 
@@ -1710,22 +1814,36 @@
                     t.xPct = t.x;
                 }
                 if (state.elapsed >= t.expires) {
-                    const persistent = (t.kind === 'paper' || t.kind === 'armored' || t.kind === 'shield' || t.kind === 'bullseye');
-                    if (!persistent && (t.kind === 'popup' || t.kind === 'hostile' || t.kind === 'civ' || t.kind === 'drone')) {
-                        feedMsg(String(t.kind).toUpperCase() + ' expired (' + t.lane + ')', '');
+                    if (t.kind === 'civ') {
+                        // Correct hold-fire: civ walks away free, no penalty.
+                        feedMsg('CIV cleared (' + t.lane + ') — good hold', 'good');
+                    } else {
+                        // Real cost for slow play: streak lost + small score
+                        // penalty, tracked per wave to gate bonuses.
+                        const wv = (typeof t.wave === 'number') ? t.wave : state.waveIdx;
+                        state.streak = 0;
+                        state.score = Math.max(0, state.score - ESCAPED_PENALTY);
+                        if (state.waveScores && typeof state.waveScores[wv] === 'number') state.waveScores[wv] -= ESCAPED_PENALTY;
+                        state.expired = (state.expired || 0) + 1;
+                        if (state.expiredByWave && typeof state.expiredByWave[wv] === 'number') state.expiredByWave[wv]++;
+                        feedMsg('TARGET ESCAPED ' + String(t.kind).toUpperCase() + ' (' + t.lane + ') −' + ESCAPED_PENALTY + ' streak lost', 'bad');
                     }
                     removeTarget(t.id);
+                    updateHud(true);
                 }
             }
 
             // Course clear: nothing left to spawn and nothing alive.
             // Requires at least one kill, else RANGE COLD (no time bonus).
+            // Escapes halve the time bonus: slow play doesn't get paid full.
             if (state.active && !state.events.length && !state.targets.length && state.elapsed > 8) {
                 if ((state.kills || 0) > 0) {
-                    const bonus = state.timeLeft * 5;
+                    const full = state.timeLeft * 5;
+                    const escapedTotal = state.expired || 0;
+                    const bonus = escapedTotal === 0 ? full : Math.floor(full / 2);
                     state.score += bonus;
                     state.bonusScores[state.waveIdx] += bonus;
-                    feedMsg('COURSE CLEAR — time bonus +' + bonus, 'good');
+                    feedMsg(escapedTotal === 0 ? 'COURSE CLEAR — time bonus +' + bonus : 'COURSE CLEAR — time bonus +' + bonus + ' (halved: ' + escapedTotal + ' escaped)', escapedTotal === 0 ? 'good' : 'warn');
                 } else {
                     feedMsg('RANGE COLD — no targets downed', 'warn');
                 }
@@ -1765,6 +1883,8 @@
             state.waveScores = [0, 0, 0, 0, 0];
             state.bonusScores = [0, 0, 0, 0, 0];
             state.civHits = [0, 0, 0, 0, 0];
+            state.expired = 0;
+            state.expiredByWave = [0, 0, 0, 0, 0];
             state.nextTid = 1;
             state.events = buildSpawnPlan(diff, (Math.random() * 1e9) | 0);
             state.lastTick = 0;
@@ -1939,11 +2059,15 @@
             document.getElementById('result-weapon').textContent = state.params.name;
             document.getElementById('result-mode').textContent = simMode ? 'SIM (SWADE DICE)' : 'ARCADE';
             document.getElementById('result-score').textContent = state.score + ' (par ' + state.diff.par + ')';
-            const rating = state.score >= state.diff.par * 1.5 ? 'EXPERT' : won ? 'QUALIFIED' : acc >= 50 ? 'NEEDS PRACTICE' : 'WASHOUT';
+            const expertScore = state.score >= state.diff.par * 1.5;
+            const expertAcc = acc >= EXPERT_MIN_ACC;
+            const rating = (expertScore && expertAcc) ? 'EXPERT' : won ? 'QUALIFIED' : acc >= 50 ? 'NEEDS PRACTICE' : 'WASHOUT';
             document.getElementById('result-rating').textContent = rating;
             document.getElementById('result-acc').textContent = state.pelletsHit + '/' + state.pelletsFired + ' (' + acc + '%)';
             document.getElementById('result-streak').textContent = state.bestStreak;
-            document.getElementById('result-status').textContent = won ? 'RANGE QUALIFIED' : 'BELOW PAR — RUN IT AGAIN';
+            const escapedTotal = state.expired || 0;
+            try { document.getElementById('result-escaped').textContent = String(escapedTotal); } catch (e) {}
+            document.getElementById('result-status').textContent = (expertScore && !expertAcc) ? 'QUALIFIED — ACC TOO LOW FOR EXPERT (need ' + EXPERT_MIN_ACC + '%)' : won ? 'RANGE QUALIFIED' : 'BELOW PAR — RUN IT AGAIN';
 
             saveStats(state.diff, state.score, acc);
             const safeShooter = sanitizeShooter(state.shooter);
@@ -1980,8 +2104,8 @@
         }
 
         async function sendWebhook(won, acc, rating) {
-            const hook = getWebhook();
-            if (!hook) { console.warn('webhook missing, skipping result post'); return; }
+            const hook = await getWebhook();
+            if (!hook) { console.warn('webhook missing, skipping result post'); markWebhookStatus(false); return; }
             const s = loadStats(state.diff.name);
             const safeShooter = sanitizeShooter(state.shooter);
             let board = '—';
@@ -2014,10 +2138,13 @@
             try {
                 if (window.Embeds && typeof window.Embeds.post === 'function') {
                     await window.Embeds.post(hook, embed);
+                    markWebhookStatus(true);
                 } else {
-                    await fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                    const resp = await fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                    if (!resp.ok) console.warn('webhook post rejected');
+                    markWebhookStatus(resp.ok);
                 }
-            } catch (e) { console.warn('webhook post failed'); }
+            } catch (e) { console.warn('webhook post failed'); markWebhookStatus(false); }
         }
 
         document.getElementById('roll-submit').addEventListener('click', submitArmory);
