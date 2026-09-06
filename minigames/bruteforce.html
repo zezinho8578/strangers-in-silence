@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRUTEFORCE // PASSWORD CRACKER</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --primary: #00ff41;
+            --primary-dim: #006622;
+            --primary-glow: #00ff41;
+            --bg: #0a0a0a;
+            --bg-panel: rgba(0, 10, 0, 0.9);
+            --target: #ff0040;
+            --target-glow: #ff0040;
+            --warning: #ffaa00;
+        }
+
+        body {
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(0, 40, 0, 0.3) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(0, 20, 40, 0.2) 0%, transparent 50%);
+            color: var(--primary);
+            font-family: 'Courier New', 'Lucida Console', monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #crt_overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.12) 0px,
+                rgba(0, 0, 0, 0.12) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            92% { opacity: 1; }
+            93% { opacity: 0.97; }
+            94% { opacity: 1; }
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        #scanline {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            height: 80px;
+            background: linear-gradient(
+                transparent 0%,
+                rgba(0, 255, 65, 0.03) 50%,
+                transparent 100%
+            );
+            animation: scanline 6s linear infinite;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #game-container {
+            animation: flicker 5s infinite;
+            border: 1px solid var(--primary);
+            padding: 25px;
+            background: var(--bg-panel);
+            width: 95%;
+            max-width: 850px;
+            position: relative;
+            box-shadow:
+                0 0 40px rgba(0, 255, 65, 0.15),
+                inset 0 0 40px rgba(0, 255, 65, 0.03),
+                inset 0 1px 0 rgba(0, 255, 65, 0.2);
+        }
+
+        #game-container::before,
+        #game-container::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: var(--primary);
+            border-style: solid;
+        }
+        #game-container::before {
+            top: -1px; left: -1px;
+            border-width: 2px 0 0 2px;
+        }
+        #game-container::after {
+            bottom: -1px; right: -1px;
+            border-width: 0 2px 2px 0;
+        }
+
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        #boot-screen {
+            text-align: left;
+            min-height: 380px;
+            padding: 20px;
+            font-size: 13px;
+        }
+        .boot-line {
+            opacity: 0;
+            margin-bottom: 6px;
+            transition: opacity 0.08s;
+            line-height: 1.6;
+        }
+        .boot-line.visible { opacity: 1; }
+        .boot-line .highlight { color: var(--target); }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 14px;
+            background: var(--primary);
+            animation: blink 1s infinite;
+            vertical-align: middle;
+            margin-left: 4px;
+        }
+
+        #roll-screen { text-align: center; padding: 30px 20px; }
+        #roll-screen h1 {
+            font-size: 22px;
+            margin-bottom: 25px;
+            text-shadow: 0 0 10px var(--primary-glow);
+            letter-spacing: 3px;
+            font-weight: normal;
+        }
+        #roll-screen p {
+            font-size: 13px;
+            margin-bottom: 18px;
+            color: var(--primary-dim);
+        }
+
+        #roll-input {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 22px;
+            padding: 12px 25px;
+            text-align: center;
+            width: 100px;
+            outline: none;
+            margin-bottom: 10px;
+        }
+        #roll-input:focus {
+            box-shadow: 0 0 15px var(--primary-glow), inset 0 0 10px rgba(0, 255, 65, 0.1);
+        }
+
+        .btn {
+            display: inline-block;
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 13px;
+            padding: 12px 35px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .btn:hover {
+            background: var(--primary);
+            color: var(--bg);
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .btn-mini {
+            display: inline-block;
+            background: transparent;
+            border: 1px solid var(--primary-dim);
+            color: var(--primary-dim);
+            font-family: inherit;
+            font-size: 10px;
+            padding: 4px 9px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            margin-left: 6px;
+        }
+        .btn-mini:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .btn-mini.muted {
+            color: var(--warning);
+            border-color: var(--warning);
+        }
+
+        #game-screen { text-align: center; }
+
+        #game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--primary-dim);
+        }
+
+        #difficulty-display {
+            font-size: 11px;
+            color: var(--warning);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #timer-display {
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 0 0 10px currentColor;
+            font-variant-numeric: tabular-nums;
+        }
+        #timer-display.warning {
+            color: var(--target);
+            animation: blink 0.5s infinite;
+        }
+
+        #penalty-flash {
+            min-height: 18px;
+            font-size: 12px;
+            color: var(--target);
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+            text-shadow: 0 0 8px var(--target-glow);
+        }
+
+        #password-display {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            margin-bottom: 14px;
+            font-size: 20px;
+            letter-spacing: 1px;
+        }
+        #password-display .pw-slot {
+            width: 30px;
+            height: 34px;
+            line-height: 34px;
+            border: 1px solid var(--primary-dim);
+            color: var(--primary-dim);
+        }
+        #password-display .pw-slot.filled {
+            border-color: var(--primary);
+            color: var(--primary);
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.35), inset 0 0 8px rgba(0, 255, 65, 0.15);
+            text-shadow: 0 0 8px var(--primary-glow);
+        }
+
+        #bruteforce-board {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            position: relative;
+            margin: 0 auto 12px;
+            max-width: 680px;
+        }
+
+        .bf-col {
+            flex: 1 1 0;
+            min-width: 0;
+            border: 1px solid var(--primary-dim);
+            background: rgba(0, 20, 0, 0.6);
+            cursor: pointer;
+            position: relative;
+            padding: 4px 0;
+            transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+        }
+        .bf-col.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 14px rgba(0, 255, 65, 0.35), inset 0 0 12px rgba(0, 255, 65, 0.08);
+        }
+        .bf-col.locked {
+            border-color: var(--primary);
+            background: rgba(0, 60, 0, 0.45);
+            cursor: default;
+        }
+        .bf-col.future {
+            opacity: 0.55;
+        }
+        .bf-col.fail {
+            border-color: var(--target) !important;
+            box-shadow: 0 0 14px rgba(255, 0, 64, 0.6) !important;
+        }
+
+        @keyframes bfshake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .bf-col.shake { animation: bfshake 0.3s ease-in-out; }
+        #game-container.shake-all { animation: bfshake 0.3s ease-in-out, flicker 5s infinite; }
+
+        .bf-cell {
+            height: 26px;
+            line-height: 26px;
+            text-align: center;
+            font-size: 18px;
+            color: var(--primary-dim);
+        }
+        .bf-cell.is-target { color: var(--target); }
+        .bf-col.locked .bf-cell { color: var(--primary-dim); }
+        .bf-cell.bf-center {
+            height: 34px;
+            line-height: 34px;
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary);
+            border-top: 1px solid var(--primary);
+            border-bottom: 1px solid var(--primary);
+            background: rgba(0, 255, 65, 0.07);
+            position: relative;
+        }
+        .bf-cell.bf-center.is-target {
+            color: var(--target);
+            background: rgba(255, 0, 64, 0.14);
+            border-top-color: var(--target);
+            border-bottom-color: var(--target);
+            text-shadow: 0 0 10px var(--target-glow);
+            box-shadow: 0 0 12px rgba(255, 0, 64, 0.35), inset 0 0 10px rgba(255, 0, 64, 0.2);
+        }
+        .bf-col.locked .bf-cell.bf-center {
+            color: var(--primary);
+            background: rgba(0, 255, 65, 0.16);
+            border-top-color: var(--primary);
+            border-bottom-color: var(--primary);
+            text-shadow: 0 0 10px var(--primary-glow);
+        }
+        .bf-col.locked .bf-cell.bf-center.is-target { color: var(--primary); }
+
+        #capture-hint {
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: var(--primary-dim);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+        #capture-hint b { color: var(--target); }
+
+        #lock-btn {
+            width: 100%;
+            max-width: 680px;
+            margin: 0 auto;
+            font-size: 16px;
+            padding: 14px 20px;
+        }
+
+        #game-footer {
+            margin-top: 15px;
+            font-size: 10px;
+            color: var(--primary-dim);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #result-screen { text-align: center; padding: 30px 20px; }
+        #result-screen h1 {
+            font-size: 26px;
+            margin-bottom: 25px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        #result-screen.success h1 {
+            color: var(--primary);
+            text-shadow: 0 0 20px var(--primary-glow);
+        }
+        #result-screen.failure h1 {
+            color: var(--target);
+            text-shadow: 0 0 20px var(--target-glow);
+        }
+
+        .result-stats {
+            text-align: left;
+            margin: 25px auto;
+            max-width: 340px;
+            font-size: 13px;
+        }
+        .result-stats div {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--primary-dim);
+        }
+        .result-stats span:first-child {
+            color: var(--primary-dim);
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        .result-stats .pw-value {
+            color: var(--target);
+            letter-spacing: 3px;
+            font-weight: bold;
+        }
+
+        @media (max-width: 600px) {
+            #game-container { padding: 15px; }
+            #bruteforce-board { gap: 4px; }
+            .bf-cell { height: 22px; line-height: 22px; font-size: 15px; }
+            .bf-cell.bf-center { height: 30px; line-height: 30px; font-size: 20px; }
+            #password-display .pw-slot { width: 24px; height: 30px; line-height: 30px; font-size: 16px; }
+            #lock-btn { font-size: 15px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #game-container, #scanline { animation: none; }
+        }
+    </style>
+</head>
+<body>
+    <div id="crt_overlay"></div>
+    <div id="scanline"></div>
+
+    <div id="game-container">
+        <div id="boot-screen" class="screen active">
+            <div class="boot-line">> BRUTEFORCE v2.4.1 // Busting through the backdoor since 1998</div>
+            <div class="boot-line">> NEURAL LINK ESTABLISHED</div>
+            <div class="boot-line">> TARGET: OVERWATCH TERMINAL // 8-CHAR PASSWORD DETECTED</div>
+            <div class="boot-line">> <span class="highlight">8 PARALLEL CIPHER STREAMS</span> STREAMING A-Z</div>
+            <div class="boot-line">> CALIBRATING CAPTURE WINDOW...</div>
+            <div class="boot-line">> TRACE DETECTION ACTIVE // TIME CONSTRAINT ENGAGED</div>
+            <div class="boot-line">> <span class="highlight">STATUS: AWAITING OPERATOR INPUT</span><span class="cursor"></span></div>
+        </div>
+
+        <div id="roll-screen" class="screen">
+            <h1>PASSWORD CRACKER</h1>
+            <p>INPUT ELECTRONICS SKILL CHECK (1–20)</p>
+            <p style="font-size: 10px; letter-spacing: 1px;">
+                FAILED [1-3] = HARD &nbsp;&nbsp;│&nbsp;&nbsp; SUCCESS [4-7] = NORMAL &nbsp;&nbsp;│&nbsp;&nbsp; RAISE [8+] = EASY
+            </p>
+            <input type="number" id="roll-input" min="1" max="20" placeholder="?">
+            <br>
+            <button class="btn" id="roll-submit">INITIATE CRACK</button>
+        </div>
+
+        <div id="game-screen" class="screen">
+            <div id="game-header">
+                <div id="difficulty-display">THREAT LVL: <span id="diff-text">NORMAL</span></div>
+                <div id="timer-display">60</div>
+                <div>
+                    <button class="btn-mini" id="mute-btn" type="button">SOUND: ON</button>
+                    <button class="btn-mini" id="abort-btn" type="button">ABORT</button>
+                </div>
+            </div>
+            <div id="penalty-flash"></div>
+            <div id="password-display"></div>
+            <div id="bruteforce-board"></div>
+            <div id="capture-hint">LOCK EACH COLUMN WHEN <b>RED</b> IS IN THE BOX // LEFT TO RIGHT</div>
+            <button class="btn" id="lock-btn" type="button">LOCK [SPACE]</button>
+            <div id="game-footer">
+                HARD = MISS RESETS ALL // EASY + NORMAL = MISS COSTS 5s
+            </div>
+        </div>
+
+        <div id="result-screen" class="screen">
+            <h1 id="result-title">ACCESS GRANTED</h1>
+            <div class="result-stats">
+                <div><span>Threat Level</span><span id="result-diff">NORMAL</span></div>
+                <div><span>Electronics Roll</span><span id="result-roll">5</span></div>
+                <div><span>Password</span><span id="result-word" class="pw-value">SENTINEL</span></div>
+                <div><span>Time Remaining</span><span id="result-time">12s</span></div>
+                <div><span>Locks</span><span id="result-locks">8/8</span></div>
+                <div><span>Misses</span><span id="result-misses">0</span></div>
+                <div><span>Status</span><span id="result-status">ACCESS GRANTED</span></div>
+                <div><span>Best Time</span><span id="result-best-time">—</span></div>
+                <div><span>Best Misses</span><span id="result-best-miss">—</span></div>
+            </div>
+            <button class="btn" id="play-again">CRACK ANOTHER PASSWORD</button>
+        </div>
+    </div>
+
+    <script>
+        const AudioEngine = {
+            ctx: null,
+            muted: false,
+            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            beep(freq = 440, dur = 0.1, vol = 0.08, type = 'square') {
+                if (!this.ctx || this.muted) return;
+                const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+                o.type = type;
+                o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                g.gain.setValueAtTime(vol, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + dur);
+            },
+            click() { this.beep(800, 0.04, 0.04); },
+            lock() { this.beep(1047, 0.12, 0.1, 'triangle'); },
+            rotate() { this.beep(500, 0.06, 0.06, 'triangle'); },
+            error() { this.beep(180, 0.15, 0.08, 'sawtooth'); },
+            win() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.beep(f, 0.18, 0.12), i * 120)); },
+            lose() { [350, 300, 250, 180].forEach((f, i) => setTimeout(() => this.beep(f, 0.2, 0.1, 'sawtooth'), i * 120)); }
+        };
+
+        const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
+
+        // Fixed-8 always: difficulty changes speed/time/forgiveness, never length.
+        const DIFF = {
+            HARD:   { name: 'HARD',   cols: 8, time: 50, speed: 11, accel: 1.08, strict: true  },
+            NORMAL: { name: 'NORMAL', cols: 8, time: 60, speed: 8,  accel: 1.0,  strict: false },
+            EASY:   { name: 'EASY',   cols: 8, time: 75, speed: 5,  accel: 1.0,  strict: false }
+        };
+        const LENIENT_PENALTY_SEC = 5;
+        const LOCK_COOLDOWN_MS = 350;
+
+        // All exactly 8x A-Z. LambdaOS / resistance flavor + GTA nods.
+        const WORDLIST = [
+            'SENTINEL', 'DEADLOCK', 'MORPHEUS', 'DYNAMITE',
+            'BACKDOOR', 'UNLOCKED', 'BLUEBOOK', 'DECIPHER',
+            'JUNKYARD', 'HEADCRAB', 'RESISTOR', 'COMBINED',
+            'STRIDERS', 'ANTLIONS', 'PASSWORD', 'FIREWALL',
+            'TERMINAL', 'LAMBDAOS', 'BLACKOUT', 'FREEMANS'
+        ];
+
+        const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const ROWS_ABOVE = 3, ROWS_BELOW = 3;
+
+        let state = {
+            diff: null, word: '', cols: [], activeIdx: 0,
+            timeLeft: 0, endTime: 0, timer: null, raf: null, lastTick: 0,
+            misses: 0, locks: 0, roll: 0, active: false, lastLockAt: 0
+        };
+
+        function mod(n, m) { return ((n % m) + m) % m; }
+        function centerLetter(col) { return ALPHABET[mod(Math.floor(col.offset), 26)]; }
+
+        function pickWord() {
+            const valid = WORDLIST.filter(w => /^[A-Z]{8}$/.test(w));
+            return valid[Math.floor(Math.random() * valid.length)];
+        }
+
+        function buildBoard() {
+            const board = document.getElementById('bruteforce-board');
+            board.innerHTML = '';
+            const pw = document.getElementById('password-display');
+            pw.innerHTML = '';
+            for (let i = 0; i < 8; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'pw-slot';
+                slot.id = 'pw-' + i;
+                slot.textContent = '_';
+                pw.appendChild(slot);
+
+                const col = document.createElement('div');
+                col.className = 'bf-col future';
+                col.dataset.i = i;
+                col.addEventListener('click', () => tryLock());
+                board.appendChild(col);
+            }
+        }
+
+        function genRun(diff) {
+            state.word = pickWord();
+            state.cols = [];
+            for (let i = 0; i < 8; i++) {
+                const target = state.word[i];
+                // Randomize phase so columns don't sync; keep target reachable quickly.
+                const targetIdx = ALPHABET.indexOf(target);
+                const startBack = 4 + Math.floor(Math.random() * 18);
+                state.cols.push({
+                    target: target,
+                    targetIdx: targetIdx,
+                    offset: targetIdx - startBack + Math.random(),
+                    speed: diff.speed * (0.94 + Math.random() * 0.12),
+                    locked: false
+                });
+            }
+            state.activeIdx = 0;
+            state.misses = 0;
+            state.locks = 0;
+            state.lastLockAt = 0;
+        }
+
+        function render() {
+            const board = document.getElementById('bruteforce-board');
+            for (let i = 0; i < state.cols.length; i++) {
+                const col = state.cols[i];
+                let el = board.children[i];
+                if (!el) continue;
+                el.classList.toggle('active', i === state.activeIdx && !col.locked && state.active);
+                el.classList.toggle('locked', col.locked);
+                el.classList.toggle('future', i > state.activeIdx);
+
+                const center = centerLetter(col);
+                let html = '';
+                for (let r = -ROWS_ABOVE; r <= ROWS_BELOW; r++) {
+                    const idx = mod(Math.floor(col.offset) + r, 26);
+                    const letter = ALPHABET[idx];
+                    const isCenter = (r === 0);
+                    const isTarget = (letter === col.target);
+                    html += '<div class="bf-cell' + (isCenter ? ' bf-center' : '') + (isTarget ? ' is-target' : '') + '">' + letter + '</div>';
+                }
+                el.innerHTML = html;
+                void center;
+            }
+            for (let i = 0; i < 8; i++) {
+                const slot = document.getElementById('pw-' + i);
+                if (!slot) continue;
+                if (i < state.locks) {
+                    slot.textContent = state.word[i];
+                    slot.classList.add('filled');
+                } else {
+                    slot.textContent = '_';
+                    slot.classList.remove('filled');
+                }
+            }
+        }
+
+        function loop(ts) {
+            if (!state.active) return;
+            if (!state.lastTick) state.lastTick = ts;
+            const dt = Math.min(0.05, (ts - state.lastTick) / 1000);
+            state.lastTick = ts;
+            for (let i = 0; i < state.cols.length; i++) {
+                if (!state.cols[i].locked) state.cols[i].offset += state.cols[i].speed * dt;
+            }
+            render();
+            state.raf = requestAnimationFrame(loop);
+        }
+
+        function flashPenalty(text) {
+            const el = document.getElementById('penalty-flash');
+            el.textContent = text;
+            clearTimeout(flashPenalty._t);
+            flashPenalty._t = setTimeout(() => { el.textContent = ''; }, 1600);
+        }
+
+        function shakeCol(i) {
+            const board = document.getElementById('bruteforce-board');
+            const el = board.children[i];
+            if (!el) return;
+            el.classList.remove('shake', 'fail');
+            void el.offsetWidth;
+            el.classList.add('shake', 'fail');
+            setTimeout(() => el.classList.remove('shake', 'fail'), 450);
+        }
+
+        function tryLock() {
+            if (!state.active) return;
+            const now = Date.now();
+            if (now - state.lastLockAt < LOCK_COOLDOWN_MS) return;
+            state.lastLockAt = now;
+
+            const i = state.activeIdx;
+            const col = state.cols[i];
+            if (!col || col.locked) return;
+
+            if (centerLetter(col) === col.target) {
+                col.locked = true;
+                col.offset = col.targetIdx;
+                state.locks++;
+                state.activeIdx++;
+                AudioEngine.lock();
+                // HARD accelerates after every lock for endgame pressure.
+                if (state.diff.accel !== 1.0) {
+                    for (let k = state.activeIdx; k < state.cols.length; k++) {
+                        state.cols[k].speed *= state.diff.accel;
+                    }
+                }
+                render();
+                if (state.locks >= 8) {
+                    state.active = false;
+                    render();
+                    setTimeout(() => endGame(true), 200);
+                }
+            } else {
+                state.misses++;
+                AudioEngine.error();
+                if (state.diff.strict) {
+                    // HARD: authentic GTA reset-all.
+                    for (let k = 0; k < state.cols.length; k++) {
+                        state.cols[k].locked = false;
+                        state.cols[k].offset = state.cols[k].targetIdx - (4 + Math.floor(Math.random() * 18)) + Math.random();
+                    }
+                    state.locks = 0;
+                    state.activeIdx = 0;
+                    flashPenalty('> MISS // TRACE SPIKE // ALL COLUMNS RESET');
+                    const gc = document.getElementById('game-container');
+                    gc.classList.remove('shake-all');
+                    void gc.offsetWidth;
+                    gc.classList.add('shake-all');
+                    setTimeout(() => gc.classList.remove('shake-all'), 400);
+                } else {
+                    // EASY/NORMAL: lenient -5s, retry same column.
+                    state.endTime -= LENIENT_PENALTY_SEC * 1000;
+                    state.timeLeft = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
+                    updTimer();
+                    flashPenalty('> MISS // -' + LENIENT_PENALTY_SEC + 's TRACE PENALTY // RETRY COLUMN ' + (i + 1));
+                    shakeCol(i);
+                    if (state.timeLeft <= 0) {
+                        state.active = false;
+                        setTimeout(() => endGame(false), 200);
+                    }
+                }
+                render();
+            }
+        }
+
+        function startTimer() {
+            state.endTime = Date.now() + state.diff.time * 1000;
+            state.timeLeft = state.diff.time;
+            updTimer();
+            state.timer = setInterval(tickTimer, 250);
+        }
+
+        function tickTimer() {
+            if (!state.active || state.timer === null) return;
+            const remain = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
+            if (remain !== state.timeLeft) {
+                state.timeLeft = remain;
+                updTimer();
+                if (state.timeLeft <= 10 && state.timeLeft > 0) AudioEngine.beep(900, 0.04, 0.06);
+            }
+            if (state.timeLeft <= 0) endGame(false);
+        }
+
+        function updTimer() {
+            const el = document.getElementById('timer-display');
+            el.textContent = state.timeLeft;
+            el.classList.toggle('warning', state.timeLeft <= 10);
+        }
+
+        function startGame(diff) {
+            document.querySelectorAll('#bruteforce-board .bf-col').forEach(n => n.remove());
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            state.diff = diff;
+            state.active = true;
+            state.lastTick = 0;
+            buildBoard();
+            genRun(diff);
+            document.getElementById('penalty-flash').textContent = '';
+            showScreen('game-screen');
+            render();
+            document.getElementById('diff-text').textContent = diff.name + (diff.strict ? ' // STRICT' : ' // LENIENT');
+            startTimer();
+            state.raf = requestAnimationFrame(loop);
+        }
+
+        function endGame(won) {
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            // Guard: endGame must run once (timer race + final lock race).
+            if (!state.active && state._ended) return;
+            state.active = false;
+            state._ended = true;
+            setTimeout(() => { state._ended = false; }, 500);
+            won ? AudioEngine.win() : AudioEngine.lose();
+            const rs = document.getElementById('result-screen');
+            rs.className = 'screen active ' + (won ? 'success' : 'failure');
+            document.getElementById('result-title').textContent = won ? 'ACCESS GRANTED' : 'TRACE DETECTED';
+            document.getElementById('result-diff').textContent = state.diff.name;
+            document.getElementById('result-roll').textContent = state.roll;
+            document.getElementById('result-word').textContent = state.word;
+            document.getElementById('result-time').textContent = won ? state.timeLeft + 's' : 'EXPIRED';
+            document.getElementById('result-locks').textContent = state.locks + '/8';
+            document.getElementById('result-misses').textContent = state.misses;
+            document.getElementById('result-status').textContent = won ? 'ACCESS GRANTED' : 'TRACE DETECTED';
+            if (won) saveStats(state.diff, state.timeLeft, state.misses);
+            showStats();
+            showScreen('result-screen');
+            sendWebhook(won);
+        }
+
+        const STATS_PREFIX = 'bruteforce_stats_';
+        function loadStats(name) {
+            try {
+                const s = JSON.parse(localStorage.getItem(STATS_PREFIX + name) || 'null');
+                if (s && typeof s.bestTime === 'number' && typeof s.bestMiss === 'number') return s;
+            } catch (e) {}
+            return { bestTime: null, bestMiss: null };
+        }
+        function saveStats(diff, time, miss) {
+            const s = loadStats(diff.name);
+            if (s.bestTime === null || time > s.bestTime) s.bestTime = time;
+            if (s.bestMiss === null || miss < s.bestMiss) s.bestMiss = miss;
+            try { localStorage.setItem(STATS_PREFIX + diff.name, JSON.stringify(s)); } catch (e) {}
+        }
+        function showStats() {
+            const s = loadStats(state.diff.name);
+            document.getElementById('result-best-time').textContent = s.bestTime === null ? '—' : s.bestTime + 's';
+            document.getElementById('result-best-miss').textContent = s.bestMiss === null ? '—' : String(s.bestMiss);
+        }
+
+        async function sendWebhook(won) {
+            const s = loadStats(state.diff.name);
+            const embed = {
+                title: '🔓 BRUTEFORCE RESULT',
+                color: won ? 0x00ff41 : 0xff0040,
+                fields: [
+                    {name: 'Outcome', value: won ? '✅ SUCCESS' : '❌ FAILED', inline: true},
+                    {name: 'Threat Level', value: state.diff.name, inline: true},
+                    {name: 'Electronics Roll', value: String(state.roll), inline: true},
+                    {name: 'Password', value: state.word, inline: true},
+                    {name: 'Time Remaining', value: won ? state.timeLeft + 's' : 'Expired', inline: true},
+                    {name: 'Locks', value: state.locks + '/8', inline: true},
+                    {name: 'Misses', value: String(state.misses), inline: true},
+                    {name: 'Best Time (' + state.diff.name + ')', value: s.bestTime === null ? '—' : s.bestTime + 's', inline: true},
+                    {name: 'Best Misses (' + state.diff.name + ')', value: s.bestMiss === null ? '—' : String(s.bestMiss), inline: true}
+                ],
+                footer: {text: 'Bruteforce // Password Cracker'},
+                timestamp: new Date().toISOString()
+            };
+            try {
+                await fetch(WEBHOOK, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({embeds: [embed]})
+                });
+            } catch (e) { console.error('Webhook error:', e); }
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function runBoot() {
+            const lines = document.querySelectorAll('#boot-screen .boot-line');
+            let delay = 0;
+            lines.forEach(line => {
+                setTimeout(() => { line.classList.add('visible'); AudioEngine.click(); }, delay);
+                delay += 300 + Math.random() * 120;
+            });
+            setTimeout(() => {
+                showScreen('roll-screen');
+                document.getElementById('roll-input').focus();
+            }, delay + 350);
+        }
+
+        function submitRoll() {
+            AudioEngine.init();
+            const v = parseInt(document.getElementById('roll-input').value);
+            if (isNaN(v) || v < 1 || v > 20) {
+                document.getElementById('roll-input').style.borderColor = '#ff0040';
+                AudioEngine.error();
+                return;
+            }
+            state.roll = v;
+            const diff = v <= 3 ? DIFF.HARD : v <= 7 ? DIFF.NORMAL : DIFF.EASY;
+            startGame(diff);
+        }
+
+        document.getElementById('roll-submit').addEventListener('click', submitRoll);
+        document.getElementById('roll-input').addEventListener('keypress', e => { if (e.key === 'Enter') submitRoll(); });
+        document.getElementById('lock-btn').addEventListener('click', () => { AudioEngine.init(); tryLock(); });
+        document.addEventListener('keydown', e => {
+            if (document.getElementById('game-screen').classList.contains('active')) {
+                if (e.key === ' ' || e.key === 'Enter') {
+                    // Don't double-fire when focus is in roll input / buttons.
+                    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') && e.target.id !== 'lock-btn') return;
+                    e.preventDefault();
+                    AudioEngine.init();
+                    tryLock();
+                }
+            }
+        });
+        document.getElementById('play-again').addEventListener('click', () => {
+            document.getElementById('roll-input').value = '';
+            document.getElementById('roll-input').style.borderColor = '';
+            showScreen('roll-screen');
+            document.getElementById('roll-input').focus();
+        });
+        const abortBtn = document.getElementById('abort-btn');
+        abortBtn.addEventListener('click', () => {
+            if (!state.active && state.timer === null) return;
+            state.active = false;
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            AudioEngine.click();
+            document.getElementById('roll-input').value = '';
+            document.getElementById('roll-input').style.borderColor = '';
+            showScreen('roll-screen');
+            document.getElementById('roll-input').focus();
+        });
+        const muteBtn = document.getElementById('mute-btn');
+        function updateMuteBtn() {
+            muteBtn.textContent = AudioEngine.muted ? 'SOUND: OFF' : 'SOUND: ON';
+            muteBtn.classList.toggle('muted', AudioEngine.muted);
+        }
+        try { AudioEngine.muted = localStorage.getItem('bruteforce_muted') === '1'; } catch (e) {}
+        updateMuteBtn();
+        muteBtn.addEventListener('click', () => {
+            AudioEngine.muted = !AudioEngine.muted;
+            try { localStorage.setItem('bruteforce_muted', AudioEngine.muted ? '1' : '0'); } catch (e) {}
+            updateMuteBtn();
+            if (!AudioEngine.muted) AudioEngine.click();
+        });
+        document.addEventListener('click', () => AudioEngine.init(), {once: true});
+        document.addEventListener('visibilitychange', () => {
+            if (!state.active || state.timer === null) return;
+            if (!document.hidden) {
+                clearInterval(state.timer);
+                state.timer = setInterval(tickTimer, 250);
+                tickTimer();
+            }
+        });
+
+        runBoot();
+    </script>
+</body>
+</html>
