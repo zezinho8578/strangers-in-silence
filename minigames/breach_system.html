@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>if(!sessionStorage.getItem('currentUser')&&!localStorage.getItem('currentUser')){window.location.replace('../index.html');}</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>COMPUTER NETWORK BREACH</title>
+    <script src="../embeds.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
             --primary: #00ff41;
-            --primary-dim: #006622;
+            --primary-dim: #00bb44;
             --primary-glow: #00ff41;
             --bg: #0a0a0a;
             --bg-panel: rgba(0, 10, 0, 0.9);
@@ -36,7 +38,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow: hidden;
+            overflow: auto;
             user-select: none;
         }
 
@@ -90,6 +92,8 @@
             background: var(--bg-panel);
             width: 95%;
             max-width: 850px;
+            max-height: calc(100dvh - 20px);
+            overflow-y: auto;
             position: relative;
             box-shadow: 
                 0 0 40px rgba(0, 255, 65, 0.15),
@@ -266,6 +270,11 @@
             background-size: 100% 100%, 40px 40px, 40px 40px;
             border: 1px solid var(--primary-dim);
             padding: 30px;
+        }
+        @supports (width: 100dvh) {
+            #network-container {
+                width: min(650px, 100%, calc(100dvh - 240px));
+            }
         }
 
         #connections-svg {
@@ -491,6 +500,16 @@
             font-size: 11px;
             letter-spacing: 1px;
         }
+        .node:focus-visible, .btn:focus-visible, .btn-mini:focus-visible, #roll-input:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+        @media (max-width: 600px) {
+            #game-header {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -515,7 +534,7 @@
             <p style="font-size: 10px; letter-spacing: 1px;">
                 FAILED [1-3] = HARD &nbsp;&nbsp;│&nbsp;&nbsp; SUCCESS [4-7] = NORMAL &nbsp;&nbsp;│&nbsp;&nbsp; RAISE [8+] = EASY
             </p>
-            <input type="number" id="roll-input" min="1" max="20" placeholder="?">
+            <input type="number" id="roll-input" min="1" max="20" step="1" placeholder="?">
             <br>
             <button class="btn" id="roll-submit">INITIATE BREACH</button>
         </div>
@@ -523,7 +542,7 @@
         <div id="game-screen" class="screen">
             <div id="game-header">
                 <div id="difficulty-display">THREAT LVL: <span id="diff-text">NORMAL</span></div>
-                <div id="timer-display">40</div>
+                <div id="timer-display" aria-live="polite">--</div>
                 <div>
                     <button class="btn-mini" id="dash-btn" type="button">DASHBOARD</button>
                     <button class="btn-mini" id="mute-btn" type="button">SOUND: ON</button>
@@ -535,10 +554,11 @@
             </div>
             <div id="game-footer">
                 CLICK NODES TO ROTATE CONNECTIONS // ESTABLISH PATH: <span style="color:var(--source)">SOURCE</span> → <span style="color:var(--target)">TARGET</span>
+                <br>STRAIGHT parity: opposite arms stay linked (180 deg) // TRACE continues while hidden
             </div>
         </div>
 
-        <div id="result-screen" class="screen">
+        <div id="result-screen" class="screen" aria-live="polite">
             <h1 id="result-title">BREACH SUCCESSFUL</h1>
             <div class="result-stats">
                 <div><span>Threat Level</span><span id="result-diff">NORMAL</span></div>
@@ -559,7 +579,12 @@
         const AudioEngine = {
             ctx: null,
             muted: false,
-            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            async init() {
+                try {
+                    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    if (this.ctx && this.ctx.state === 'suspended') await this.ctx.resume();
+                } catch (e) {}
+            },
             beep(freq = 440, dur = 0.1, vol = 0.08, type = 'square') {
                 if (!this.ctx || this.muted) return;
                 const o = this.ctx.createOscillator(), g = this.ctx.createGain();
@@ -577,7 +602,9 @@
             lose() { [350, 300, 250, 180].forEach((f, i) => setTimeout(() => this.beep(f, 0.2, 0.1, 'sawtooth'), i * 120)); }
         };
 
-        const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
+        function getWebhook(){ try{const db=JSON.parse(localStorage.getItem('localFallbackDB')||'null'); if(db&&db.webhook) return db.webhook;}catch(e){} return window.WEBHOOK_URL||localStorage.getItem('discord-webhook')||''; }
+        function sanitizeUser(u){ try{ let s=String(u||'').toUpperCase().slice(0,12).replace(/[@`_*~>|]/g,'').replace(/[^A-Z0-9 _-]/g,'').trim(); if(!/^[A-Z0-9 _-]{1,12}$/.test(s)) return 'OPERATOR'; return s||'OPERATOR'; }catch(e){ return 'OPERATOR'; } }
+        function currentOperator(){ return sanitizeUser(sessionStorage.getItem('currentUser')||localStorage.getItem('currentUser')||''); }
 
         const DIFF = {
             HARD:   { name: 'HARD',   grid: 6, time: 40, locked: 0.15, preSolved: 0   },
@@ -597,7 +624,7 @@
 
         let state = {
             diff: null, grid: [], size: 0,
-            timeLeft: 0, endTime: 0, timer: null,
+            timeLeft: 0, endTime: 0, timer: null, endTimeout: null, _ended: false,
             rotations: 0, roll: 0, active: false, angles: []
         };
 
@@ -635,7 +662,7 @@
                         break;
                     }
                 }
-                if (!moved) path.pop();
+                if (!moved) { visited.delete(cur.r+','+cur.c); path.pop(); }
             }
             return path;
         }
@@ -649,7 +676,12 @@
                 path = genPath(sz, sz);
                 last = path[path.length - 1];
             }
-            const pathSet = new Set(path.map(p => p.r+','+p.c));
+            if (!last || last.r !== tR || last.c !== tC) {
+                path = [];
+                for (let c = 0; c < sz; c++) path.push({r: 0, c: c});
+                for (let r = 1; r < sz; r++) path.push({r: r, c: sz - 1});
+            }
+            let pathSet = new Set(path.map(p => p.r+','+p.c));
             const grid = [];
             for (let r = 0; r < sz; r++) {
                 grid[r] = [];
@@ -661,36 +693,81 @@
                     };
                 }
             }
+            function assignSolutionTypes() {
+                for (let i = 0; i < path.length; i++) {
+                    const cell = path[i], piece = grid[cell.r][cell.c];
+                    let eD = null, xD = null;
+                    if (i > 0) {
+                        const p = path[i-1];
+                        eD = p.r<cell.r?0 : p.r>cell.r?2 : p.c<cell.c?3 : 1;
+                    }
+                    if (i < path.length-1) {
+                        const n = path[i+1];
+                        xD = n.r<cell.r?0 : n.r>cell.r?2 : n.c<cell.c?3 : 1;
+                    }
+                    const dirs = [];
+                    if (eD !== null) dirs.push(eD);
+                    if (xD !== null) dirs.push(xD);
+                    dirs.sort();
+                    if (dirs.length === 2) {
+                        const d1=dirs[0], d2=dirs[1];
+                        if ((d1+2)%4 === d2) {
+                            piece.type='straight';
+                            piece.solRot=d1;
+                        } else {
+                            piece.type='corner';
+                            piece.solRot=(d1===0&&d2===3)?3:Math.min(d1,d2);
+                        }
+                    } else if (dirs.length === 1) {
+                        piece.type = 'endpoint';
+                        piece.solRot = dirs[0];
+                    }
+                }
+            }
+            function solvedConnects() {
+                const vis = new Set(['0,0']);
+                const queue = [{r:0,c:0}];
+                while (queue.length) {
+                    const cur = queue.shift();
+                    const cell = grid[cur.r][cur.c];
+                    const rot = (cell.solRot !== undefined) ? cell.solRot : cell.rot;
+                    const cc = getConns(cell.type, rot);
+                    for (const dir of cc) {
+                        const dr = DIR_VEC[dir][0], dc = DIR_VEC[dir][1];
+                        const nr=cur.r+dr, nc=cur.c+dc, key=nr+','+nc;
+                        if (nr>=0&&nr<sz&&nc>=0&&nc<sz&&!vis.has(key)) {
+                            const nb = grid[nr][nc];
+                            const nbRot = (nb.solRot !== undefined) ? nb.solRot : nb.rot;
+                            const nc2 = getConns(nb.type, nbRot);
+                            if (nc2.includes(oppDir(dir))) { vis.add(key); queue.push({r:nr,c:nc}); }
+                        }
+                    }
+                }
+                return vis.has((sz-1)+','+(sz-1));
+            }
+            assignSolutionTypes();
+            for (let attempt = 0; attempt < 20; attempt++) {
+                if (solvedConnects()) break;
+                path = genPath(sz, sz);
+                last = path[path.length - 1];
+                for (let retry = 0; retry < 8 && (!last || last.r !== tR || last.c !== tC); retry++) {
+                    path = genPath(sz, sz);
+                    last = path[path.length - 1];
+                }
+                if (!last || last.r !== tR || last.c !== tC) {
+                    path = [];
+                    for (let c = 0; c < sz; c++) path.push({r: 0, c: c});
+                    for (let r = 1; r < sz; r++) path.push({r: r, c: sz - 1});
+                }
+                for (let r = 0; r < sz; r++) for (let c = 0; c < sz; c++) {
+                    grid[r][c].type = 'straight'; grid[r][c].rot = 0; grid[r][c].locked = false;
+                    delete grid[r][c].solRot;
+                }
+                assignSolutionTypes();
+            }
+            pathSet = new Set(path.map(p => p.r+','+p.c));
             for (let i = 0; i < path.length; i++) {
                 const cell = path[i], piece = grid[cell.r][cell.c];
-                let eD = null, xD = null;
-                if (i > 0) {
-                    const p = path[i-1];
-                    eD = p.r<cell.r?0 : p.r>cell.r?2 : p.c<cell.c?3 : 1;
-                }
-                if (i < path.length-1) {
-                    const n = path[i+1];
-                    xD = n.r<cell.r?0 : n.r>cell.r?2 : n.c<cell.c?3 : 1;
-                }
-                const dirs = [];
-                if (eD !== null) dirs.push(eD);
-                if (xD !== null) dirs.push(xD);
-                dirs.sort();
-                
-                if (dirs.length === 2) {
-                    const d1=dirs[0], d2=dirs[1];
-                    if ((d1+2)%4 === d2) { 
-                        piece.type='straight'; 
-                        piece.solRot=d1; 
-                    } else { 
-                        piece.type='corner'; 
-                        piece.solRot=(d1===0&&d2===3)?3:Math.min(d1,d2); 
-                    }
-                } else if (dirs.length === 1) {
-                    piece.type = 'endpoint';
-                    piece.solRot = dirs[0];
-                }
-                
                 if (piece.type === 'straight') {
                     let randRot;
                     do {
@@ -772,7 +849,7 @@
             const spacing = Math.min(drawW, drawH) / state.size;
             const offsetX = pad + (drawW - spacing * (state.size - 1)) / 2;
             const offsetY = pad + (drawH - spacing * (state.size - 1)) / 2;
-            const nodeSize = Math.min(60, spacing - 10);
+            const nodeSize = Math.max(24, Math.min(60, spacing - 10));
 
             const positions = [];
             
@@ -791,7 +868,12 @@
                         node.className = 'node';
                         node.dataset.r = r;
                         node.dataset.c = c;
+                        node.tabIndex = 0;
+                        node.setAttribute('tabindex', '0');
+                        node.setAttribute('role', 'button');
+                        node.setAttribute('aria-label', 'Rotate node row ' + (r+1) + ' column ' + (c+1));
                         node.addEventListener('click', () => handleClick(r, c));
+                        node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(r, c); } });
                         
                         const rotator = document.createElement('div');
                         rotator.className = 'node-rotator';
@@ -874,6 +956,7 @@
 
         function handleClick(r, c) {
             if (!state.active) return;
+            AudioEngine.init();
             const cell = state.grid[r][c];
             const nodeEl = document.querySelector(`.node[data-r="${r}"][data-c="${c}"]`);
             
@@ -890,12 +973,13 @@
             AudioEngine.rotate();
             cell.rot = (cell.rot + 1) % 4;
             state.rotations++;
-            state.angles[r][c] = (state.angles[r][c] || cell.rot * 90) + 90;
+            state.angles[r][c] += 90;
             
             if (checkConn()) {
                 state.active = false;
+                if (state.timer) { clearInterval(state.timer); state.timer = null; }
                 render();
-                setTimeout(() => endGame(true), 200);
+                state.endTimeout = setTimeout(() => endGame(true), 200);
             } else {
                 render();
             }
@@ -928,6 +1012,8 @@
         function startGame(diff) {
             document.querySelectorAll('#network-container .node').forEach(n => n.remove());
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.endTimeout) { clearTimeout(state.endTimeout); state.endTimeout = null; }
+            state._ended = false;
             state.diff = diff;
             state.size = diff.grid;
             state.rotations = 0;
@@ -935,8 +1021,27 @@
             state.grid = genPuzzle(diff);
             let safe = 0;
             while (checkConn() && safe++ < 10) state.grid = genPuzzle(diff);
+            let forceTries = 0;
+            while (checkConn() && forceTries++ < 100) {
+                const cands = [];
+                for (let r = 0; r < state.size; r++) for (let c = 0; c < state.size; c++) {
+                    const p = state.grid[r][c];
+                    if (!p.locked && p.solRot !== undefined && !(r === 0 && c === 0) && !(r === state.size - 1 && c === state.size - 1)) cands.push({r, c});
+                }
+                if (!cands.length) break;
+                const pick = cands[Math.floor(Math.random() * cands.length)];
+                const pc = state.grid[pick.r][pick.c];
+                if (pc.type === 'straight') {
+                    pc.rot = (pc.solRot + 1) % 4;
+                } else {
+                    let nr;
+                    do { nr = Math.floor(Math.random() * 4); } while (nr === pc.solRot);
+                    pc.rot = nr;
+                }
+                checkConn();
+            }
             checkConn();
-state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
+            state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
             showScreen('game-screen');
             checkConn();
             render();
@@ -945,7 +1050,9 @@ state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
         }
 
         function endGame(won) {
+            if (state._ended) return; state._ended = true;
             state.active = false;
+            if (state.endTimeout) { clearTimeout(state.endTimeout); state.endTimeout = null; }
             clearInterval(state.timer);
             state.timer = null;
             won ? AudioEngine.win() : AudioEngine.lose();
@@ -964,10 +1071,20 @@ state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
         }
 
         const STATS_PREFIX = 'breach_stats_';
+        function statsKey(name) {
+            const u = currentOperator();
+            if (u && u !== 'OPERATOR') return STATS_PREFIX + u + '_' + name;
+            return STATS_PREFIX + name;
+        }
         function loadStats(name) {
             try {
-                const s = JSON.parse(localStorage.getItem(STATS_PREFIX + name) || 'null');
+                const k = statsKey(name);
+                const s = JSON.parse(localStorage.getItem(k) || 'null');
                 if (s && typeof s.bestTime === 'number' && typeof s.bestRot === 'number') return s;
+                if (k !== STATS_PREFIX + name) {
+                    const old = JSON.parse(localStorage.getItem(STATS_PREFIX + name) || 'null');
+                    if (old && typeof old.bestTime === 'number' && typeof old.bestRot === 'number') return old;
+                }
             } catch (e) {}
             return { bestTime: null, bestRot: null };
         }
@@ -975,7 +1092,7 @@ state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
             const s = loadStats(diff.name);
             if (s.bestTime === null || time > s.bestTime) s.bestTime = time;
             if (s.bestRot === null || rot < s.bestRot) s.bestRot = rot;
-            try { localStorage.setItem(STATS_PREFIX + diff.name, JSON.stringify(s)); } catch (e) {}
+            try { localStorage.setItem(statsKey(diff.name), JSON.stringify(s)); } catch (e) {}
         }
         function showStats() {
             const s = loadStats(state.diff.name);
@@ -984,11 +1101,14 @@ state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
         }
 
         async function sendWebhook(won) {
+            const wh = getWebhook();
+            if (!wh) return;
             const embed = {
-                title: '\u{1F50C} NETWORK BREACH RESULT',
+                title: '🔌 NETWORK BREACH RESULT',
                 color: won ? 0x00ff41 : 0xff0040,
                 fields: [
-                    {name: 'Outcome', value: won ? '\u2705 SUCCESS' : '\u274C FAILED', inline: true},
+                    {name: 'Operator', value: currentOperator(), inline: true},
+                    {name: 'Outcome', value: won ? '✅ SUCCESS' : '❌ FAILED', inline: true},
                     {name: 'Threat Level', value: state.diff.name, inline: true},
                     {name: 'Electronics Roll', value: String(state.roll), inline: true},
                     {name: 'Time Remaining', value: won ? state.timeLeft+'s' : 'Expired', inline: true},
@@ -998,13 +1118,14 @@ state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
                 footer: {text: 'Breach System'},
                 timestamp: new Date().toISOString()
             };
+            if (window.Embeds && window.Embeds.post) { await window.Embeds.post(wh, embed); return; }
             try {
-                await fetch(WEBHOOK, {
+                await fetch(wh, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({embeds: [embed]})
                 });
-            } catch (e) { console.error('Webhook error:', e); }
+            } catch (e) { console.warn('result post failed'); }
         }
 
         function showScreen(id) {
@@ -1015,24 +1136,36 @@ state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
         function runBoot() {
             const lines = document.querySelectorAll('#boot-screen .boot-line');
             let delay = 0;
+            const bootTimeouts = [];
+            let bootDone = false;
+            function finishBoot() {
+                if (bootDone) return;
+                bootDone = true;
+                bootTimeouts.forEach(t => clearTimeout(t));
+                lines.forEach(line => line.classList.add('visible'));
+                showScreen('roll-screen');
+                const ri = document.getElementById('roll-input');
+                if (ri) ri.focus();
+            }
             lines.forEach(line => {
-                setTimeout(() => { line.classList.add('visible'); AudioEngine.click(); }, delay);
+                bootTimeouts.push(setTimeout(() => { line.classList.add('visible'); AudioEngine.click(); }, delay));
                 delay += 300 + Math.random() * 120;
             });
-            setTimeout(() => {
-                showScreen('roll-screen');
-                document.getElementById('roll-input').focus();
-            }, delay + 350);
+            bootTimeouts.push(setTimeout(finishBoot, delay + 350));
+            const bootEl = document.getElementById('boot-screen');
+            if (bootEl) bootEl.addEventListener('click', () => { AudioEngine.init(); finishBoot(); });
         }
 
         function submitRoll() {
             AudioEngine.init();
-            const v = parseInt(document.getElementById('roll-input').value);
-            if (isNaN(v) || v < 1 || v > 20) {
+            const raw = document.getElementById('roll-input').value;
+            const v = Number(raw);
+            if (!Number.isInteger(v) || v < 1 || v > 20) {
                 document.getElementById('roll-input').style.borderColor = '#ff0040';
                 AudioEngine.error();
                 return;
             }
+            document.getElementById('roll-input').style.borderColor = '';
             state.roll = v;
             const diff = v <= 3 ? DIFF.HARD : v <= 7 ? DIFF.NORMAL : DIFF.EASY;
             startGame(diff);
@@ -1048,10 +1181,12 @@ state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
         });
         const abortBtn = document.getElementById('abort-btn');
         abortBtn.addEventListener('click', () => {
-            if (!state.active && state.timer === null) return;
+            if (!state.active && state.timer === null && !state.endTimeout) return;
             state.active = false;
+            state._ended = true;
             clearInterval(state.timer);
             state.timer = null;
+            if (state.endTimeout) { clearTimeout(state.endTimeout); state.endTimeout = null; }
             AudioEngine.click();
             document.getElementById('roll-input').value = '';
             document.getElementById('roll-input').style.borderColor = '';
@@ -1060,7 +1195,9 @@ state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
         });
         document.getElementById('dash-btn').addEventListener('click', () => {
             state.active = false;
+            state._ended = true;
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.endTimeout) { clearTimeout(state.endTimeout); state.endTimeout = null; }
             window.location.href = '../dashboard.html';
         });
         document.getElementById('back-to-dash').addEventListener('click', () => {
@@ -1071,16 +1208,17 @@ state.angles = state.grid.map(row => row.map(cell => cell.rot * 90));
             muteBtn.textContent = AudioEngine.muted ? 'SOUND: OFF' : 'SOUND: ON';
             muteBtn.classList.toggle('muted', AudioEngine.muted);
         }
-        try { AudioEngine.muted = localStorage.getItem('breach_muted') === '1'; } catch (e) {}
+        try { AudioEngine.muted = localStorage.getItem('breach_muted') === '1' || localStorage.getItem('lambdaAudio') === 'off'; } catch (e) {}
         updateMuteBtn();
         muteBtn.addEventListener('click', () => {
+            AudioEngine.init();
             AudioEngine.muted = !AudioEngine.muted;
             try { localStorage.setItem('breach_muted', AudioEngine.muted ? '1' : '0'); } catch (e) {}
             updateMuteBtn();
             if (!AudioEngine.muted) AudioEngine.click();
         });
         document.addEventListener('click', () => AudioEngine.init(), {once: true});
-        window.addEventListener('resize', () => { if (state.active) render(); });
+        window.addEventListener('resize', () => { if (document.getElementById('game-screen').classList.contains('active') && state.grid && state.grid.length) render(); });
         document.addEventListener('visibilitychange', () => {
             if (!state.active || state.timer === null) return;
             if (!document.hidden) {

@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ORDNANCE // UXB DEFUSAL</title>
+    <script>
+        (function () { try { var u = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser'); if (!u) window.location.replace("../index.html"); } catch (e) {} })();
+    </script>
+    <script src="../embeds.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -29,7 +33,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow: hidden;
+            overflow: auto;
             user-select: none;
         }
 
@@ -82,6 +86,8 @@
             background: var(--bg-panel);
             width: 95%;
             max-width: 850px;
+            max-height: calc(100vh - 20px);
+            overflow: auto;
             position: relative;
             box-shadow:
                 0 0 40px rgba(0, 255, 65, 0.15),
@@ -202,6 +208,7 @@
             letter-spacing: 1px;
             transition: all 0.2s;
             margin-left: 6px;
+            min-height: 44px;
         }
         .btn-mini:hover {
             border-color: var(--primary);
@@ -317,6 +324,7 @@
             border: 1px solid rgba(255, 255, 255, 0.25);
         }
         .wire.cut { opacity: 0.4; cursor: default; }
+        .wire.cut:hover { box-shadow: none; }
         .wire.cut .wire-color { background: transparent !important; position: relative; }
         .wire.cut .wire-label { text-decoration: line-through; }
         .wire.fail {
@@ -459,6 +467,7 @@
 
         @media (prefers-reduced-motion: reduce) {
             #game-container, #scanline { animation: none; }
+            * { animation: none !important; }
         }
     </style>
 </head>
@@ -483,7 +492,9 @@
             <p style="font-size: 10px; letter-spacing: 1px;">
                 FAILED [1-3] = HARD &nbsp;&nbsp;│&nbsp;&nbsp; SUCCESS [4-7] = NORMAL &nbsp;&nbsp;│&nbsp;&nbsp; RAISE [8+] = EASY
             </p>
-            <input type="number" id="roll-input" min="1" max="20" placeholder="?">
+            <label for="roll-input" style="display:block; font-size:11px; letter-spacing:2px; margin-bottom:8px; color: var(--primary-dim);">REPAIR ROLL (1-20)</label>
+            <input type="number" id="roll-input" min="1" max="20" placeholder="?" aria-label="Repair skill roll 1 to 20">
+            <div id="roll-error" role="alert" style="min-height:16px; font-size:11px; color:var(--target); letter-spacing:1px; margin-top:6px;"></div>
             <br>
             <button class="btn" id="roll-submit">INITIATE DEFUSAL</button>
         </div>
@@ -537,7 +548,7 @@
             </div>
 
             <div id="game-footer">
-                STRIKES CARRY ACROSS PHASES // CLOCK PAUSES BETWEEN PHASES
+                STRIKES CARRY ACROSS PHASES // CLOCK PAUSES ~0.6s BETWEEN PHASES (COMPENSATED)
             </div>
         </div>
 
@@ -563,9 +574,18 @@
         const AudioEngine = {
             ctx: null,
             muted: false,
-            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            init() {
+                try {
+                    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+                } catch (e) {}
+            },
+            isGlobalMuted() {
+                try { if (localStorage.getItem('lambdaAudio') === 'off') return true; } catch (e) {}
+                return false;
+            },
             beep(freq = 440, dur = 0.1, vol = 0.08, type = 'square') {
-                if (!this.ctx || this.muted) return;
+                if (!this.ctx || this.muted || this.isGlobalMuted()) return;
                 const o = this.ctx.createOscillator(), g = this.ctx.createGain();
                 o.type = type;
                 o.frequency.setValueAtTime(freq, this.ctx.currentTime);
@@ -582,7 +602,26 @@
             lose() { [350, 300, 250, 180].forEach((f, i) => setTimeout(() => this.beep(f, 0.2, 0.1, 'sawtooth'), i * 120)); }
         };
 
-        const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
+        function getWebhook() {
+            try {
+                const db = JSON.parse(localStorage.getItem('localFallbackDB') || 'null');
+                if (db && db.webhook) return db.webhook;
+            } catch (e) {}
+            if (window.WEBHOOK_URL) return window.WEBHOOK_URL;
+            try {
+                const w = localStorage.getItem('discord-webhook');
+                if (w) return w;
+            } catch (e) {}
+            return '';
+        }
+        function sanitizeUser(u) {
+            return String(u === undefined || u === null ? '' : u).slice(0, 24).replace(/[^\w\- ]/g, '').trim() || 'UNKNOWN';
+        }
+        function getCurrentUser() {
+            try { return sanitizeUser(sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser') || 'UNKNOWN'); }
+            catch (e) { return 'UNKNOWN'; }
+        }
+        let lastWebhookAt = 0;
 
         const DIFF = {
             HARD:   { name: 'HARD',   wires: 6, time: 60,  needle: 1.5,  window: 0.14, strikesMax: 1, codeMode: 'formula' },
@@ -591,7 +630,10 @@
         };
         const STRIKE_PENALTY_SEC = 5;
         const INPUT_COOLDOWN_MS = 400;
+        const WIRE_COOLDOWN_MS = 200;
         const DISCHARGE_ARM_MS = 750;
+        // NOTE: DIFF.codeMode 'formula' is a legacy label (code is read straight
+        // off the S/N plate on all difficulties); kept for save compat.
 
         // __PURE_LOGIC_START__
         // Pure device logic: no DOM, no audio, no storage. The regression
@@ -678,7 +720,7 @@
             phase: 1, phasesCleared: 0, strikes: 0,
             needleT: 0, needleCenter: 0.5, dischargeArmedAt: 0, codeEntry: '', code: '',
             timeLeft: 0, endTime: 0, timer: null, raf: null, lastTick: 0,
-            roll: 0, active: false, lastInputAt: 0, _ended: false
+            roll: 0, active: false, lastInputAt: 0, _ended: false, runId: 0
         };
 
         function inputReady() {
@@ -716,16 +758,19 @@
             state.timeLeft = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
             updTimer();
             renderStrikes();
-            if (state.strikes > state.diff.strikesMax) {
+            if (state.phase === 3 && typeof renderCodeHint === 'function') { try { renderCodeHint(); } catch (e) {} }
+            if (state.strikes >= state.diff.strikesMax) {
                 flashPenalty('> ' + label + ' // STRIKE LIMIT EXCEEDED // DETONATION');
                 state.active = false;
-                setTimeout(() => endGame(false), 400);
+                const myRun = state.runId;
+                setTimeout(() => { if (myRun !== state.runId) return; endGame(false); }, 400);
                 return true;
             }
             flashPenalty('> ' + label + ' // STRIKE ' + state.strikes + '/' + state.diff.strikesMax + ' // -' + STRIKE_PENALTY_SEC + 's');
             if (state.timeLeft <= 0) {
                 state.active = false;
-                setTimeout(() => endGame(false), 200);
+                const myRun = state.runId;
+                setTimeout(() => { if (myRun !== state.runId) return; endGame(false); }, 200);
                 return true;
             }
             return false;
@@ -760,9 +805,11 @@
         function cutWire(color, rowEl) {
             if (!state.active || state.phase !== 1) return;
             if (state.cutSet[color]) return;
-            if (!inputReady()) return;
             const expected = state.order[state.wireProgress];
             if (color === expected) {
+                const now = Date.now();
+                if (now - state.lastInputAt < WIRE_COOLDOWN_MS) return;
+                state.lastInputAt = now;
                 state.cutSet[color] = true;
                 state.wireProgress++;
                 AudioEngine.snip();
@@ -772,13 +819,17 @@
                 if (state.wireProgress >= state.order.length) {
                     state.phasesCleared = 1;
                     state.active = false; // pause input during transition
+                    const myRun = state.runId;
                     setTimeout(() => {
+                        if (myRun !== state.runId) return;
                         if (state.timer === null) return; // aborted mid-transition
+                        state.endTime += 600; // compensate ~0.6s pause
                         state.active = true;
                         enterPhase2();
                     }, 600);
                 }
             } else {
+                if (!inputReady()) return;
                 rowEl.classList.remove('shake', 'fail');
                 void rowEl.offsetWidth;
                 rowEl.classList.add('shake', 'fail');
@@ -800,7 +851,9 @@
             if (!el) return;
             const n = (parseInt(el.dataset.used || '0', 10) || 0) + 1;
             el.dataset.used = n;
-            el.innerHTML = el.innerHTML.replace(/ \[x\d+\]$/, '') + ' [x' + n + ']';
+            let c = el.querySelector('.count');
+            if (!c) { c = document.createElement('span'); c.className = 'count'; el.appendChild(c); }
+            c.textContent = ' [x' + n + ']';
         }
 
         function firedRuleId(dev, alreadyCut, color) {
@@ -856,8 +909,11 @@
                 AudioEngine.lock();
                 state.phasesCleared = 2;
                 state.active = false;
+                const myRun = state.runId;
                 setTimeout(() => {
+                    if (myRun !== state.runId) return;
                     if (state.timer === null) return;
+                    state.endTime += 600; // compensate ~0.6s pause
                     state.active = true;
                     enterPhase3();
                 }, 600);
@@ -896,9 +952,13 @@
             const d = state.device.digits;
             let html = '<div class="manual-title">FUSE CODE — READ THE 4 DIGITS OFF S/N ' + state.device.serial + '</div>';
             html += '<div>C1 = 1ST DIGIT &nbsp; C2 = 2ND DIGIT &nbsp; C3 = 3RD DIGIT &nbsp; C4 = 4TH DIGIT</div>';
-            if (state.diff.codeMode === 'worked') {
-                html += '<div style="margin-top:6px; opacity:0.9;">WORKED: S/N ' + state.device.serial +
-                    ' → DIGITS (' + d.join(',') + ') → CODE ' + state.code + '</div>';
+            if (state.diff.codeMode === 'worked' && state.diff.name === 'EASY') {
+                if (state.strikes === 0) {
+                    html += '<div style="margin-top:6px; opacity:0.9;">WORKED EXAMPLE — EX: S/N 1A-00B0 -&gt; DIGITS (1,0,0,0) -&gt; CODE 1000 // YOUR CODE IS ON THE S/N PLATE ABOVE</div>';
+                } else {
+                    html += '<div style="margin-top:6px; opacity:0.9;">WORKED: S/N ' + state.device.serial +
+                        ' → DIGITS (' + d.join(',') + ') → CODE ' + state.code + '</div>';
+                }
             }
             document.getElementById('code-hint').innerHTML = html;
         }
@@ -930,7 +990,8 @@
                     state.phasesCleared = 3;
                     state.active = false;
                     renderCodeSlots(false);
-                    setTimeout(() => endGame(true), 300);
+                    const myRun = state.runId;
+                    setTimeout(() => { if (myRun !== state.runId) return; endGame(true); }, 300);
                 } else {
                     renderCodeSlots(true);
                     const bad = state.codeEntry;
@@ -982,6 +1043,7 @@
         }
 
         function startGame(diff) {
+            state.runId++;
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
             state.diff = diff;
@@ -1011,13 +1073,13 @@
         }
 
         function endGame(won) {
+            state.timeLeft = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
             // Guard: endGame must run once (timer race + strike race).
-            if (!state.active && state._ended) return;
-            state.active = false;
+            if (state._ended) return;
             state._ended = true;
-            setTimeout(() => { state._ended = false; }, 500);
+            state.active = false;
             won ? AudioEngine.win() : AudioEngine.lose();
             const rs = document.getElementById('result-screen');
             rs.className = 'screen active ' + (won ? 'success' : 'failure');
@@ -1056,10 +1118,12 @@
 
         async function sendWebhook(won) {
             const s = loadStats(state.diff.name);
+            const operator = getCurrentUser();
             const embed = {
                 title: '🧨 DEFUSAL RESULT',
                 color: won ? 0x00ff41 : 0xff0040,
                 fields: [
+                    {name: 'Operator', value: operator, inline: true},
                     {name: 'Outcome', value: won ? '✅ DEVICE SAFE' : '❌ DETONATED', inline: true},
                     {name: 'Threat Level', value: state.diff.name, inline: true},
                     {name: 'Repair Roll', value: String(state.roll), inline: true},
@@ -1072,13 +1136,23 @@
                 footer: {text: 'Ordnance // UXB Defusal'},
                 timestamp: new Date().toISOString()
             };
+            const webhook = getWebhook();
+            if (!webhook) return;
+            const now = Date.now();
+            if (now - lastWebhookAt < 1000) return;
+            lastWebhookAt = now;
             try {
-                await fetch(WEBHOOK, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({embeds: [embed]})
-                });
-            } catch (e) { console.error('Webhook error:', e); }
+                if (window.Embeds && typeof window.Embeds.post === 'function') {
+                    await window.Embeds.post(webhook, embed);
+                } else {
+                    const resp = await fetch(webhook, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({embeds: [embed]})
+                    });
+                    if (!resp.ok) console.warn('Defusal webhook post rejected');
+                }
+            } catch (e) { console.warn('Defusal webhook skipped'); }
         }
 
         function showScreen(id) {
@@ -1101,12 +1175,17 @@
 
         function submitRoll() {
             AudioEngine.init();
-            const v = parseInt(document.getElementById('roll-input').value);
-            if (isNaN(v) || v < 1 || v > 20) {
+            const raw = document.getElementById('roll-input').value.trim();
+            const v = Number(raw);
+            const errEl = document.getElementById('roll-error');
+            if (raw === '' || !Number.isInteger(v) || v < 1 || v > 20) {
                 document.getElementById('roll-input').style.borderColor = '#ff0040';
+                if (errEl) errEl.textContent = 'ENTER AN INTEGER 1-20';
                 AudioEngine.error();
                 return;
             }
+            if (errEl) errEl.textContent = '';
+            document.getElementById('roll-input').style.borderColor = '';
             state.roll = v;
             const diff = v <= 3 ? DIFF.HARD : v <= 7 ? DIFF.NORMAL : DIFF.EASY;
             startGame(diff);
@@ -1114,6 +1193,11 @@
 
         document.getElementById('roll-submit').addEventListener('click', submitRoll);
         document.getElementById('roll-input').addEventListener('keypress', e => { if (e.key === 'Enter') submitRoll(); });
+        document.getElementById('roll-input').addEventListener('input', () => {
+            document.getElementById('roll-input').style.borderColor = '';
+            const errEl = document.getElementById('roll-error');
+            if (errEl) errEl.textContent = '';
+        });
         document.getElementById('discharge-btn').addEventListener('click', (e) => { AudioEngine.init(); if (e && e.currentTarget) e.currentTarget.blur(); tryDischarge(); });
         document.addEventListener('keydown', e => {
             if (!document.getElementById('game-screen').classList.contains('active')) return;
@@ -1121,6 +1205,12 @@
             // are blurred on click (see below) so held focus can never eat
             // gameplay keys or double-fire via native Space activation.
             if (e.target && e.target.tagName === 'INPUT') return;
+            const t = e.target;
+            if (t) {
+                const tn = ((t.tagName || '') + '').toLowerCase();
+                if (tn === 'button' || tn === 'select' || tn === 'a') return;
+                try { if (t.closest && t.closest('button')) return; } catch (err) {}
+            }
             if (state.phase === 2 && (e.key === ' ' || e.key === 'Enter')) {
                 e.preventDefault();
                 AudioEngine.init();
@@ -1141,17 +1231,23 @@
         });
         const abortBtn = document.getElementById('abort-btn');
         abortBtn.addEventListener('click', () => {
+            state.runId++;
             if (!state.active && state.timer === null) return;
             state.active = false;
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            try { clearTimeout(flashPenalty._t); } catch (e) {}
+            document.getElementById('penalty-flash').textContent = '';
             AudioEngine.click();
             document.getElementById('roll-input').value = '';
             document.getElementById('roll-input').style.borderColor = '';
+            const re = document.getElementById('roll-error');
+            if (re) re.textContent = '';
             showScreen('roll-screen');
             document.getElementById('roll-input').focus();
         });
         document.getElementById('dash-btn').addEventListener('click', () => {
+            state.runId++;
             state.active = false;
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
@@ -1162,8 +1258,9 @@
         });
         const muteBtn = document.getElementById('mute-btn');
         function updateMuteBtn() {
-            muteBtn.textContent = AudioEngine.muted ? 'SOUND: OFF' : 'SOUND: ON';
-            muteBtn.classList.toggle('muted', AudioEngine.muted);
+            const off = AudioEngine.muted || AudioEngine.isGlobalMuted();
+            muteBtn.textContent = off ? 'SOUND: OFF' : 'SOUND: ON';
+            muteBtn.classList.toggle('muted', off);
         }
         try { AudioEngine.muted = localStorage.getItem('defusal_muted') === '1'; } catch (e) {}
         updateMuteBtn();
@@ -1171,9 +1268,10 @@
             AudioEngine.muted = !AudioEngine.muted;
             try { localStorage.setItem('defusal_muted', AudioEngine.muted ? '1' : '0'); } catch (e) {}
             updateMuteBtn();
-            if (!AudioEngine.muted) AudioEngine.click();
+            if (!AudioEngine.muted && !AudioEngine.isGlobalMuted()) AudioEngine.click();
         });
-        document.addEventListener('click', () => AudioEngine.init(), {once: true});
+        document.addEventListener('click', () => AudioEngine.init());
+        document.addEventListener('keydown', () => AudioEngine.init());
         document.addEventListener('visibilitychange', () => {
             if (!state.active || state.timer === null) return;
             if (!document.hidden) {

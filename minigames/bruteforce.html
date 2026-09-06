@@ -4,12 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BRUTEFORCE // PASSWORD CRACKER</title>
+    <script>
+        try { var _u = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser'); if (!_u) window.location.replace("../index.html"); } catch (e) {}
+    </script>
+    <script src="../embeds.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
             --primary: #00ff41;
-            --primary-dim: #006622;
+            --primary-dim: #00aa33;
             --primary-glow: #00ff41;
             --bg: #0a0a0a;
             --bg-panel: rgba(0, 10, 0, 0.9);
@@ -29,8 +33,13 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow: hidden;
+            overflow: auto;
             user-select: none;
+        }
+
+        :focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
         }
 
         #crt_overlay {
@@ -82,6 +91,8 @@
             background: var(--bg-panel);
             width: 95%;
             max-width: 850px;
+            max-height: 95vh;
+            overflow-y: auto;
             position: relative;
             box-shadow:
                 0 0 40px rgba(0, 255, 65, 0.15),
@@ -196,7 +207,8 @@
             color: var(--primary-dim);
             font-family: inherit;
             font-size: 10px;
-            padding: 4px 9px;
+            padding: 8px 12px;
+            min-height: 44px;
             cursor: pointer;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -218,6 +230,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
             margin-bottom: 15px;
             padding-bottom: 10px;
             border-bottom: 1px solid var(--primary-dim);
@@ -293,14 +307,17 @@
         .bf-col.active {
             border-color: var(--primary);
             box-shadow: 0 0 14px rgba(0, 255, 65, 0.35), inset 0 0 12px rgba(0, 255, 65, 0.08);
+            pointer-events: auto;
         }
         .bf-col.locked {
             border-color: var(--primary);
             background: rgba(0, 60, 0, 0.45);
             cursor: default;
+            pointer-events: none;
         }
         .bf-col.future {
             opacity: 0.55;
+            pointer-events: none;
         }
         .bf-col.fail {
             border-color: var(--target) !important;
@@ -332,6 +349,7 @@
             left: -1px;
             right: -1px;
             top: 50%;
+            /* 34px box = 26px CELL_H + 8px tolerance so the fractional slide never clips the target glyph */
             height: 34px;
             transform: translateY(-50%);
             border-top: 1px solid var(--primary);
@@ -385,6 +403,10 @@
             margin: 0 auto;
             font-size: 16px;
             padding: 14px 20px;
+        }
+        #lock-btn.disabled, #lock-btn:disabled {
+            opacity: 0.45;
+            pointer-events: none;
         }
 
         #game-footer {
@@ -471,7 +493,7 @@
             <p style="font-size: 10px; letter-spacing: 1px;">
                 FAILED [1-3] = HARD &nbsp;&nbsp;│&nbsp;&nbsp; SUCCESS [4-7] = NORMAL &nbsp;&nbsp;│&nbsp;&nbsp; RAISE [8+] = EASY
             </p>
-            <input type="number" id="roll-input" min="1" max="20" placeholder="?">
+            <input type="number" id="roll-input" min="1" max="20" placeholder="?" inputmode="numeric">
             <br>
             <button class="btn" id="roll-submit">INITIATE CRACK</button>
         </div>
@@ -479,14 +501,14 @@
         <div id="game-screen" class="screen">
             <div id="game-header">
                 <div id="difficulty-display">THREAT LVL: <span id="diff-text">NORMAL</span></div>
-                <div id="timer-display">60</div>
+                <div id="timer-display" aria-live="polite">60</div>
                 <div>
                     <button class="btn-mini" id="dash-btn" type="button">DASHBOARD</button>
                     <button class="btn-mini" id="mute-btn" type="button">SOUND: ON</button>
                     <button class="btn-mini" id="abort-btn" type="button">ABORT</button>
                 </div>
             </div>
-            <div id="penalty-flash"></div>
+            <div id="penalty-flash" aria-live="polite"></div>
             <div id="password-display"></div>
             <div id="bruteforce-board"></div>
             <div id="capture-hint">LOCK EACH COLUMN WHEN <b>RED</b> IS IN THE BOX // LEFT TO RIGHT</div>
@@ -496,7 +518,7 @@
             </div>
         </div>
 
-        <div id="result-screen" class="screen">
+        <div id="result-screen" class="screen" aria-live="polite">
             <h1 id="result-title">ACCESS GRANTED</h1>
             <div class="result-stats">
                 <div><span>Threat Level</span><span id="result-diff">NORMAL</span></div>
@@ -506,7 +528,7 @@
                 <div><span>Locks</span><span id="result-locks">8/8</span></div>
                 <div><span>Misses</span><span id="result-misses">0</span></div>
                 <div><span>Status</span><span id="result-status">ACCESS GRANTED</span></div>
-                <div><span>Best Time</span><span id="result-best-time">—</span></div>
+                <div><span>Best (Most Time Left)</span><span id="result-best-time">—</span></div>
                 <div><span>Best Misses</span><span id="result-best-miss">—</span></div>
             </div>
             <button class="btn" id="play-again">CRACK ANOTHER PASSWORD</button>
@@ -519,7 +541,12 @@
         const AudioEngine = {
             ctx: null,
             muted: false,
-            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            init() {
+                try {
+                    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+                } catch (e) { /* audio unavailable — non-fatal */ }
+            },
             beep(freq = 440, dur = 0.1, vol = 0.08, type = 'square') {
                 if (!this.ctx || this.muted) return;
                 const o = this.ctx.createOscillator(), g = this.ctx.createGain();
@@ -532,13 +559,25 @@
             },
             click() { this.beep(800, 0.04, 0.04); },
             lock() { this.beep(1047, 0.12, 0.1, 'triangle'); },
-            rotate() { this.beep(500, 0.06, 0.06, 'triangle'); },
             error() { this.beep(180, 0.15, 0.08, 'sawtooth'); },
             win() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.beep(f, 0.18, 0.12), i * 120)); },
             lose() { [350, 300, 250, 180].forEach((f, i) => setTimeout(() => this.beep(f, 0.2, 0.1, 'sawtooth'), i * 120)); }
         };
 
-        const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
+        function sanitizeUser(u) { return String(u || '').replace(/[^A-Za-z0-9 _-]/g, '').slice(0, 32) || 'UNKNOWN'; }
+        function getCurrentUser() {
+            try { return sanitizeUser(sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser') || ''); }
+            catch (e) { return 'UNKNOWN'; }
+        }
+        function getWebhook() {
+            try {
+                const raw = localStorage.getItem('localFallbackDB');
+                if (raw) { const db = JSON.parse(raw); if (db && db.webhook) return db.webhook; }
+            } catch (e) {}
+            if (window.WEBHOOK_URL) return window.WEBHOOK_URL;
+            try { const w = localStorage.getItem('discord-webhook'); if (w) return w; } catch (e) {}
+            return '';
+        }
 
         // Fixed-8 always: difficulty changes speed/time/forgiveness, never length.
         // Speeds are letters/sec of smooth vertical tape (EASY ~= 625ms per letter).
@@ -571,7 +610,8 @@
         let state = {
             diff: null, word: '', cols: [], activeIdx: 0,
             timeLeft: 0, endTime: 0, timer: null, raf: null, lastTick: 0,
-            misses: 0, locks: 0, roll: 0, active: false, lastLockAt: 0
+            misses: 0, locks: 0, roll: 0, active: false, lastLockAt: 0,
+            pendingWin: false, _ended: false, endTimeout: null, _cachedActive: -1
         };
 
         function mod(n, m) { return ((n % m) + m) % m; }
@@ -579,6 +619,7 @@
 
         function pickWord() {
             const valid = WORDLIST.filter(w => /^[A-Z]{8}$/.test(w));
+            if (!valid.length) return 'PASSWORD';
             return valid[Math.floor(Math.random() * valid.length)];
         }
 
@@ -606,7 +647,7 @@
                 viewport.appendChild(strip);
                 viewport.appendChild(cap);
                 col.appendChild(viewport);
-                col.addEventListener('click', () => tryLock());
+                (function (idx) { col.addEventListener('click', () => tryLock(idx)); })(i);
                 board.appendChild(col);
             }
         }
@@ -614,6 +655,7 @@
         // Paint a column's strip. Future columns hide their red target until
         // they become active, so players can't pre-read the password.
         function paintStrip(col, reveal) {
+            if (!col || !col._strip) return;
             const base = Math.floor(col.pos);
             let html = '';
             for (let r = 0; r < STRIP_ROWS; r++) {
@@ -644,11 +686,13 @@
                 // Randomize phase so columns don't sync; keep target reachable quickly.
                 const targetIdx = ALPHABET.indexOf(target);
                 const startBack = 4 + Math.floor(Math.random() * 18);
+                const _sp = diff.speed * (0.94 + Math.random() * 0.12);
                 state.cols.push({
                     target: target,
                     targetIdx: targetIdx,
                     pos: targetIdx - startBack + Math.random(),
-                    speed: diff.speed * (0.94 + Math.random() * 0.12),
+                    speed: _sp,
+                    baseSpeed: _sp,
                     locked: false,
                     _floor: null,
                     _el: null, _strip: null, _cap: null
@@ -683,10 +727,15 @@
         // Per-frame: advance ONLY the active column's tape, slide strips via
         // transform, repaint a strip only when its floor rolls over.
         function updateFrame(force) {
+            const ai = state.activeIdx;
+            if (!force && state._cachedActive === ai) {
+                // fast path still needs per-frame slide; class churn skipped below via cached check
+            }
+            state._cachedActive = ai;
             for (let i = 0; i < state.cols.length; i++) {
                 const col = state.cols[i];
-                if (!col._el) continue;
-                const isActive = (i === state.activeIdx && !col.locked && state.active);
+                if (!col._el || !col._strip || !col._cap) continue;
+                const isActive = (i === ai && !col.locked && state.active);
                 col._el.classList.toggle('active', isActive);
                 col._el.classList.toggle('locked', col.locked);
                 col._el.classList.toggle('future', i > state.activeIdx);
@@ -717,11 +766,23 @@
             setTimeout(() => el.classList.remove('shake', 'fail'), 450);
         }
 
-        function tryLock() {
-            if (!state.active) return;
+        function tryLock(clickedIdx) {
+            AudioEngine.init();
+            if (!state.active || state.pendingWin) return;
+            if (typeof clickedIdx === 'number' && clickedIdx !== state.activeIdx) {
+                flashPenalty('> FOLLOW SEQUENCE LEFT TO RIGHT - NO PENALTY');
+                return;
+            }
             const now = Date.now();
-            if (now - state.lastLockAt < LOCK_COOLDOWN_MS) return;
+            if (now - state.lastLockAt < LOCK_COOLDOWN_MS) {
+                flashPenalty('> LOCK RECHARGING');
+                const _lb = document.getElementById('lock-btn');
+                if (_lb) { _lb.classList.add('disabled'); _lb.disabled = true; setTimeout(() => { _lb.classList.remove('disabled'); _lb.disabled = false; }, 200); }
+                return;
+            }
             state.lastLockAt = now;
+            const _lb2 = document.getElementById('lock-btn');
+            if (_lb2) { _lb2.classList.add('disabled'); _lb2.disabled = true; setTimeout(() => { _lb2.classList.remove('disabled'); _lb2.disabled = false; }, 200); }
 
             const i = state.activeIdx;
             const col = state.cols[i];
@@ -746,17 +807,21 @@
                 updateFrame(true);
                 if (state.locks >= 8) {
                     state.active = false;
+                    state.pendingWin = true;
+                    if (state.timer) { clearInterval(state.timer); state.timer = null; }
+                    if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
                     updateFrame(true);
-                    setTimeout(() => endGame(true), 200);
+                    state.endTimeout = setTimeout(() => endGame(true), 200);
                 }
             } else {
                 state.misses++;
                 AudioEngine.error();
                 if (state.diff.strict) {
-                    // HARD: authentic GTA reset-all.
+                    // HARD: authentic GTA reset-all. Restore base speed so misses don't soft-lock via accel.
                     for (let k = 0; k < state.cols.length; k++) {
                         state.cols[k].locked = false;
                         state.cols[k].pos = state.cols[k].targetIdx - (4 + Math.floor(Math.random() * 18)) + Math.random();
+                        state.cols[k].speed = state.cols[k].baseSpeed * (0.94 + Math.random() * 0.12);
                         paintStrip(state.cols[k], k === 0);
                     }
                     state.locks = 0;
@@ -777,7 +842,10 @@
                     shakeCol(i);
                     if (state.timeLeft <= 0) {
                         state.active = false;
-                        setTimeout(() => endGame(false), 200);
+                        state.pendingWin = true;
+                        if (state.timer) { clearInterval(state.timer); state.timer = null; }
+                        if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+                        state.endTimeout = setTimeout(() => endGame(false), 200);
                     }
                 }
                 updateFrame(true);
@@ -806,6 +874,7 @@
 
         function tickTimer() {
             if (!state.active || state.timer === null) return;
+            if (state.pendingWin || state._ended) return;
             const remain = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
             if (remain !== state.timeLeft) {
                 state.timeLeft = remain;
@@ -825,8 +894,20 @@
             document.querySelectorAll('#bruteforce-board .bf-col').forEach(n => n.remove());
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            if (state.endTimeout) { clearTimeout(state.endTimeout); state.endTimeout = null; }
+            clearTimeout(flashPenalty._t);
+            try {
+                const _gc0 = document.getElementById('game-container');
+                if (_gc0) _gc0.classList.remove('shake-all');
+                const _lb0 = document.getElementById('lock-btn');
+                if (_lb0) { _lb0.classList.remove('disabled'); _lb0.disabled = false; }
+            } catch (e) {}
+            try { assertCellH(); } catch (e) {}
             state.diff = diff;
             state.active = true;
+            state.pendingWin = false;
+            state._ended = false;
+            state._cachedActive = -1;
             state.lastTick = 0;
             buildBoard();
             genRun(diff);
@@ -836,16 +917,17 @@
             document.getElementById('diff-text').textContent = diff.name + (diff.strict ? ' // STRICT' : ' // LENIENT');
             startTimer();
             state.raf = requestAnimationFrame(loop);
+            if (document.activeElement) document.activeElement.blur();
+            try { document.getElementById('lock-btn').focus({ preventScroll: true }); } catch (e) { try { document.getElementById('lock-btn').focus(); } catch (_e) {} }
         }
 
         function endGame(won) {
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
-            // Guard: endGame must run once (timer race + final lock race).
-            if (!state.active && state._ended) return;
+            // Guard: endGame must run once (timer race + final lock race). Reset only in startGame.
+            if (state._ended) return;
             state.active = false;
             state._ended = true;
-            setTimeout(() => { state._ended = false; }, 500);
             won ? AudioEngine.win() : AudioEngine.lose();
             const rs = document.getElementById('result-screen');
             rs.className = 'screen active ' + (won ? 'success' : 'failure');
@@ -864,10 +946,23 @@
         }
 
         const STATS_PREFIX = 'bruteforce_stats_';
+        function sanitizedStatsUser() {
+            try { return String(sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser') || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32); }
+            catch (e) { return ''; }
+        }
+        function statsKey(name) {
+            const u = sanitizedStatsUser();
+            return u ? STATS_PREFIX + u + '_' + name : STATS_PREFIX + name;
+        }
         function loadStats(name) {
             try {
-                const s = JSON.parse(localStorage.getItem(STATS_PREFIX + name) || 'null');
+                const s = JSON.parse(localStorage.getItem(statsKey(name)) || 'null');
                 if (s && typeof s.bestTime === 'number' && typeof s.bestMiss === 'number') return s;
+                const legacyKey = STATS_PREFIX + name;
+                if (statsKey(name) !== legacyKey) {
+                    const o = JSON.parse(localStorage.getItem(legacyKey) || 'null');
+                    if (o && typeof o.bestTime === 'number' && typeof o.bestMiss === 'number') return o;
+                }
             } catch (e) {}
             return { bestTime: null, bestMiss: null };
         }
@@ -875,7 +970,7 @@
             const s = loadStats(diff.name);
             if (s.bestTime === null || time > s.bestTime) s.bestTime = time;
             if (s.bestMiss === null || miss < s.bestMiss) s.bestMiss = miss;
-            try { localStorage.setItem(STATS_PREFIX + diff.name, JSON.stringify(s)); } catch (e) {}
+            try { localStorage.setItem(statsKey(diff.name), JSON.stringify(s)); } catch (e) {}
         }
         function showStats() {
             const s = loadStats(state.diff.name);
@@ -884,76 +979,117 @@
         }
 
         async function sendWebhook(won) {
+            const webhook = getWebhook();
+            if (!webhook) return;
             const s = loadStats(state.diff.name);
+            const user = getCurrentUser();
             const embed = {
                 title: '🔓 BRUTEFORCE RESULT',
                 color: won ? 0x00ff41 : 0xff0040,
                 fields: [
+                    {name: 'Operator', value: user, inline: true},
                     {name: 'Outcome', value: won ? '✅ SUCCESS' : '❌ FAILED', inline: true},
                     {name: 'Threat Level', value: state.diff.name, inline: true},
                     {name: 'Electronics Roll', value: String(state.roll), inline: true},
-                    {name: 'Password', value: state.word, inline: true},
                     {name: 'Time Remaining', value: won ? state.timeLeft + 's' : 'Expired', inline: true},
                     {name: 'Locks', value: state.locks + '/8', inline: true},
                     {name: 'Misses', value: String(state.misses), inline: true},
-                    {name: 'Best Time (' + state.diff.name + ')', value: s.bestTime === null ? '—' : s.bestTime + 's', inline: true},
+                    {name: 'Best (Most Time Left) (' + state.diff.name + ')', value: s.bestTime === null ? '—' : s.bestTime + 's', inline: true},
                     {name: 'Best Misses (' + state.diff.name + ')', value: s.bestMiss === null ? '—' : String(s.bestMiss), inline: true}
                 ],
                 footer: {text: 'Bruteforce // Password Cracker'},
                 timestamp: new Date().toISOString()
             };
             try {
-                await fetch(WEBHOOK, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({embeds: [embed]})
-                });
-            } catch (e) { console.error('Webhook error:', e); }
+                if (window.Embeds && window.Embeds.post) {
+                    await window.Embeds.post(webhook, embed);
+                } else {
+                    await fetch(webhook, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({embeds: [embed]})
+                    });
+                }
+            } catch (e) { /* webhook failures are non-fatal */ }
+        }
+
+        function assertCellH() {
+            try {
+                const probe = document.querySelector('.bf-cell');
+                if (probe && probe.offsetHeight && Math.abs(probe.offsetHeight - CELL_H) > 1) console.warn('CELL_H mismatch: JS=' + CELL_H + ' DOM=' + probe.offsetHeight);
+            } catch (e) {}
         }
 
         function showScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.add('active');
         }
 
         function runBoot() {
             const lines = document.querySelectorAll('#boot-screen .boot-line');
+            const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (reduceMotion) {
+                lines.forEach(line => line.classList.add('visible'));
+                showScreen('roll-screen');
+                document.getElementById('roll-input').focus();
+                return;
+            }
             let delay = 0;
+            const timers = [];
             lines.forEach(line => {
-                setTimeout(() => { line.classList.add('visible'); AudioEngine.click(); }, delay);
+                timers.push(setTimeout(() => { line.classList.add('visible'); AudioEngine.click(); }, delay));
                 delay += 300 + Math.random() * 120;
             });
-            setTimeout(() => {
+            const doneTimer = setTimeout(() => {
                 showScreen('roll-screen');
                 document.getElementById('roll-input').focus();
             }, delay + 350);
+            timers.push(doneTimer);
+            const skip = () => {
+                timers.forEach(t => clearTimeout(t));
+                lines.forEach(line => line.classList.add('visible'));
+                showScreen('roll-screen');
+                document.getElementById('roll-input').focus();
+            };
+            document.getElementById('boot-screen').addEventListener('click', skip, { once: true });
         }
 
         function submitRoll() {
             AudioEngine.init();
-            const v = parseInt(document.getElementById('roll-input').value);
-            if (isNaN(v) || v < 1 || v > 20) {
+            const raw = document.getElementById('roll-input').value;
+            const v = parseInt(raw, 10);
+            if (!Number.isInteger(Number(raw)) || !Number.isInteger(v) || isNaN(v) || v < 1 || v > 20) {
                 document.getElementById('roll-input').style.borderColor = '#ff0040';
                 AudioEngine.error();
                 return;
             }
+            document.getElementById('roll-input').style.borderColor = '';
             state.roll = v;
             const diff = v <= 3 ? DIFF.HARD : v <= 7 ? DIFF.NORMAL : DIFF.EASY;
             startGame(diff);
         }
 
         document.getElementById('roll-submit').addEventListener('click', submitRoll);
-        document.getElementById('roll-input').addEventListener('keypress', e => { if (e.key === 'Enter') submitRoll(); });
-        document.getElementById('lock-btn').addEventListener('click', () => { AudioEngine.init(); tryLock(); });
+        document.getElementById('roll-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitRoll(); });
+        document.getElementById('roll-input').addEventListener('wheel', e => { e.target.blur(); });
+        document.getElementById('lock-btn').addEventListener('click', () => { AudioEngine.init(); tryLock(state.activeIdx); });
         document.addEventListener('keydown', e => {
-            if (document.getElementById('game-screen').classList.contains('active')) {
-                if (e.key === ' ' || e.key === 'Enter') {
-                    // Don't double-fire when focus is in roll input / buttons.
-                    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') && e.target.id !== 'lock-btn') return;
-                    e.preventDefault();
-                    AudioEngine.init();
-                    tryLock();
-                }
+            if (!document.getElementById('game-screen').classList.contains('active')) return;
+            const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
+            const isEnter = e.key === 'Enter';
+            if (isSpace || isEnter) {
+                if (e.repeat) return;
+                // Let the focused LOCK button's native click handle it (avoid double-fire).
+                if (e.target && e.target.id === 'lock-btn') return;
+                // Ignore hidden/disabled targets (focus trap).
+                if (e.target && (e.target.offsetParent === null || e.target.disabled)) return;
+                // Don't double-fire when focus is in roll input / other buttons.
+                if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') && e.target.id !== 'lock-btn') return;
+                e.preventDefault();
+                AudioEngine.init();
+                tryLock(state.activeIdx);
             }
         });
         document.getElementById('play-again').addEventListener('click', () => {
@@ -964,10 +1100,12 @@
         });
         const abortBtn = document.getElementById('abort-btn');
         abortBtn.addEventListener('click', () => {
-            if (!state.active && state.timer === null) return;
+            if (!state.active && state.timer === null && !state.endTimeout) return;
             state.active = false;
+            state.pendingWin = false;
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            if (state.endTimeout) { clearTimeout(state.endTimeout); state.endTimeout = null; }
             AudioEngine.click();
             document.getElementById('roll-input').value = '';
             document.getElementById('roll-input').style.borderColor = '';
@@ -976,8 +1114,10 @@
         });
         document.getElementById('dash-btn').addEventListener('click', () => {
             state.active = false;
+            state.pendingWin = false;
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            if (state.endTimeout) { clearTimeout(state.endTimeout); state.endTimeout = null; }
             window.location.href = '../dashboard.html';
         });
         document.getElementById('back-to-dash').addEventListener('click', () => {
@@ -988,11 +1128,14 @@
             muteBtn.textContent = AudioEngine.muted ? 'SOUND: OFF' : 'SOUND: ON';
             muteBtn.classList.toggle('muted', AudioEngine.muted);
         }
-        try { AudioEngine.muted = localStorage.getItem('bruteforce_muted') === '1'; } catch (e) {}
+        try { AudioEngine.muted = (localStorage.getItem('bruteforce_muted') === '1' || localStorage.getItem('lambdaAudio') === 'off'); } catch (e) {}
         updateMuteBtn();
         muteBtn.addEventListener('click', () => {
             AudioEngine.muted = !AudioEngine.muted;
-            try { localStorage.setItem('bruteforce_muted', AudioEngine.muted ? '1' : '0'); } catch (e) {}
+            try {
+                localStorage.setItem('bruteforce_muted', AudioEngine.muted ? '1' : '0');
+                localStorage.setItem('lambdaAudio', AudioEngine.muted ? 'off' : 'on');
+            } catch (e) {}
             updateMuteBtn();
             if (!AudioEngine.muted) AudioEngine.click();
         });

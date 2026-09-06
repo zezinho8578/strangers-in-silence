@@ -125,7 +125,7 @@
         .armory-grid .full { grid-column: 1 / -1; }
         .field-label { font-size: 10px; letter-spacing: 2px; color: var(--primary-dim); text-transform: uppercase; margin-bottom: 4px; }
 
-        #roll-input, #shooter-input {
+        #roll-input, #shooter-display {
             background: transparent;
             border: 1px solid var(--primary);
             color: var(--primary);
@@ -136,8 +136,8 @@
             width: 110px;
             outline: none;
         }
-        #shooter-input { width: 100%; font-size: 15px; text-align: left; letter-spacing: 1px; }
-        #roll-input:focus, #shooter-input:focus, #weapon-select:focus {
+        #shooter-display { width: 100%; font-size: 15px; text-align: left; letter-spacing: 1px; }
+        #roll-input:focus, #shooter-display:focus, #weapon-select:focus {
             box-shadow: 0 0 15px var(--primary-glow), inset 0 0 10px rgba(0, 255, 65, 0.1);
         }
         #weapon-select {
@@ -309,6 +309,13 @@
         #board-table th, #board-table td { border: 1px solid var(--primary-dim); padding: 5px 7px; text-align: left; }
         #board-table th { color: var(--primary-dim); font-size: 10px; letter-spacing: 1px; }
         #board-status { font-size: 11px; color: var(--primary-dim); margin-top: 6px; min-height: 16px; }
+        #shooter-display { border: 1px solid var(--primary); padding: 10px 12px; font-size: 15px; letter-spacing: 1px; text-align: left; background: rgba(0,20,0,0.5); }
+        #shooter-select { width: 100%; background: #000; border: 1px solid var(--primary); color: var(--primary); font-family: inherit; font-size: 13px; padding: 10px; outline: none; margin-top: 6px; }
+        #toast { font-size: 11px; color: var(--warning); min-height: 16px; margin-top: 6px; letter-spacing: 1px; }
+        #roll-error { font-size: 11px; color: var(--target); min-height: 16px; margin-top: 6px; }
+        .target:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .target:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+        button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 
         @media (max-width: 700px) {
             #game-container { padding: 14px; }
@@ -346,10 +353,12 @@
                 <div>
                     <div class="field-label">Shooting roll</div>
                     <input type="number" id="roll-input" min="1" max="20" placeholder="?">
+                    <div id="roll-error" role="alert"></div>
                 </div>
                 <div>
-                    <div class="field-label">Shooter (leaderboard)</div>
-                    <input type="text" id="shooter-input" maxlength="12" placeholder="OPERATOR">
+                    <div class="field-label">Shooter (auto from login)</div>
+                    <div id="shooter-display" aria-live="polite">OPERATOR</div>
+                    <select id="shooter-select" style="display:none;" aria-label="Linked operative"></select>
                 </div>
                 <div class="full">
                     <div class="field-label">Weapon (presets + owned)</div>
@@ -372,7 +381,7 @@
         <div id="game-screen" class="screen">
             <div id="game-header">
                 <div id="difficulty-display">THREAT LVL: <span id="diff-text">NORMAL</span><br><span id="weapon-text" style="color:var(--primary);"></span></div>
-                <div id="timer-display">75</div>
+                <div id="timer-display" aria-live="polite">75</div>
                 <div>
                     <button class="btn-mini" id="dash-btn" type="button">DASHBOARD</button>
                     <button class="btn-mini" id="mute-btn" type="button">SOUND: ON</button>
@@ -393,7 +402,7 @@
                 <div class="lane" id="lane-far"><span class="lane-tag">FAR x2</span></div>
                 <div id="crosshair"><div class="ch-ring" id="ch-ring"></div><div class="ch-dot"></div></div>
             </div>
-            <div id="feed"></div>
+            <div id="feed" aria-live="polite"></div>
             <div id="range-controls">
                 <button class="btn" id="reload-btn" type="button">RELOAD [R]</button>
             </div>
@@ -404,6 +413,7 @@
             <h1 id="result-title">COURSE COMPLETE</h1>
             <div class="result-stats">
                 <div><span>Threat Level</span><span id="result-diff">NORMAL</span></div>
+                <div><span>Shooter</span><span id="result-shooter">OPERATOR</span></div>
                 <div><span>Shooting Roll</span><span id="result-roll">5</span></div>
                 <div><span>Weapon</span><span id="result-weapon">—</span></div>
                 <div><span>Mode</span><span id="result-mode">ARCADE</span></div>
@@ -417,17 +427,18 @@
             </div>
             <div id="wave-medals"></div>
             <div id="board-tabs">
-                <button class="mode-btn active" id="tab-local" type="button">LOCAL TOP-10</button>
-                <button class="mode-btn" id="tab-shared" type="button">SHARED TOP-10</button>
+                <span class="field-label">SHARED TOP-10</span>
             </div>
             <table id="board-table"><thead><tr><th>#</th><th>SHOOTER</th><th>WEAPON</th><th>SCORE</th><th>ACC</th><th>MODE</th></tr></thead><tbody id="board-body"></tbody></table>
-            <div id="board-status"></div>
+            <div id="board-status" aria-live="polite"></div>
+            <div id="toast" aria-live="polite"></div>
             <button class="btn" id="play-again">RUN THE COURSE AGAIN</button>
             <br>
             <button class="btn" id="back-to-dash" type="button">RETURN TO DASHBOARD</button>
         </div>
     </div>
 
+    <script src="../embeds.js"></script>
     <script>
         const AudioEngine = {
             ctx: null,
@@ -456,8 +467,49 @@
             lose() { [350, 300, 250, 180].forEach((f, i) => setTimeout(() => this.beep(f, 0.2, 0.1, 'sawtooth'), i * 120)); }
         };
 
-        const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
         const FIREBASE_DB_URL = 'https://strangers-in-silence-default-rtdb.firebaseio.com';
+        // Firebase rules (shared board, no secrets client-side):
+        // { "rules": { "firingRangeBoards": { "$diff": { ".read": true, ".write": true,
+        //   ".validate": "newData.hasChildren(['name','score','acc'])" } } } }
+        function getFallbackDB() {
+            // Cached localFallbackDB parse (invalidated on armory re-sync).
+            if ('_cache' in getFallbackDB) return getFallbackDB._cache;
+            try {
+                const db = JSON.parse(localStorage.getItem('localFallbackDB') || 'null');
+                getFallbackDB._cache = db;
+                return db;
+            } catch (e) { getFallbackDB._cache = null; return null; }
+        }
+        function getWebhook() {
+            try {
+                const db = getFallbackDB();
+                if (db && db.webhook) return db.webhook;
+            } catch (e) {}
+            if (typeof window.WEBHOOK_URL === 'string' && window.WEBHOOK_URL) return window.WEBHOOK_URL;
+            return '';
+        }
+        function sanitizeShooter(s) {
+            let v = String(s === undefined || s === null ? '' : s).toUpperCase().slice(0, 12);
+            v = v.replace(/[@`_*~>|]/g, '');
+            v = v.replace(/[^A-Z0-9 _-]/g, '');
+            v = v.trim();
+            if (!/^[A-Z0-9 _-]{1,12}$/.test(v)) return 'OPERATOR';
+            return v;
+        }
+        function getCurrentUser() { try { return sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser') || 'OPERATOR'; } catch (e) { return 'OPERATOR'; } }
+        function getShooter() {
+            try {
+                const sel = document.getElementById('shooter-select');
+                if (sel && sel.style.display !== 'none' && sel.value) return sanitizeShooter(sel.value);
+            } catch (e) {}
+            return sanitizeShooter(getCurrentUser());
+        }
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            if (!t) return;
+            t.textContent = String(msg || '');
+            if (msg) setTimeout(() => { try { if (t.textContent === String(msg)) t.textContent = ''; } catch (e) {} }, 4000);
+        }
 
         const DIFF = {
             HARD:   { name: 'HARD',   time: 60, uptime: 0.9,  speed: 1.35, spreadMult: 1.25, par: 1800, maxAlive: 4 },
@@ -547,6 +599,10 @@
         function parseMag(shots, w) {
             const s = String(shots === undefined || shots === null ? '' : shots);
             if (/unlimited/i.test(s)) return Infinity;
+            // Explicit '—' in shots field means unlimited (e.g. grav-punt) and
+            // overrides the ranged fallback. Mag-less ranged guns (s==='')
+            // still default to 10; melee still Infinity (invariants).
+            if (/—/.test(s)) return Infinity;
             const m = s.match(/\d+/);
             if (m) return Math.max(1, parseInt(m[0], 10));
             if (w && typeof w === 'object') {
@@ -610,7 +666,7 @@
             armored:  { toughness: 8, armor: 2, hp: 2, base: 250 },
             shield:   { toughness: 8, armor: 2, hp: 2, base: 250, heavy: true },
             bullseye: { toughness: 5, armor: 0, hp: 1, base: 200, precision: true },
-            drone:    { toughness: 6, armor: 0, hp: 1, base: 300, moving: true, shieldEnergy: true }
+            drone:    { toughness: 6, armor: 0, hp: 2, base: 300, moving: true, shieldEnergy: true }
         };
         const WAVE_NAMES = ['QUALIFICATION', 'SPEED DRILL', 'DISCIPLINE', 'ARMOR TRIAL', 'LONG RANGE'];
         const WAVE_KINDS = [
@@ -651,6 +707,8 @@
         }
         function arcadeHitProb(params, kind, lane, recoil, diffName) {
             const def = TARGET_DEFS[kind] || TARGET_DEFS.paper;
+            // Reachable via direct prob queries; resolveShotPure short-circuits
+            // CIVs before calling here, but the branch is kept for completeness.
             if (def.noShoot) return 0.97; // civs are easy to (wrongly) hit
             const spreadMult = diffName === 'HARD' ? 1.25 : diffName === 'EASY' ? 0.8 : 1.0;
             let base = lane === 'close' ? 0.95 : lane === 'mid' ? 0.86 : 0.72;
@@ -778,26 +836,35 @@
             if (def.noShoot) {
                 return { hits: n, fired: n, outcome: 'civ', raise: false, bonus: 0, breakdown: 'CIVILIAN HIT (hold fire)' };
             }
-            let hits = 0, raise = false, first = null;
+            let hits = 0, raise = false, firstKill = null, firstChip = null, firstAbsorbed = null, firstHit = null;
             for (let i = 0; i < n; i++) {
                 const r = resolveShotPure(params, kind, lane, diffName, { sim: opts.sim, recoil: opts.recoil, rand });
                 if (r.hit) {
                     hits++;
-                    if (!first) first = r;
+                    if (!firstHit) firstHit = r;
                     if (r.raise) raise = true;
+                    // anyKill > anyChip > anyAbsorbed priority across pellets
+                    // (not first-pellet-wins): one lucky pellet can still kill.
+                    if (r.killed && !firstKill) firstKill = r;
+                    else if (r.chip && !r.killed && !firstChip) firstChip = r;
+                    else if (r.absorbed && !firstAbsorbed) firstAbsorbed = r;
+                    else if (!r.killed && !r.chip && !r.absorbed && !firstKill) firstKill = r;
                 }
             }
             if (!hits) {
                 return { hits: 0, fired: n, outcome: 'miss', raise: false, bonus: 0, breakdown: opts.sim ? 'all pellets miss vs TN4' : 'miss (arcade spread)' };
             }
             const bonus = Math.min(2, hits - 1) * 10;
-            if (first.absorbed) {
-                return { hits, fired: n, outcome: 'absorbed', raise, bonus: 0, breakdown: first.breakdown, sim: first.sim, dmg: first.dmg };
+            if (firstKill) {
+                return { hits, fired: n, outcome: 'kill', raise, bonus, breakdown: firstKill.breakdown, sim: firstKill.sim, dmg: firstKill.dmg };
             }
-            if (first.chip && !first.killed) {
-                return { hits, fired: n, outcome: 'chip', raise, bonus: 0, breakdown: first.breakdown, sim: first.sim, dmg: first.dmg };
+            if (firstChip) {
+                return { hits, fired: n, outcome: 'chip', raise, bonus: 0, breakdown: firstChip.breakdown, sim: firstChip.sim, dmg: firstChip.dmg };
             }
-            return { hits, fired: n, outcome: 'kill', raise, bonus, breakdown: first.breakdown, sim: first.sim, dmg: first.dmg };
+            if (firstAbsorbed) {
+                return { hits, fired: n, outcome: 'absorbed', raise, bonus: 0, breakdown: firstAbsorbed.breakdown, sim: firstAbsorbed.sim, dmg: firstAbsorbed.dmg };
+            }
+            return { hits, fired: n, outcome: 'kill', raise, bonus, breakdown: firstHit.breakdown, sim: firstHit.sim, dmg: firstHit.dmg };
         }
         // __PURE_LOGIC_END__
 
@@ -808,7 +875,7 @@
             const map = new Map();
             DEFAULT_ARMORY.forEach(w => map.set(w.id, Object.assign({}, w, { _owned: false })));
             try {
-                const db = JSON.parse(localStorage.getItem('localFallbackDB') || 'null');
+                const db = getFallbackDB();
                 if (db) {
                     // Live campaign presets override the baked-in fallbacks.
                     if (Array.isArray(db.presets)) {
@@ -818,14 +885,23 @@
                             if (k) map.set(k, Object.assign({}, p, { _owned: false }));
                         });
                     }
-                    // Owned character weapons override same-id presets so
-                    // customized stats actually reach the range.
+                    // Owned character weapons: key includes charId+index to avoid
+                    // collisions across characters. Preserve w.id when present,
+                    // suffix on collision.
                     if (db.characters) {
-                        Object.values(db.characters).forEach(c => {
+                        Object.entries(db.characters).forEach(([charId, c]) => {
                             if (c && Array.isArray(c.weapons)) {
-                                c.weapons.forEach(w => {
+                                c.weapons.forEach((w, idx) => {
                                     if (!w || (!w.id && !w.name)) return;
-                                    const k = w.id || ('owned-' + String(w.name).toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+                                    const slug = w.id ? String(w.id) : String(w.name || 'weapon').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                                    let k;
+                                    if (w.id) {
+                                        k = String(w.id);
+                                        if (map.has(k)) k = k + '-owned-' + charId + '-' + idx;
+                                    } else {
+                                        k = 'owned-' + charId + '-' + idx + '-' + slug;
+                                    }
+                                    if (map.has(k)) k = k + '-' + charId + '-' + idx;
                                     map.set(k, Object.assign({}, w, { id: k, _owned: true }));
                                 });
                             }
@@ -887,64 +963,128 @@
         let state = {
             diff: null, weapon: null, params: null,
             score: 0, shotsFired: 0, pelletsFired: 0, pelletsHit: 0,
-            streak: 0, bestStreak: 0, ammo: 0, reloading: false,
-            waveIdx: 0, waveScores: [0, 0, 0, 0, 0], civHits: [0, 0, 0, 0, 0],
+            streak: 0, bestStreak: 0, kills: 0, ammo: 0, reloading: false,
+            waveIdx: 0, waveScores: [0, 0, 0, 0, 0], bonusScores: [0, 0, 0, 0, 0], civHits: [0, 0, 0, 0, 0],
             targets: [], nextTid: 1, events: [],
             timeLeft: 0, endTime: 0, timer: null, raf: null, lastTick: 0,
             roll: 0, shooter: 'OPERATOR', active: false,
-            lastTriggerAt: 0, recoil: 0, swayT: 0, reloadTimeout: null,
-            elapsed: 0, feed: [], _ended: false, boardTab: 'local', sharedCache: null
+            lastTriggerAt: 0, recoil: 0, reloadTimeout: null,
+            elapsed: 0, feed: [], _ended: false, boardTab: 'shared', sharedCache: null,
+            lastHudUpdate: 0, hudEls: null, hiddenAt: 0
         };
+        // shotsFired = trigger count (diagnostics; accuracy uses pelletsFired/pelletsHit).
 
         const WAVE_DUR = [15, 15, 15, 15, 999];
 
-        function feedMsg(html, cls) {
-            state.feed.push({ html, cls: cls || '' });
+        function feedMsg(text, cls) {
+            // Text-safe feed: uses textContent so shooter/weapon/target strings
+            // can never inject HTML (stored-XSS safe).
+            state.feed.push({ text: String(text === undefined || text === null ? '' : text), cls: cls || '' });
             if (state.feed.length > 5) state.feed.shift();
             const el = document.getElementById('feed');
-            el.innerHTML = state.feed.map(f => '<div class="f-' + f.cls + '">' + f.html + '</div>').join('');
+            el.innerHTML = '';
+            state.feed.forEach(f => {
+                const d = document.createElement('div');
+                d.className = 'f-' + String(f.cls).replace(/[^a-z-]/g, '');
+                d.textContent = f.text;
+                el.appendChild(d);
+            });
+        }
+        function feedHtml(html, cls) {
+            // Trusted internal HTML only (static strings, no user data).
+            state.feed.push({ text: '', html: String(html), cls: cls || '' });
+            if (state.feed.length > 5) state.feed.shift();
+            const el = document.getElementById('feed');
+            el.innerHTML = '';
+            state.feed.forEach(f => {
+                const d = document.createElement('div');
+                d.className = 'f-' + String(f.cls).replace(/[^a-z-]/g, '');
+                if (f.html) d.innerHTML = f.html;
+                else d.textContent = f.text;
+                el.appendChild(d);
+            });
         }
 
         function showScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(id).classList.add('active');
+            if (id === 'roll-screen') {
+                try { refreshShooterUI(); } catch (e) {}
+                const ri = document.getElementById('roll-input');
+                if (ri && !ri.placeholder) ri.placeholder = '?';
+            }
+        }
+
+        function refreshShooterUI() {
+            const raw = getCurrentUser();
+            const slug = String(raw || '').toLowerCase().replace(/ /g, '-');
+            const linked = (slug === 'trombley-hicks' || slug === 'kazimierz-pilsudki');
+            const disp = document.getElementById('shooter-display');
+            const sel = document.getElementById('shooter-select');
+            if (linked && sel) {
+                sel.style.display = '';
+                if (!sel.options.length) {
+                    const o1 = document.createElement('option'); o1.value = 'TROMBLEY HICKS'; o1.textContent = 'Trombley Hicks'; sel.appendChild(o1);
+                    const o2 = document.createElement('option'); o2.value = 'KAZIMIERZ PILSUDKI'; o2.textContent = 'Kazimierz Pilsudki'; sel.appendChild(o2);
+                }
+                const want = sanitizeShooter(raw);
+                let matched = false;
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sanitizeShooter(sel.options[i].value) === want) { sel.selectedIndex = i; matched = true; break; }
+                }
+                if (!matched) {
+                    for (let i = 0; i < sel.options.length; i++) {
+                        const ov = String(sel.options[i].value).toLowerCase().replace(/ /g, '-');
+                        if (ov === slug) { sel.selectedIndex = i; matched = true; break; }
+                    }
+                }
+                if (disp) disp.textContent = sanitizeShooter(sel.value);
+            } else {
+                if (sel) { sel.style.display = 'none'; }
+                if (disp) disp.textContent = sanitizeShooter(raw);
+            }
         }
 
         function runBoot() {
             const lines = document.querySelectorAll('#boot-screen .boot-line');
             let delay = 0;
-            lines.forEach(line => {
-                setTimeout(() => { line.classList.add('visible'); AudioEngine.click(); }, delay);
-                delay += 300 + Math.random() * 120;
-            });
-            setTimeout(() => {
+            let skipped = false;
+            function skipBoot() {
+                if (skipped) return;
+                skipped = true;
                 showScreen('roll-screen');
                 renderArmoryOptions();
+                refreshShooterUI();
                 const inp = document.getElementById('roll-input');
                 if (inp) inp.focus();
-                try {
-                    const u = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser') || '';
-                    if (u) document.getElementById('shooter-input').value = String(u).toUpperCase().slice(0, 12);
-                } catch (e) {}
-            }, delay + 350);
+            }
+            document.getElementById('boot-screen').addEventListener('click', skipBoot);
+            lines.forEach(line => {
+                setTimeout(() => { if (!skipped) { line.classList.add('visible'); AudioEngine.click(); } }, delay);
+                delay += 300 + Math.random() * 120;
+            });
+            setTimeout(skipBoot, delay + 350);
         }
 
         function submitArmory() {
+            if (state.active) return;
             AudioEngine.init();
+            const errEl = document.getElementById('roll-error');
             const v = parseInt(document.getElementById('roll-input').value, 10);
             if (isNaN(v) || v < 1 || v > 20) {
                 document.getElementById('roll-input').style.borderColor = '#ff0040';
+                if (errEl) errEl.textContent = 'Enter a Shooting roll 1–20.';
                 AudioEngine.error();
                 return;
             }
+            if (errEl) errEl.textContent = '';
             const wid = document.getElementById('weapon-select').value;
             const w = ARMORY.find(x => x.id === wid);
             if (!w) { AudioEngine.error(); return; }
             state.roll = v;
             state.weapon = w;
             state.params = weaponToRangeParams(w);
-            const nm = document.getElementById('shooter-input').value.trim();
-            state.shooter = (nm || 'OPERATOR').toUpperCase().slice(0, 12);
+            state.shooter = getShooter();
             const diff = v <= 3 ? DIFF.HARD : v <= 7 ? DIFF.NORMAL : DIFF.EASY;
             startGame(diff);
         }
@@ -1009,13 +1149,17 @@
 
         function spawnTarget(ev) {
             const wrap = document.getElementById('range-wrap');
-            const id = state.nextTid++;
+            const id = state.nextTid++; // tid generation counter (monotonic per course)
             const size = laneSize(ev.kind, ev.lane);
             const el = document.createElement('div');
             el.className = 'target t-' + ev.kind;
             el.dataset.tid = id;
             el.style.width = size + 'px';
             el.style.height = size + 'px';
+            // A11y: keyboard-operable targets with visible focus ring.
+            el.setAttribute('tabindex', '0');
+            el.setAttribute('role', 'button');
+            el.setAttribute('aria-label', ev.kind + ' target, ' + ev.lane + ' lane');
             const laneEl = document.getElementById('lane-' + ev.lane);
             const laneTop = laneEl.offsetTop;
             const laneH = laneEl.offsetHeight;
@@ -1023,21 +1167,36 @@
             el.style.left = ev.x + '%';
             el.style.top = y + 'px';
             el.innerHTML = '<div class="core">' + targetLabel(ev.kind) + '</div>';
-            el.addEventListener('pointerdown', e => { e.stopPropagation(); fireAt(id, e); });
+            el.addEventListener('pointerdown', e => { if (e.button !== undefined && e.button !== 0) return; e.stopPropagation(); fireAt(id, e); });
+            el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); fireAt(id, null); } });
             wrap.appendChild(el);
             const persistent = (ev.kind === 'paper' || ev.kind === 'armored' || ev.kind === 'shield' || ev.kind === 'bullseye');
+            const wrapH = wrap.clientHeight || 380;
             const t = {
                 id, kind: ev.kind, lane: ev.lane, wave: ev.wave, el,
                 hp: (TARGET_DEFS[ev.kind] || {}).hp || 1,
                 born: state.elapsed,
                 expires: persistent ? state.elapsed + 25 : state.elapsed + state.diff.uptime * (ev.kind === 'drone' ? 7 : 1) + 2,
                 vx: ev.kind === 'drone' ? (Math.random() < 0.5 ? -1 : 1) * (26 + Math.random() * 22) * state.diff.speed : 0,
-                x: ev.x
+                x: ev.x, xPct: ev.x, yPct: wrapH ? (y / wrapH) : 0, dead: false
             };
             state.targets.push(t);
         }
 
-        function removeTarget(id, silent) {
+        function relayoutTargets() {
+            const wrap = document.getElementById('range-wrap');
+            if (!wrap) return;
+            const H = wrap.clientHeight || 380;
+            state.targets.forEach(t => {
+                try {
+                    if (typeof t.xPct === 'number') t.el.style.left = t.xPct + '%';
+                    else if (typeof t.x === 'number') t.el.style.left = t.x + '%';
+                    if (typeof t.yPct === 'number') t.el.style.top = (t.yPct * H) + 'px';
+                } catch (e) {}
+            });
+        }
+
+        function removeTarget(id) {
             const i = state.targets.findIndex(t => t.id === id);
             if (i === -1) return;
             const t = state.targets[i];
@@ -1052,16 +1211,43 @@
             state.targets = [];
         }
 
-        function updateHud() {
-            document.getElementById('hud-score').textContent = state.score;
-            document.getElementById('hud-wave').textContent = Math.min(5, state.waveIdx + 1) + '/5';
-            document.getElementById('hud-ammo').textContent = state.params && state.params.magSize === Infinity ? '∞' : (state.reloading ? '…' : state.ammo);
-            document.getElementById('ammo-box').classList.toggle('low', !!state.params && state.params.magSize !== Infinity && state.ammo <= Math.max(1, Math.ceil(state.params.magSize * 0.25)));
-            document.getElementById('hud-streak').textContent = state.streak;
+        function getHudEls() {
+            if (!state.hudEls) {
+                state.hudEls = {
+                    score: document.getElementById('hud-score'),
+                    wave: document.getElementById('hud-wave'),
+                    ammo: document.getElementById('hud-ammo'),
+                    ammoBox: document.getElementById('ammo-box'),
+                    streak: document.getElementById('hud-streak'),
+                    acc: document.getElementById('hud-acc'),
+                    waveText: document.getElementById('wave-text'),
+                    reloadText: document.getElementById('reload-text')
+                };
+            }
+            return state.hudEls;
+        }
+
+        function updateHud(force) {
+            // Cached HUD els, throttled to ~4Hz; force=true for immediate updates.
+            const now = Date.now();
+            if (!force && now - (state.lastHudUpdate || 0) < 250) return;
+            state.lastHudUpdate = now;
+            const h = getHudEls();
+            h.score.textContent = state.score;
+            h.wave.textContent = Math.min(5, state.waveIdx + 1) + '/5';
+            h.ammo.textContent = state.params && state.params.magSize === Infinity ? '∞' : (state.reloading ? '…' : state.ammo);
+            h.ammoBox.classList.toggle('low', !!state.params && state.params.magSize !== Infinity && state.ammo <= Math.max(1, Math.ceil(state.params.magSize * 0.25)));
+            h.streak.textContent = state.streak;
             const acc = state.pelletsFired ? Math.round(100 * state.pelletsHit / state.pelletsFired) : null;
-            document.getElementById('hud-acc').textContent = acc === null ? '—' : acc + '%';
-            document.getElementById('wave-text').textContent = 'W' + Math.min(5, state.waveIdx + 1) + '/5: ' + WAVE_NAMES[Math.min(4, state.waveIdx)] + (simMode ? ' [SIM]' : '');
-            document.getElementById('reload-text').textContent = state.reloading ? 'RELOADING…' : '';
+            h.acc.textContent = acc === null ? '—' : acc + '%';
+            h.waveText.textContent = 'W' + Math.min(5, state.waveIdx + 1) + '/5: ' + WAVE_NAMES[Math.min(4, state.waveIdx)] + (simMode ? ' [SIM]' : '');
+            h.reloadText.textContent = state.reloading ? 'RELOADING…' : '';
+        }
+
+        function afterTrigger() {
+            // Auto-reload on ALL paths (kill/civ/absorbed/chip/miss).
+            if (state.params && state.params.magSize !== Infinity && state.ammo <= 0) doReload();
+            updateHud(true);
         }
 
         function floatText(x, y, txt, color) {
@@ -1097,6 +1283,7 @@
 
         function fireAt(tid, e) {
             if (!state.active) return;
+            if (e && e.button !== undefined && e.button !== 0) return;
             const now = Date.now();
             if (now - state.lastTriggerAt < TRIGGER_COOLDOWN_MS) return;
             if (state.reloading) { AudioEngine.dry(); return; }
@@ -1113,7 +1300,7 @@
             if (p.magSize !== Infinity) state.ammo--;
 
             state.shotsFired++;
-            state.recoil = Math.min(1, state.recoil + 0.22 + p.pellets * 0.03);
+            const oldRecoil = state.recoil;
             AudioEngine.shot();
 
             const pt = rangePoint(e);
@@ -1125,34 +1312,39 @@
                 setTimeout(() => { gc.style.transform = ''; }, 60);
             }
 
-            // Points always credit the active clock wave (matches the HUD banner),
-            // not the wave a straggler target spawned in.
-            const wave = state.waveIdx;
-            const target = tid === null || tid === undefined ? null : state.targets.find(t => t.id === tid) || null;
+            // M1: credit spawn wave (target.wave), not clock waveIdx, so medals
+            // grade the wave a target spawned in. wave-text display still uses
+            // clock waveIdx (see updateHud).
+            const target = tid === null || tid === undefined ? null : state.targets.find(t => t.id === tid && !t.dead) || null;
             if (!target) {
                 // Empty range: one miss per trigger, no feed spam.
+                // Empty burst miss counts pellets for accuracy (documents behavior).
                 state.pelletsFired += p.pellets;
                 state.streak = 0;
                 floatText(pt.x, pt.y, 'MISS', '#ff0040');
-                updateHud();
+                afterTrigger();
                 return;
             }
+            const wave = (typeof target.wave === 'number') ? target.wave : state.waveIdx;
 
             // Exactly one outcome per trigger (see resolveTriggerPure): burst
             // pellets feed hit stats, but scoring/streaks apply once.
-            const res = resolveTriggerPure(p, target.kind, target.lane, state.diff.name, { sim: simMode, recoil: state.recoil });
-            state.pelletsFired += res.fired;
-            state.pelletsHit += res.hits;
+            // Resolve with old recoil, then add recoil for next trigger.
+            const res = resolveTriggerPure(p, target.kind, target.lane, state.diff.name, { sim: simMode, recoil: oldRecoil });
+            state.recoil = Math.min(1, oldRecoil + 0.22 + p.pellets * 0.03);
 
             if (res.outcome === 'miss') {
+                state.pelletsFired += res.fired;
                 state.streak = 0;
                 floatText(pt.x, pt.y, 'MISS', '#ff0040');
-                if (simMode) feedMsg('SIM: ' + escapeHtml(res.breakdown) + ' — ' + target.kind + ' (' + target.lane + ')', 'sim');
+                if (simMode) feedMsg('SIM: ' + res.breakdown + ' — ' + target.kind + ' (' + target.lane + ')', 'sim');
                 else feedMsg('Miss — ' + target.kind + ' (' + target.lane + ')', '');
-                updateHud();
+                afterTrigger();
                 return;
             }
             if (res.outcome === 'civ') {
+                // Civ: fired counts for accuracy, hits stay 0 (not skill hits).
+                state.pelletsFired += res.fired;
                 state.score -= 100;
                 state.waveScores[wave] -= 100;
                 state.civHits[wave]++;
@@ -1162,84 +1354,133 @@
                 floatText(pt.x, pt.y, '-100 CIV!', '#e8e8e8');
                 feedMsg('CIVILIAN HIT (−100, streak reset) — HOLD FIRE on white', 'bad');
                 removeTarget(target.id);
-                updateHud();
+                afterTrigger();
                 return;
             }
             if (res.outcome === 'absorbed') {
+                state.pelletsFired += res.fired;
+                state.pelletsHit += res.hits;
                 state.streak = 0;
                 AudioEngine.ping();
                 target.el.classList.add('damaged');
                 setTimeout(() => { try { target.el.classList.remove('damaged'); } catch (err) {} }, 300);
-                const pts = 10;
+                const pts = Math.max(1, Math.round(10 * laneMult(target.lane)));
                 state.score += pts;
                 state.waveScores[wave] += pts;
                 floatText(pt.x, pt.y, 'PING +' + pts, '#ffaa00');
-                feedMsg((simMode ? 'SIM: ' : '') + escapeHtml(res.breakdown) + ' (+' + pts + ')', simMode ? 'sim' : 'warn');
-                updateHud();
+                feedMsg((simMode ? 'SIM: ' : '') + res.breakdown + ' (+' + pts + ')', simMode ? 'sim' : 'warn');
+                afterTrigger();
                 return;
             }
             if (res.outcome === 'chip') {
+                state.pelletsFired += res.fired;
+                state.pelletsHit += res.hits;
                 // Arcade armor chip: one HP per trigger, never more.
                 target.hp -= 1;
                 target.el.classList.add('damaged');
                 AudioEngine.ping();
                 if (target.hp <= 0) {
                     killTarget(target, pt, { raise: res.raise, breakdown: res.breakdown, bonus: res.bonus });
+                    afterTrigger();
                 } else {
-                    const pts = 25;
+                    const pts = Math.max(1, Math.round(25 * laneMult(target.lane)));
                     state.score += pts;
                     state.waveScores[wave] += pts;
+                    // Chip keeps streak alive (documented: chips are progress, not resets).
                     state.streak++;
                     state.bestStreak = Math.max(state.bestStreak, state.streak);
                     floatText(pt.x, pt.y, 'CHIP +' + pts, '#ffaa00');
                     feedMsg('Armor chip (+' + pts + ') — one more on target', 'warn');
-                    updateHud();
+                    afterTrigger();
                 }
                 return;
             }
+            state.pelletsFired += res.fired;
+            state.pelletsHit += res.hits;
             // Kill.
             killTarget(target, pt, { raise: res.raise, breakdown: res.breakdown, bonus: res.bonus });
 
-            // Splash (RPG/grenade/mine): damage neighbors in same lane
+            // Splash (RPG/grenade/mine): damage neighbors in same lane, respecting
+            // armor via resolveShotPure — shield without Heavy/AP and armored
+            // first splash award chip +25 (not kill).
             if (p.splash) {
-                const splashables = state.targets.filter(t => t.id !== target.id && t.lane === target.lane && t.kind !== 'civ');
+                const splashables = state.targets.filter(t => !t.dead && t.id !== target.id && t.lane === target.lane && t.kind !== 'civ');
                 let splashed = 0;
                 splashables.slice(0, 2).forEach(t => {
+                    const chk = resolveShotPure(p, t.kind, t.lane, state.diff.name, { sim: simMode, recoil: oldRecoil });
+                    const tWave = (typeof t.wave === 'number') ? t.wave : wave;
+                    if ((chk.absorbed || (chk.chip && !chk.killed)) && !chk.killed) {
+                        // Armored/shielded neighbor: chip, not kill.
+                        t.hp -= 1;
+                        if (t.hp <= 0) {
+                            const pts2 = Math.max(10, Math.round(scoreShotPure(t.kind, t.lane, false, state.streak) / 2));
+                            state.score += pts2;
+                            state.waveScores[tWave] += pts2;
+                            try {
+                                const r = t.el.getBoundingClientRect();
+                                const wr = document.getElementById('range-wrap').getBoundingClientRect();
+                                floatText(r.left - wr.left + r.width / 2, r.top - wr.top, 'SPLASH +' + pts2, '#ffaa00');
+                            } catch (err) {}
+                            feedMsg('Splash finishes ' + t.kind + ' (+' + pts2 + ')', 'warn');
+                            t.dead = true;
+                            removeTarget(t.id);
+                        } else {
+                            const pts2 = Math.max(1, Math.round(25 * laneMult(t.lane)));
+                            state.score += pts2;
+                            state.waveScores[tWave] += pts2;
+                            t.el.classList.add('damaged');
+                            try {
+                                const r = t.el.getBoundingClientRect();
+                                const wr = document.getElementById('range-wrap').getBoundingClientRect();
+                                floatText(r.left - wr.left + r.width / 2, r.top - wr.top, 'SPLASH CHIP +' + pts2, '#ffaa00');
+                            } catch (err) {}
+                            feedMsg('Splash chips ' + t.kind + ' (+' + pts2 + ') — armor holds', 'warn');
+                        }
+                        splashed++;
+                        return;
+                    }
                     const pts = Math.max(10, Math.round(scoreShotPure(t.kind, t.lane, false, state.streak) / 2));
                     state.score += pts;
-                    state.waveScores[wave] += pts;
+                    state.waveScores[tWave] += pts;
                     try {
                         const r = t.el.getBoundingClientRect();
                         const wr = document.getElementById('range-wrap').getBoundingClientRect();
                         floatText(r.left - wr.left + r.width / 2, r.top - wr.top, 'SPLASH +' + pts, '#ffaa00');
                     } catch (err) {}
                     feedMsg('Splash hits ' + t.kind + ' (+' + pts + ')', 'warn');
+                    t.dead = true;
                     removeTarget(t.id);
                     splashed++;
                 });
                 if (splashed) AudioEngine.ping();
             }
 
-            if (p.magSize !== Infinity && state.ammo <= 0) doReload();
-            updateHud();
+            afterTrigger();
         }
 
         function killTarget(target, pt, res) {
             res = res || {};
+            // Prevent double-count: mark dead + splice immediately, keep visual.
+            if (target.dead) return;
+            target.dead = true;
+            const idx = state.targets.findIndex(t => t.id === target.id);
+            if (idx !== -1) state.targets.splice(idx, 1);
             state.streak++;
             state.bestStreak = Math.max(state.bestStreak, state.streak);
+            state.kills = (state.kills || 0) + 1;
             let pts = scoreShotPure(target.kind, target.lane, !!res.raise, state.streak);
             if (res.bonus) pts += res.bonus; // extra burst pellets, capped in resolveTriggerPure
             state.score += pts;
-            state.waveScores[state.waveIdx] += pts;
+            const wv = (typeof target.wave === 'number') ? target.wave : state.waveIdx;
+            state.waveScores[wv] += pts;
             AudioEngine.lock();
-            target.el.classList.add('hitflash');
-            const tid = target.id;
+            try { target.el.classList.add('hitflash'); } catch (e) {}
+            const el = target.el;
             floatText(pt.x, pt.y, '+' + pts + (res.raise ? ' RAISE!' : ''), res.raise ? '#ffaa00' : '#00ff41');
-            if (simMode && res.breakdown) feedMsg('SIM: ' + escapeHtml(res.breakdown) + ' → +' + pts, 'sim');
-            else feedMsg(target.kind.toUpperCase() + ' down (' + target.lane + ')' + (res.raise ? ' RAISE' : '') + ' +' + pts, 'good');
-            setTimeout(() => removeTarget(tid), 120);
-            updateHud();
+            if (simMode && res.breakdown) feedMsg('SIM: ' + res.breakdown + ' → +' + pts, 'sim');
+            else feedMsg(String(target.kind).toUpperCase() + ' down (' + target.lane + ')' + (res.raise ? ' RAISE' : '') + ' +' + pts, 'good');
+            setTimeout(() => { try { el.remove(); } catch (e) {} }, 120);
+            updateHud(true);
         }
 
         function doReload() {
@@ -1248,7 +1489,7 @@
             state.reloading = true;
             AudioEngine.reload();
             feedMsg('Reloading ' + state.params.name + '…', '');
-            updateHud();
+            updateHud(true);
             if (state.reloadTimeout) clearTimeout(state.reloadTimeout);
             state.reloadTimeout = setTimeout(() => {
                 state.reloadTimeout = null;
@@ -1257,7 +1498,7 @@
                 state.reloading = false;
                 state.recoil = Math.max(0, state.recoil - 0.4);
                 feedMsg('Reloaded (' + state.ammo + ' rds)', 'good');
-                updateHud();
+                updateHud(true);
             }, state.params.reloadMs);
         }
 
@@ -1294,7 +1535,6 @@
             if (!state.lastTick) state.lastTick = ts;
             const dt = Math.min(0.05, (ts - state.lastTick) / 1000);
             state.lastTick = ts;
-            state.swayT += dt;
             state.elapsed = state.diff.time - state.timeLeft;
             state.recoil = Math.max(0, state.recoil - dt * 1.4);
 
@@ -1306,13 +1546,13 @@
                 if (state.elapsed < acc) { newWave = w; break; }
             }
             if (newWave !== state.waveIdx) {
-                // Leaving a discipline wave with zero CIV hits earns a bonus,
-                // so waiting the CIVs out is no longer free.
+                // Leaving a discipline wave with zero CIV hits earns a bonus.
+                // Bonuses stored separately so medals grade pure waveScores only.
                 const prev = state.waveIdx;
                 if (WAVE_KINDS[prev] && WAVE_KINDS[prev].indexOf('civ') !== -1 && state.civHits[prev] === 0) {
                     const bonus = 150;
                     state.score += bonus;
-                    state.waveScores[prev] += bonus;
+                    state.bonusScores[prev] += bonus;
                     feedMsg('DISCIPLINE BONUS +' + bonus + ' (W' + (prev + 1) + ' clean)', 'good');
                 }
                 state.waveIdx = newWave;
@@ -1335,24 +1575,29 @@
                     if (t.x < 6) { t.x = 6; t.vx = Math.abs(t.vx); }
                     if (t.x > 94) { t.x = 94; t.vx = -Math.abs(t.vx); }
                     t.el.style.left = t.x + '%';
+                    t.xPct = t.x;
                 }
                 if (state.elapsed >= t.expires) {
                     const persistent = (t.kind === 'paper' || t.kind === 'armored' || t.kind === 'shield' || t.kind === 'bullseye');
                     if (!persistent && (t.kind === 'popup' || t.kind === 'hostile' || t.kind === 'civ' || t.kind === 'drone')) {
-                        feedMsg(t.kind.toUpperCase() + ' expired (' + t.lane + ')', '');
+                        feedMsg(String(t.kind).toUpperCase() + ' expired (' + t.lane + ')', '');
                     }
                     removeTarget(t.id);
                 }
             }
 
-            // Course clear: nothing left to spawn and nothing alive → bank a
-            // time bonus and finish early instead of idling to the clock.
+            // Course clear: nothing left to spawn and nothing alive.
+            // Requires at least one kill, else RANGE COLD (no time bonus).
             if (state.active && !state.events.length && !state.targets.length && state.elapsed > 8) {
-                const bonus = state.timeLeft * 5;
-                state.score += bonus;
-                state.waveScores[state.waveIdx] += bonus;
-                feedMsg('COURSE CLEAR — time bonus +' + bonus, 'good');
-                updateHud();
+                if ((state.kills || 0) > 0) {
+                    const bonus = state.timeLeft * 5;
+                    state.score += bonus;
+                    state.bonusScores[state.waveIdx] += bonus;
+                    feedMsg('COURSE CLEAR — time bonus +' + bonus, 'good');
+                } else {
+                    feedMsg('RANGE COLD — no targets downed', 'warn');
+                }
+                updateHud(true);
                 endGame(true);
                 return;
             }
@@ -1365,7 +1610,7 @@
                 document.getElementById('ch-ring').style.width = d + 'px';
                 document.getElementById('ch-ring').style.height = d + 'px';
             }
-            updateHud();
+            updateHud(false);
             state.raf = requestAnimationFrame(loop);
         }
 
@@ -1381,63 +1626,87 @@
             state.pelletsHit = 0;
             state.streak = 0;
             state.bestStreak = 0;
+            state.kills = 0;
             state.ammo = state.params.magSize;
             state.reloading = false;
             state.waveIdx = 0;
             state.waveScores = [0, 0, 0, 0, 0];
+            state.bonusScores = [0, 0, 0, 0, 0];
             state.civHits = [0, 0, 0, 0, 0];
             state.nextTid = 1;
             state.events = buildSpawnPlan(diff, (Math.random() * 1e9) | 0);
             state.lastTick = 0;
             state.elapsed = 0;
             state.recoil = 0;
-            state.swayT = 0;
             state.feed = [];
             state._ended = false;
             state.lastTriggerAt = 0;
             state.sharedCache = null;
+            state.lastHudUpdate = 0;
+            state.hudEls = null;
             state.active = true;
             document.getElementById('feed').innerHTML = '';
-            document.getElementById('penalty-note') && (document.getElementById('penalty-note').textContent = '');
             showScreen('game-screen');
             document.getElementById('diff-text').textContent = diff.name + (simMode ? ' // SIM' : ' // ARCADE');
             document.getElementById('weapon-text').textContent = state.params.name + ' — ' + state.params.damageStr + ' / AP ' + (state.params.apIgnore ? 'Ignore' : state.params.apValue) + ' / RoF ' + state.params.pellets;
             feedMsg('Course live: ' + state.params.name + ' (' + (simMode ? 'SIM dice' : 'arcade') + '). WHITE = HOLD FIRE.', 'good');
             if (state.params.melee) feedMsg('Melee weapon: stay effective CLOSE; MID/FAR heavily penalized.', 'warn');
-            updateHud();
+            updateHud(true);
             startTimer();
             state.raf = requestAnimationFrame(loop);
         }
 
         const STATS_PREFIX = 'firing_range_stats_';
-        const BOARD_PREFIX = 'firing_range_board_';
+        const BOARD_PREFIX = 'firing_range_board_'; // kept for regression compat, local board removed
+        function statsKey(name) {
+            try {
+                const u = sanitizeShooter(getCurrentUser()).replace(/[^A-Z0-9_-]/g, '') || 'OPERATOR';
+                const perUser = STATS_PREFIX + u + '_' + name;
+                if (localStorage.getItem(perUser) !== null) return perUser;
+                // Migrate legacy shared key once so returning players keep bests.
+                try {
+                    const legacy = localStorage.getItem(STATS_PREFIX + name);
+                    if (legacy !== null) { localStorage.setItem(perUser, legacy); return perUser; }
+                } catch (e) {}
+                return perUser;
+            } catch (e) { return STATS_PREFIX + name; }
+        }
         function loadStats(name) {
             try {
-                const s = JSON.parse(localStorage.getItem(STATS_PREFIX + name) || 'null');
-                if (s && typeof s.bestScore === 'number' && typeof s.bestAcc === 'number') return s;
+                const s = JSON.parse(localStorage.getItem(statsKey(name)) || localStorage.getItem(STATS_PREFIX + name) || 'null');
+                // Validate stats on read (stored-XSS/poison safe).
+                if (s && typeof s.bestScore === 'number' && isFinite(s.bestScore) && typeof s.bestAcc === 'number' && isFinite(s.bestAcc)) {
+                    s.bestAcc = Math.min(100, Math.max(0, s.bestAcc));
+                    return s;
+                }
             } catch (e) {}
             return { bestScore: null, bestAcc: null };
         }
         function saveStats(diff, score, acc) {
             const s = loadStats(diff.name);
-            if (s.bestScore === null || score > s.bestScore) s.bestScore = score;
-            if (s.bestAcc === null || acc > s.bestAcc) s.bestAcc = acc;
-            try { localStorage.setItem(STATS_PREFIX + diff.name, JSON.stringify(s)); } catch (e) {}
+            if (typeof score === 'number' && isFinite(score)) {
+                if (s.bestScore === null || score > s.bestScore) s.bestScore = score;
+            }
+            if (typeof acc === 'number' && isFinite(acc)) {
+                acc = Math.min(100, Math.max(0, acc));
+                if (s.bestAcc === null || acc > s.bestAcc) s.bestAcc = acc;
+            }
+            try { localStorage.setItem(statsKey(diff.name), JSON.stringify(s)); } catch (e) {}
         }
-        function loadBoard(name) {
-            try {
-                const b = JSON.parse(localStorage.getItem(BOARD_PREFIX + name) || 'null');
-                if (Array.isArray(b)) return b.filter(e => e && typeof e.score === 'number').slice(0, 10);
-            } catch (e) {}
-            return [];
-        }
-        function saveBoardEntry(name, entry) {
-            const b = loadBoard(name);
-            b.push(entry);
-            b.sort((a, b2) => b2.score - a.score);
-            const top = b.slice(0, 10);
-            try { localStorage.setItem(BOARD_PREFIX + name, JSON.stringify(top)); } catch (e) {}
-            return top;
+
+        function sanitizeBoardEntry(e) {
+            if (!e || typeof e.score !== 'number' || !isFinite(e.score)) return null;
+            let acc = (typeof e.acc === 'number' && isFinite(e.acc)) ? e.acc : 0;
+            acc = Math.min(100, Math.max(0, Math.round(acc)));
+            return {
+                name: sanitizeShooter(e.name || 'OPERATOR'),
+                weapon: String(e.weapon || '?').slice(0, 40),
+                weaponId: String(e.weaponId || '').slice(0, 40),
+                score: e.score,
+                acc: acc,
+                sim: !!e.sim,
+                date: String(e.date || '').slice(0, 10)
+            };
         }
 
         async function fetchSharedBoard(name) {
@@ -1449,7 +1718,7 @@
                 if (!resp.ok) throw new Error('http ' + resp.status);
                 const data = await resp.json();
                 if (!data) return [];
-                const arr = Object.values(data).filter(e => e && typeof e.score === 'number');
+                const arr = Object.values(data).map(sanitizeBoardEntry).filter(Boolean);
                 arr.sort((a, b) => b.score - a.score);
                 return arr.slice(0, 10);
             } catch (e) {
@@ -1489,49 +1758,40 @@
         function renderBoard() {
             const body = document.getElementById('board-body');
             const status = document.getElementById('board-status');
-            document.getElementById('tab-local').classList.toggle('active', state.boardTab === 'local');
-            document.getElementById('tab-shared').classList.toggle('active', state.boardTab === 'shared');
+            state.boardTab = 'shared';
             body.innerHTML = '';
-            if (state.boardTab === 'local') {
-                const b = loadBoard(state.diff.name);
-                status.textContent = b.length ? 'LOCAL BOARD — stored on this terminal.' : 'LOCAL BOARD — no entries yet. Be the first.';
-                b.forEach((e, i) => {
+            status.textContent = 'SHARED BOARD — syncing with Firebase…';
+            fetchSharedBoard(state.diff.name).then(arr => {
+                state.sharedCache = arr;
+                if (!arr.length) status.textContent = 'SHARED BOARD — no entries yet. Be the first.';
+                else status.textContent = 'SHARED BOARD — live from Firebase (' + arr.length + ' entries).';
+                const tb = document.getElementById('board-body');
+                tb.innerHTML = '';
+                arr.forEach((e, i) => {
                     const tr = document.createElement('tr');
-                    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + escapeHtml(e.name) + '</td><td>' + escapeHtml(e.weapon) + '</td><td>' + e.score + '</td><td>' + e.acc + '%</td><td>' + escapeHtml(e.sim ? 'SIM' : 'ARC') + '</td>';
-                    body.appendChild(tr);
+                    const td0 = document.createElement('td'); td0.textContent = String(i + 1); tr.appendChild(td0);
+                    const td1 = document.createElement('td'); td1.textContent = String(e.name || 'OPERATOR'); tr.appendChild(td1);
+                    const td2 = document.createElement('td'); td2.textContent = String(e.weapon || '?'); tr.appendChild(td2);
+                    const td3 = document.createElement('td'); td3.textContent = String(Math.max(0, e.score)); tr.appendChild(td3);
+                    const td4 = document.createElement('td'); td4.textContent = String(Math.min(100, Math.max(0, e.acc))) + '%'; tr.appendChild(td4);
+                    const td5 = document.createElement('td'); td5.textContent = e.sim ? 'SIM' : 'ARC'; tr.appendChild(td5);
+                    tb.appendChild(tr);
                 });
-            } else {
-                status.textContent = 'SHARED BOARD — syncing with Firebase…';
-                body.innerHTML = '';
-                fetchSharedBoard(state.diff.name).then(arr => {
-                    state.sharedCache = arr;
-                    if (state.boardTab !== 'shared') return;
-                    if (!arr.length) status.textContent = 'SHARED BOARD — empty or offline. Local board still saved.';
-                    else status.textContent = 'SHARED BOARD — live from Firebase (' + arr.length + ' entries).';
-                    const tb = document.getElementById('board-body');
-                    tb.innerHTML = '';
-                    arr.forEach((e, i) => {
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + escapeHtml(e.name) + '</td><td>' + escapeHtml(e.weapon) + '</td><td>' + e.score + '</td><td>' + e.acc + '%</td><td>' + escapeHtml(e.sim ? 'SIM' : 'ARC') + '</td>';
-                        tb.appendChild(tr);
-                    });
-                }).catch(() => {
-                    if (state.boardTab !== 'shared') return;
-                    status.textContent = 'SHARED BOARD — OFFLINE. Showing local fallback.';
-                    state.boardTab = 'local';
-                    renderBoard();
-                });
-            }
+            }).catch(() => {
+                status.textContent = 'SHARED BOARD — OFFLINE. Try again later.';
+                showToast('Shared board offline');
+            });
         }
 
         function endGame(completed) {
+            // completed flag kept for call-site compat (always true); win/loss
+            // is derived from score vs par.
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
             clearReloadTimeout();
-            if (!state.active && state._ended) return;
+            if (state._ended) return;
             state.active = false;
             state._ended = true;
-            setTimeout(() => { state._ended = false; }, 500);
             clearTargets();
 
             const acc = state.pelletsFired ? Math.round(100 * state.pelletsHit / state.pelletsFired) : 0;
@@ -1542,6 +1802,7 @@
             rs.className = 'screen active ' + (won ? 'success' : 'failure');
             document.getElementById('result-title').textContent = won ? 'RANGE QUALIFIED' : 'WASHOUT — BELOW PAR';
             document.getElementById('result-diff').textContent = state.diff.name;
+            document.getElementById('result-shooter').textContent = sanitizeShooter(state.shooter);
             document.getElementById('result-roll').textContent = state.roll;
             document.getElementById('result-weapon').textContent = state.params.name;
             document.getElementById('result-mode').textContent = simMode ? 'SIM (SWADE DICE)' : 'ARCADE';
@@ -1553,31 +1814,49 @@
             document.getElementById('result-status').textContent = won ? 'RANGE QUALIFIED' : 'BELOW PAR — RUN IT AGAIN';
 
             saveStats(state.diff, state.score, acc);
-            const entry = { name: state.shooter, weapon: state.params.name, weaponId: state.params.id, score: state.score, acc, sim: simMode, date: new Date().toISOString().slice(0, 10) };
-            saveBoardEntry(state.diff.name, entry);
+            const safeShooter = sanitizeShooter(state.shooter);
+            const entry = { name: safeShooter, weapon: state.params.name, weaponId: state.params.id, score: state.score, acc, sim: simMode, date: new Date().toISOString().slice(0, 10) };
             pushSharedBoard(state.diff.name, entry).then(ok => {
-                if (state.boardTab === 'shared') renderBoard();
+                if (ok) renderBoard();
+                else showToast('Shared save failed - kept locally (session only)');
             });
             const s = loadStats(state.diff.name);
             document.getElementById('result-best-score').textContent = s.bestScore === null ? '—' : String(s.bestScore);
             document.getElementById('result-best-acc').textContent = s.bestAcc === null ? '—' : s.bestAcc + '%';
 
             const medals = document.getElementById('wave-medals');
-            medals.innerHTML = '<div style="letter-spacing:2px;color:var(--warning);margin-bottom:4px;">CHALLENGES (SINGLE COURSE — 5 WAVES):</div>' +
-                WAVE_NAMES.map((n, i) => {
-                    const m = medalFor(state.waveScores[i], state.diff.name, i);
-                    return '<div>W' + (i + 1) + ' ' + n + ': ' + state.waveScores[i] + ' pts — <span class="medal-' + m + '">' + m + '</span></div>';
-                }).join('');
+            medals.innerHTML = '';
+            const mTitle = document.createElement('div');
+            mTitle.style.cssText = 'letter-spacing:2px;color:var(--warning);margin-bottom:4px;';
+            mTitle.textContent = 'CHALLENGES (SINGLE COURSE — 5 WAVES):';
+            medals.appendChild(mTitle);
+            WAVE_NAMES.forEach((n, i) => {
+                const m = medalFor(state.waveScores[i], state.diff.name, i);
+                const row = document.createElement('div');
+                const bonus = (state.bonusScores && state.bonusScores[i]) ? ' (+' + state.bonusScores[i] + ' bonus)' : '';
+                row.textContent = 'W' + (i + 1) + ' ' + n + ': ' + state.waveScores[i] + ' pts' + bonus + ' — ' + m;
+                const sp = document.createElement('span');
+                sp.className = 'medal-' + m;
+                row.appendChild(sp);
+                medals.appendChild(row);
+            });
 
-            state.boardTab = 'local';
+            state.boardTab = 'shared';
             renderBoard();
             showScreen('result-screen');
             sendWebhook(won, acc, rating);
         }
 
         async function sendWebhook(won, acc, rating) {
+            const hook = getWebhook();
+            if (!hook) { console.warn('webhook missing, skipping result post'); return; }
             const s = loadStats(state.diff.name);
-            const board = loadBoard(state.diff.name).slice(0, 3).map((e, i) => (i + 1) + '. ' + e.name + ' ' + e.score + ' (' + e.weapon + ')').join('\n') || '—';
+            const safeShooter = sanitizeShooter(state.shooter);
+            let board = '—';
+            try {
+                const shared = state.sharedCache && state.sharedCache.length ? state.sharedCache : await fetchSharedBoard(state.diff.name);
+                board = shared.slice(0, 3).map((e, i) => (i + 1) + '. ' + String(e.name) + ' ' + e.score + ' (' + String(e.weapon) + ')').join('\n') || '—';
+            } catch (e) { board = '—'; }
             const waveLine = WAVE_NAMES.map((n, i) => 'W' + (i + 1) + ' ' + state.waveScores[i]).join(' │ ');
             const embed = {
                 title: '🎯 FIRING RANGE RESULT',
@@ -1586,7 +1865,7 @@
                     { name: 'Outcome', value: won ? '✅ RANGE QUALIFIED' : '❌ WASHOUT', inline: true },
                     { name: 'Threat Level', value: state.diff.name, inline: true },
                     { name: 'Shooting Roll', value: String(state.roll), inline: true },
-                    { name: 'Shooter', value: state.shooter, inline: true },
+                    { name: 'Shooter', value: safeShooter, inline: true },
                     { name: 'Weapon', value: state.params.name + ' (' + state.params.damageStr + ' / AP ' + (state.params.apIgnore ? 'Ignore' : state.params.apValue) + ' / RoF ' + state.params.pellets + ')', inline: true },
                     { name: 'Mode', value: simMode ? 'SIM (SWADE dice)' : 'ARCADE', inline: true },
                     { name: 'Score', value: String(state.score) + ' (par ' + state.diff.par + ')', inline: true },
@@ -1595,21 +1874,26 @@
                     { name: 'Rating', value: rating, inline: true },
                     { name: 'Waves', value: waveLine, inline: false },
                     { name: 'Best Score (' + state.diff.name + ')', value: s.bestScore === null ? '—' : String(s.bestScore), inline: true },
-                    { name: 'Top-3 Local (' + state.diff.name + ')', value: board, inline: false }
+                    { name: 'Top-3 Shared (' + state.diff.name + ')', value: board, inline: false }
                 ],
                 footer: { text: 'Marksmanship // Firing Range' },
                 timestamp: new Date().toISOString()
             };
             try {
-                await fetch(WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
-            } catch (e) { console.error('Webhook error:', e); }
+                if (window.Embeds && typeof window.Embeds.post === 'function') {
+                    await window.Embeds.post(hook, embed);
+                } else {
+                    await fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [embed] }) });
+                }
+            } catch (e) { console.warn('webhook post failed'); }
         }
 
         document.getElementById('roll-submit').addEventListener('click', submitArmory);
         document.getElementById('roll-input').addEventListener('keypress', e => { if (e.key === 'Enter') submitArmory(); });
         document.getElementById('weapon-select').addEventListener('change', () => { AudioEngine.click(); renderWeaponCard(); });
-        document.getElementById('armory-refresh').addEventListener('click', () => { AudioEngine.click(); renderArmoryOptions(); feedMsgSafe('Armory re-synced (' + ARMORY.length + ' weapons).'); });
-        function feedMsgSafe(t) { try { AudioEngine.click(); } catch (e) {} const c = document.getElementById('weapon-card'); c.innerHTML += '<div style="color:var(--warning);">' + escapeHtml(t) + '</div>'; }
+        document.getElementById('shooter-select').addEventListener('change', () => { const d = document.getElementById('shooter-display'); if (d) d.textContent = getShooter(); AudioEngine.click(); });
+        document.getElementById('armory-refresh').addEventListener('click', () => { AudioEngine.click(); try { delete getFallbackDB._cache; } catch (e) {} renderArmoryOptions(); feedMsgSafe('Armory re-synced (' + ARMORY.length + ' weapons).'); });
+        function feedMsgSafe(t) { try { AudioEngine.click(); } catch (e) {} const c = document.getElementById('weapon-card'); const d = document.createElement('div'); d.style.color = 'var(--warning)'; d.textContent = String(t); c.appendChild(d); }
         document.getElementById('mode-arcade').addEventListener('click', () => {
             simMode = false;
             document.getElementById('mode-arcade').classList.add('active');
@@ -1622,14 +1906,14 @@
             document.getElementById('mode-arcade').classList.remove('active');
             AudioEngine.click();
         });
-        document.getElementById('tab-local').addEventListener('click', () => { state.boardTab = 'local'; renderBoard(); AudioEngine.click(); });
-        document.getElementById('tab-shared').addEventListener('click', () => { state.boardTab = 'shared'; renderBoard(); AudioEngine.click(); });
 
         document.getElementById('range-wrap').addEventListener('pointerdown', e => {
+            if (e.button !== undefined && e.button !== 0) return;
             if (e.target.closest && e.target.closest('.target')) return;
             fireAt(null, e);
         });
-        document.getElementById('range-wrap').addEventListener('mousemove', e => {
+        document.getElementById('range-wrap').addEventListener('contextmenu', e => e.preventDefault());
+        document.getElementById('range-wrap').addEventListener('pointermove', e => {
             const ch = document.getElementById('crosshair');
             if (!state.active) { ch.style.display = 'none'; return; }
             const pt = rangePoint(e);
@@ -1640,19 +1924,32 @@
         document.getElementById('range-wrap').addEventListener('mouseleave', () => {
             document.getElementById('crosshair').style.display = 'none';
         });
+        try {
+            if (typeof ResizeObserver !== 'undefined') {
+                new ResizeObserver(() => relayoutTargets()).observe(document.getElementById('range-wrap'));
+            }
+            window.addEventListener('resize', relayoutTargets);
+        } catch (e) {}
         document.getElementById('reload-btn').addEventListener('click', () => { AudioEngine.init(); doReload(); });
         document.addEventListener('keydown', e => {
             if (document.getElementById('game-screen').classList.contains('active')) {
                 if (e.key === 'r' || e.key === 'R') { AudioEngine.init(); doReload(); }
             }
-            if (document.getElementById('roll-screen').classList.contains('active') && e.key === 'Enter' && e.target.id !== 'roll-input') submitArmory();
+            if (document.getElementById('roll-screen').classList.contains('active') && e.key === 'Enter') {
+                const tag = (e.target && e.target.tagName ? e.target.tagName : '').toUpperCase();
+                if (tag === 'BUTTON' || tag === 'SELECT' || tag === 'INPUT') return;
+                submitArmory();
+            }
         });
 
         document.getElementById('play-again').addEventListener('click', () => {
             document.getElementById('roll-input').value = '';
             document.getElementById('roll-input').style.borderColor = '';
+            const re = document.getElementById('roll-error'); if (re) re.textContent = '';
             showScreen('roll-screen');
+            try { delete getFallbackDB._cache; } catch (e) {}
             renderArmoryOptions();
+            refreshShooterUI();
             document.getElementById('roll-input').focus();
         });
         const abortBtn = document.getElementById('abort-btn');
@@ -1666,8 +1963,10 @@
             AudioEngine.click();
             document.getElementById('roll-input').value = '';
             document.getElementById('roll-input').style.borderColor = '';
+            const re = document.getElementById('roll-error'); if (re) re.textContent = '';
             showScreen('roll-screen');
             renderArmoryOptions();
+            refreshShooterUI();
             document.getElementById('roll-input').focus();
         });
         document.getElementById('dash-btn').addEventListener('click', () => {
@@ -1675,6 +1974,7 @@
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
             clearReloadTimeout();
+            clearTargets();
             window.location.href = '../dashboard.html';
         });
         document.getElementById('back-to-dash').addEventListener('click', () => {
@@ -1696,10 +1996,18 @@
         document.addEventListener('click', () => AudioEngine.init(), { once: true });
         document.addEventListener('visibilitychange', () => {
             if (!state.active || state.timer === null) return;
-            if (!document.hidden) {
-                clearInterval(state.timer);
-                state.timer = setInterval(tickTimer, 250);
-                tickTimer();
+            if (document.hidden) {
+                state.hiddenAt = Date.now();
+                return;
+            }
+            // Tab-return: drop expired spawn storm if jump > 5s.
+            const gap = state.hiddenAt ? (Date.now() - state.hiddenAt) : 0;
+            state.hiddenAt = 0;
+            clearInterval(state.timer);
+            state.timer = setInterval(tickTimer, 250);
+            tickTimer();
+            if (gap > 5000) {
+                state.events = state.events.filter(ev => ev.at >= state.elapsed - 0.5);
             }
         });
 
