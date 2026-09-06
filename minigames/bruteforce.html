@@ -288,7 +288,6 @@
             background: rgba(0, 20, 0, 0.6);
             cursor: pointer;
             position: relative;
-            padding: 4px 0;
             transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
         }
         .bf-col.active {
@@ -316,42 +315,60 @@
         .bf-col.shake { animation: bfshake 0.3s ease-in-out; }
         #game-container.shake-all { animation: bfshake 0.3s ease-in-out, flicker 5s infinite; }
 
+        .bf-viewport {
+            position: relative;
+            height: 182px; /* 7 visible rows x 26px — must match CELL_H in JS */
+            overflow: hidden;
+        }
+        .bf-strip {
+            position: absolute;
+            top: -26px; /* one spare row above/below so the fractional slide never exposes a gap */
+            left: 0;
+            right: 0;
+            will-change: transform;
+        }
+        .bf-capture {
+            position: absolute;
+            left: -1px;
+            right: -1px;
+            top: 50%;
+            height: 34px;
+            transform: translateY(-50%);
+            border-top: 1px solid var(--primary);
+            border-bottom: 1px solid var(--primary);
+            background: rgba(0, 255, 65, 0.07);
+            pointer-events: none;
+            transition: background 0.12s, box-shadow 0.12s, border-color 0.12s;
+        }
+        .bf-capture.in-window {
+            border-top-color: var(--target);
+            border-bottom-color: var(--target);
+            background: rgba(255, 0, 64, 0.14);
+            box-shadow: 0 0 12px rgba(255, 0, 64, 0.35), inset 0 0 10px rgba(255, 0, 64, 0.2);
+        }
+        .bf-col.locked .bf-capture {
+            border-top-color: var(--primary);
+            border-bottom-color: var(--primary);
+            background: rgba(0, 255, 65, 0.16);
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.35);
+        }
+
         .bf-cell {
-            height: 26px;
+            height: 26px; /* must match CELL_H in JS — do not change per breakpoint */
             line-height: 26px;
             text-align: center;
             font-size: 18px;
             color: var(--primary-dim);
         }
         .bf-cell.is-target { color: var(--target); }
-        .bf-col.locked .bf-cell { color: var(--primary-dim); }
-        .bf-cell.bf-center {
-            height: 34px;
-            line-height: 34px;
-            font-size: 24px;
-            font-weight: bold;
-            color: var(--primary);
-            border-top: 1px solid var(--primary);
-            border-bottom: 1px solid var(--primary);
-            background: rgba(0, 255, 65, 0.07);
-            position: relative;
-        }
-        .bf-cell.bf-center.is-target {
+        .bf-cell.bf-mid { font-weight: bold; font-size: 20px; color: var(--primary); }
+        .bf-cell.bf-mid.is-target {
             color: var(--target);
-            background: rgba(255, 0, 64, 0.14);
-            border-top-color: var(--target);
-            border-bottom-color: var(--target);
             text-shadow: 0 0 10px var(--target-glow);
-            box-shadow: 0 0 12px rgba(255, 0, 64, 0.35), inset 0 0 10px rgba(255, 0, 64, 0.2);
         }
-        .bf-col.locked .bf-cell.bf-center {
-            color: var(--primary);
-            background: rgba(0, 255, 65, 0.16);
-            border-top-color: var(--primary);
-            border-bottom-color: var(--primary);
-            text-shadow: 0 0 10px var(--primary-glow);
-        }
-        .bf-col.locked .bf-cell.bf-center.is-target { color: var(--primary); }
+        .bf-col.locked .bf-cell { color: var(--primary-dim); }
+        .bf-col.locked .bf-cell.bf-mid { color: var(--primary); text-shadow: 0 0 10px var(--primary-glow); }
+        .bf-col.locked .bf-cell.is-target { color: var(--primary); text-shadow: 0 0 10px var(--primary-glow); }
 
         #capture-hint {
             font-size: 10px;
@@ -422,8 +439,8 @@
         @media (max-width: 600px) {
             #game-container { padding: 15px; }
             #bruteforce-board { gap: 4px; }
-            .bf-cell { height: 22px; line-height: 22px; font-size: 15px; }
-            .bf-cell.bf-center { height: 30px; line-height: 30px; font-size: 20px; }
+            .bf-cell { font-size: 15px; }
+            .bf-cell.bf-mid { font-size: 17px; }
             #password-display .pw-slot { width: 24px; height: 30px; line-height: 30px; font-size: 16px; }
             #lock-btn { font-size: 15px; }
         }
@@ -521,10 +538,11 @@
         const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
 
         // Fixed-8 always: difficulty changes speed/time/forgiveness, never length.
+        // Speeds are letters/sec of smooth vertical tape (EASY ~= 625ms per letter).
         const DIFF = {
-            HARD:   { name: 'HARD',   cols: 8, time: 50, speed: 11, accel: 1.08, strict: true  },
-            NORMAL: { name: 'NORMAL', cols: 8, time: 60, speed: 8,  accel: 1.0,  strict: false },
-            EASY:   { name: 'EASY',   cols: 8, time: 75, speed: 5,  accel: 1.0,  strict: false }
+            HARD:   { name: 'HARD',   cols: 8, time: 60, speed: 3.4, accel: 1.06, strict: true  },
+            NORMAL: { name: 'NORMAL', cols: 8, time: 75, speed: 2.4, accel: 1.0,  strict: false },
+            EASY:   { name: 'EASY',   cols: 8, time: 90, speed: 1.6, accel: 1.0,  strict: false }
         };
         const LENIENT_PENALTY_SEC = 5;
         const LOCK_COOLDOWN_MS = 350;
@@ -539,7 +557,13 @@
         ];
 
         const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        const ROWS_ABOVE = 3, ROWS_BELOW = 3;
+        // Smooth vertical tape: each column renders 9 rows (7 visible + 1 spare
+        // each side) and slides via translateY on the fractional part of pos.
+        // Strip innerHTML is only rebuilt when floor(pos) changes — every frame
+        // just moves the transform, so motion is continuous, not teleporting.
+        const CELL_H = 26; // px — must match .bf-cell height / .bf-viewport in CSS
+        const STRIP_ROWS = 9;
+        const CENTER_ROW = 4;
 
         let state = {
             diff: null, word: '', cols: [], activeIdx: 0,
@@ -548,7 +572,7 @@
         };
 
         function mod(n, m) { return ((n % m) + m) % m; }
-        function centerLetter(col) { return ALPHABET[mod(Math.floor(col.offset), 26)]; }
+        function centerLetter(col) { return ALPHABET[mod(Math.floor(col.pos), 26)]; }
 
         function pickWord() {
             const valid = WORDLIST.filter(w => /^[A-Z]{8}$/.test(w));
@@ -570,8 +594,42 @@
                 const col = document.createElement('div');
                 col.className = 'bf-col future';
                 col.dataset.i = i;
+                const viewport = document.createElement('div');
+                viewport.className = 'bf-viewport';
+                const strip = document.createElement('div');
+                strip.className = 'bf-strip';
+                const cap = document.createElement('div');
+                cap.className = 'bf-capture';
+                viewport.appendChild(strip);
+                viewport.appendChild(cap);
+                col.appendChild(viewport);
                 col.addEventListener('click', () => tryLock());
                 board.appendChild(col);
+            }
+        }
+
+        // Paint a column's strip. Future columns hide their red target until
+        // they become active, so players can't pre-read the password.
+        function paintStrip(col, reveal) {
+            const base = Math.floor(col.pos);
+            let html = '';
+            for (let r = 0; r < STRIP_ROWS; r++) {
+                const letter = ALPHABET[mod(base + r - CENTER_ROW, 26)];
+                const isMid = (r === CENTER_ROW);
+                const isTarget = reveal && (letter === col.target);
+                html += '<div class="bf-cell' + (isMid ? ' bf-mid' : '') + (isTarget ? ' is-target' : '') + '">' + letter + '</div>';
+            }
+            col._strip.innerHTML = html;
+            col._floor = base;
+        }
+
+        function bindColRefs() {
+            const board = document.getElementById('bruteforce-board');
+            for (let i = 0; i < state.cols.length; i++) {
+                const el = board.children[i];
+                state.cols[i]._el = el;
+                state.cols[i]._strip = el.querySelector('.bf-strip');
+                state.cols[i]._cap = el.querySelector('.bf-capture');
             }
         }
 
@@ -586,39 +644,26 @@
                 state.cols.push({
                     target: target,
                     targetIdx: targetIdx,
-                    offset: targetIdx - startBack + Math.random(),
+                    pos: targetIdx - startBack + Math.random(),
                     speed: diff.speed * (0.94 + Math.random() * 0.12),
-                    locked: false
+                    locked: false,
+                    _floor: null,
+                    _el: null, _strip: null, _cap: null
                 });
             }
             state.activeIdx = 0;
             state.misses = 0;
             state.locks = 0;
             state.lastLockAt = 0;
+            bindColRefs();
+            for (let i = 0; i < state.cols.length; i++) {
+                paintStrip(state.cols[i], i === 0);
+            }
+            updatePassword();
+            updateFrame(true);
         }
 
-        function render() {
-            const board = document.getElementById('bruteforce-board');
-            for (let i = 0; i < state.cols.length; i++) {
-                const col = state.cols[i];
-                let el = board.children[i];
-                if (!el) continue;
-                el.classList.toggle('active', i === state.activeIdx && !col.locked && state.active);
-                el.classList.toggle('locked', col.locked);
-                el.classList.toggle('future', i > state.activeIdx);
-
-                const center = centerLetter(col);
-                let html = '';
-                for (let r = -ROWS_ABOVE; r <= ROWS_BELOW; r++) {
-                    const idx = mod(Math.floor(col.offset) + r, 26);
-                    const letter = ALPHABET[idx];
-                    const isCenter = (r === 0);
-                    const isTarget = (letter === col.target);
-                    html += '<div class="bf-cell' + (isCenter ? ' bf-center' : '') + (isTarget ? ' is-target' : '') + '">' + letter + '</div>';
-                }
-                el.innerHTML = html;
-                void center;
-            }
+        function updatePassword() {
             for (let i = 0; i < 8; i++) {
                 const slot = document.getElementById('pw-' + i);
                 if (!slot) continue;
@@ -632,16 +677,24 @@
             }
         }
 
-        function loop(ts) {
-            if (!state.active) return;
-            if (!state.lastTick) state.lastTick = ts;
-            const dt = Math.min(0.05, (ts - state.lastTick) / 1000);
-            state.lastTick = ts;
+        // Per-frame: advance ONLY the active column's tape, slide strips via
+        // transform, repaint a strip only when its floor rolls over.
+        function updateFrame(force) {
             for (let i = 0; i < state.cols.length; i++) {
-                if (!state.cols[i].locked) state.cols[i].offset += state.cols[i].speed * dt;
+                const col = state.cols[i];
+                if (!col._el) continue;
+                const isActive = (i === state.activeIdx && !col.locked && state.active);
+                col._el.classList.toggle('active', isActive);
+                col._el.classList.toggle('locked', col.locked);
+                col._el.classList.toggle('future', i > state.activeIdx);
+                if (force || Math.floor(col.pos) !== col._floor) {
+                    paintStrip(col, col.locked || i <= state.activeIdx);
+                }
+                const frac = col.pos - Math.floor(col.pos);
+                col._strip.style.transform = 'translateY(' + (-frac * CELL_H) + 'px)';
+                const inWin = isActive && centerLetter(col) === col.target;
+                col._cap.classList.toggle('in-window', inWin);
             }
-            render();
-            state.raf = requestAnimationFrame(loop);
         }
 
         function flashPenalty(text) {
@@ -673,7 +726,7 @@
 
             if (centerLetter(col) === col.target) {
                 col.locked = true;
-                col.offset = col.targetIdx;
+                col.pos = col.targetIdx;
                 state.locks++;
                 state.activeIdx++;
                 AudioEngine.lock();
@@ -683,10 +736,14 @@
                         state.cols[k].speed *= state.diff.accel;
                     }
                 }
-                render();
+                paintStrip(col, true);
+                // Newly armed column reveals its red target.
+                if (state.cols[state.activeIdx]) paintStrip(state.cols[state.activeIdx], true);
+                updatePassword();
+                updateFrame(true);
                 if (state.locks >= 8) {
                     state.active = false;
-                    render();
+                    updateFrame(true);
                     setTimeout(() => endGame(true), 200);
                 }
             } else {
@@ -696,10 +753,12 @@
                     // HARD: authentic GTA reset-all.
                     for (let k = 0; k < state.cols.length; k++) {
                         state.cols[k].locked = false;
-                        state.cols[k].offset = state.cols[k].targetIdx - (4 + Math.floor(Math.random() * 18)) + Math.random();
+                        state.cols[k].pos = state.cols[k].targetIdx - (4 + Math.floor(Math.random() * 18)) + Math.random();
+                        paintStrip(state.cols[k], k === 0);
                     }
                     state.locks = 0;
                     state.activeIdx = 0;
+                    updatePassword();
                     flashPenalty('> MISS // TRACE SPIKE // ALL COLUMNS RESET');
                     const gc = document.getElementById('game-container');
                     gc.classList.remove('shake-all');
@@ -718,8 +777,21 @@
                         setTimeout(() => endGame(false), 200);
                     }
                 }
-                render();
+                updateFrame(true);
             }
+        }
+
+        function loop(ts) {
+            if (!state.active) return;
+            if (!state.lastTick) state.lastTick = ts;
+            const dt = Math.min(0.05, (ts - state.lastTick) / 1000);
+            state.lastTick = ts;
+            // Only the armed column scrolls — locked tapes freeze, future
+            // tapes wait dimmed. Keeps focus on one vertical stream.
+            const col = state.cols[state.activeIdx];
+            if (col && !col.locked) col.pos += col.speed * dt;
+            updateFrame(false);
+            state.raf = requestAnimationFrame(loop);
         }
 
         function startTimer() {
@@ -757,7 +829,7 @@
             genRun(diff);
             document.getElementById('penalty-flash').textContent = '';
             showScreen('game-screen');
-            render();
+            updateFrame(true);
             document.getElementById('diff-text').textContent = diff.name + (diff.strict ? ' // STRICT' : ' // LENIENT');
             startTimer();
             state.raf = requestAnimationFrame(loop);
