@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORDNANCE // UXB DEFUSAL</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --primary: #00ff41;
+            --primary-dim: #006622;
+            --primary-glow: #00ff41;
+            --bg: #0a0a0a;
+            --bg-panel: rgba(0, 10, 0, 0.9);
+            --target: #ff0040;
+            --target-glow: #ff0040;
+            --warning: #ffaa00;
+        }
+
+        body {
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(0, 40, 0, 0.3) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(0, 20, 40, 0.2) 0%, transparent 50%);
+            color: var(--primary);
+            font-family: 'Courier New', 'Lucida Console', monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #crt_overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.12) 0px,
+                rgba(0, 0, 0, 0.12) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            92% { opacity: 1; }
+            93% { opacity: 0.97; }
+            94% { opacity: 1; }
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        #scanline {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            height: 80px;
+            background: linear-gradient(
+                transparent 0%,
+                rgba(0, 255, 65, 0.03) 50%,
+                transparent 100%
+            );
+            animation: scanline 6s linear infinite;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #game-container {
+            animation: flicker 5s infinite;
+            border: 1px solid var(--primary);
+            padding: 25px;
+            background: var(--bg-panel);
+            width: 95%;
+            max-width: 850px;
+            position: relative;
+            box-shadow:
+                0 0 40px rgba(0, 255, 65, 0.15),
+                inset 0 0 40px rgba(0, 255, 65, 0.03),
+                inset 0 1px 0 rgba(0, 255, 65, 0.2);
+        }
+
+        #game-container::before,
+        #game-container::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: var(--primary);
+            border-style: solid;
+        }
+        #game-container::before {
+            top: -1px; left: -1px;
+            border-width: 2px 0 0 2px;
+        }
+        #game-container::after {
+            bottom: -1px; right: -1px;
+            border-width: 0 2px 2px 0;
+        }
+
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        #boot-screen {
+            text-align: left;
+            min-height: 380px;
+            padding: 20px;
+            font-size: 13px;
+        }
+        .boot-line {
+            opacity: 0;
+            margin-bottom: 6px;
+            transition: opacity 0.08s;
+            line-height: 1.6;
+        }
+        .boot-line.visible { opacity: 1; }
+        .boot-line .highlight { color: var(--target); }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 14px;
+            background: var(--primary);
+            animation: blink 1s infinite;
+            vertical-align: middle;
+            margin-left: 4px;
+        }
+
+        #roll-screen { text-align: center; padding: 30px 20px; }
+        #roll-screen h1 {
+            font-size: 22px;
+            margin-bottom: 25px;
+            text-shadow: 0 0 10px var(--primary-glow);
+            letter-spacing: 3px;
+            font-weight: normal;
+        }
+        #roll-screen p {
+            font-size: 13px;
+            margin-bottom: 18px;
+            color: var(--primary-dim);
+        }
+
+        #roll-input {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 22px;
+            padding: 12px 25px;
+            text-align: center;
+            width: 100px;
+            outline: none;
+            margin-bottom: 10px;
+        }
+        #roll-input:focus {
+            box-shadow: 0 0 15px var(--primary-glow), inset 0 0 10px rgba(0, 255, 65, 0.1);
+        }
+
+        .btn {
+            display: inline-block;
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 13px;
+            padding: 12px 35px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .btn:hover {
+            background: var(--primary);
+            color: var(--bg);
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .btn-mini {
+            display: inline-block;
+            background: transparent;
+            border: 1px solid var(--primary-dim);
+            color: var(--primary-dim);
+            font-family: inherit;
+            font-size: 10px;
+            padding: 4px 9px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            margin-left: 6px;
+        }
+        .btn-mini:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .btn-mini.muted {
+            color: var(--warning);
+            border-color: var(--warning);
+        }
+
+        #game-screen { text-align: center; }
+
+        #game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--primary-dim);
+        }
+
+        #difficulty-display {
+            font-size: 11px;
+            color: var(--warning);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #timer-display {
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 0 0 10px currentColor;
+            font-variant-numeric: tabular-nums;
+        }
+        #timer-display.warning {
+            color: var(--target);
+            animation: blink 0.5s infinite;
+        }
+
+        #penalty-flash {
+            min-height: 18px;
+            font-size: 12px;
+            color: var(--target);
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+            text-shadow: 0 0 8px var(--target-glow);
+        }
+
+        #phase-banner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid var(--primary);
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            letter-spacing: 2px;
+            background: rgba(0, 255, 65, 0.05);
+        }
+        #strikes-display { color: var(--target); text-shadow: 0 0 8px var(--target-glow); white-space: nowrap; }
+
+        .phase { max-width: 680px; margin: 0 auto; }
+
+        #device-plate {
+            border: 1px solid var(--primary-dim);
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            background: rgba(0, 20, 0, 0.6);
+        }
+        #serial-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+        #serial-value { font-weight: bold; text-shadow: 0 0 8px var(--primary-glow); }
+        #led-row { display: flex; gap: 10px; align-items: center; font-size: 11px; }
+        .led { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--primary-dim); background: #111; display: inline-block; }
+        .led.lit-red { background: var(--target); box-shadow: 0 0 10px var(--target-glow); border-color: var(--target); }
+        .led.lit-green { background: var(--primary); box-shadow: 0 0 10px var(--primary-glow); border-color: var(--primary); }
+        .led.lit-yellow { background: var(--warning); box-shadow: 0 0 10px var(--warning); border-color: var(--warning); }
+
+        #manual-box {
+            border: 1px dashed var(--primary-dim);
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            text-align: left;
+            font-size: 12px;
+            line-height: 1.7;
+        }
+        #manual-box .manual-title { letter-spacing: 2px; color: var(--warning); margin-bottom: 4px; }
+        #manual-box .spent { opacity: 0.35; text-decoration: line-through; }
+
+        #wire-list { display: flex; flex-direction: column; gap: 8px; }
+        .wire {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid var(--primary-dim);
+            padding: 0 12px;
+            height: 52px;
+            cursor: pointer;
+            font-size: 15px;
+            letter-spacing: 3px;
+            background: rgba(0, 20, 0, 0.6);
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .wire:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(0, 255, 65, 0.3); }
+        .wire .wire-color {
+            flex: 1;
+            height: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+        .wire.cut { opacity: 0.4; cursor: default; }
+        .wire.cut .wire-color { background: transparent !important; position: relative; }
+        .wire.cut .wire-label { text-decoration: line-through; }
+        .wire.fail {
+            border-color: var(--target) !important;
+            box-shadow: 0 0 14px rgba(255, 0, 64, 0.6) !important;
+        }
+
+        @keyframes bfshake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .shake { animation: bfshake 0.3s ease-in-out; }
+
+        #cap-wrap { border: 1px solid var(--primary-dim); padding: 16px 14px; background: rgba(0, 20, 0, 0.6); }
+        #cap-readout { font-size: 13px; letter-spacing: 2px; margin-bottom: 12px; }
+        #cap-bar {
+            position: relative;
+            height: 34px;
+            border: 1px solid var(--primary);
+            background: rgba(0, 0, 0, 0.5);
+            margin-bottom: 14px;
+            overflow: hidden;
+        }
+        #cap-window {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(0, 255, 65, 0.18);
+            border-left: 1px solid var(--primary);
+            border-right: 1px solid var(--primary);
+        }
+        #cap-needle {
+            position: absolute;
+            top: -2px;
+            bottom: -2px;
+            width: 4px;
+            background: var(--target);
+            box-shadow: 0 0 12px var(--target-glow);
+        }
+        #discharge-btn { width: 100%; font-size: 16px; padding: 14px 20px; margin-top: 0; }
+
+        #code-slots { display: flex; justify-content: center; gap: 8px; margin: 4px 0 14px; }
+        #code-slots .code-slot {
+            width: 52px;
+            height: 60px;
+            line-height: 60px;
+            font-size: 30px;
+            border: 1px solid var(--primary);
+            background: rgba(0, 0, 0, 0.5);
+            text-shadow: 0 0 10px var(--primary-glow);
+        }
+        #code-slots .code-slot.bad { border-color: var(--target); color: var(--target); text-shadow: 0 0 10px var(--target-glow); }
+        #code-hint {
+            border: 1px dashed var(--primary-dim);
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            line-height: 1.7;
+            text-align: left;
+        }
+        #code-hint .manual-title { letter-spacing: 2px; color: var(--warning); margin-bottom: 4px; }
+        #code-pad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            max-width: 320px;
+            margin: 0 auto;
+        }
+        #code-pad button {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 20px;
+            padding: 12px 0;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        #code-pad button:hover { background: var(--primary); color: var(--bg); box-shadow: 0 0 14px var(--primary-glow); }
+
+        #phase-hint {
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: var(--primary-dim);
+            text-transform: uppercase;
+            margin: 12px 0 0;
+        }
+        #phase-hint b { color: var(--target); }
+
+        #game-footer {
+            margin-top: 15px;
+            font-size: 10px;
+            color: var(--primary-dim);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #result-screen { text-align: center; padding: 30px 20px; }
+        #result-screen h1 {
+            font-size: 26px;
+            margin-bottom: 25px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        #result-screen.success h1 {
+            color: var(--primary);
+            text-shadow: 0 0 20px var(--primary-glow);
+        }
+        #result-screen.failure h1 {
+            color: var(--target);
+            text-shadow: 0 0 20px var(--target-glow);
+        }
+
+        .result-stats {
+            text-align: left;
+            margin: 25px auto;
+            max-width: 340px;
+            font-size: 13px;
+        }
+        .result-stats div {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--primary-dim);
+        }
+        .result-stats span:first-child {
+            color: var(--primary-dim);
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+
+        @media (max-width: 600px) {
+            #game-container { padding: 15px; }
+            .wire { height: 48px; font-size: 13px; }
+            #phase-banner { font-size: 11px; }
+            #code-slots .code-slot { width: 44px; height: 52px; line-height: 52px; font-size: 26px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #game-container, #scanline { animation: none; }
+        }
+    </style>
+</head>
+<body>
+    <div id="crt_overlay"></div>
+    <div id="scanline"></div>
+
+    <div id="game-container">
+        <div id="boot-screen" class="screen active">
+            <div class="boot-line">> ORDNANCE v1.9.3 // UXB DEFUSAL UNIT</div>
+            <div class="boot-line">> NEURAL LINK ESTABLISHED</div>
+            <div class="boot-line">> TARGET: COMBINE UXB // <span class="highlight">LIVE FUSE DETECTED</span></div>
+            <div class="boot-line">> LOADING FIELD MANUAL §7 (WIRE ORDER) ...</div>
+            <div class="boot-line">> CALIBRATING DISCHARGE PROBE ...</div>
+            <div class="boot-line">> 3-PHASE SEQUENCE ARMED // STRIKES ARE CUMULATIVE</div>
+            <div class="boot-line">> <span class="highlight">STATUS: AWAITING OPERATOR INPUT</span><span class="cursor"></span></div>
+        </div>
+
+        <div id="roll-screen" class="screen">
+            <h1>UXB DEFUSAL</h1>
+            <p>INPUT REPAIR SKILL CHECK (1–20)</p>
+            <p style="font-size: 10px; letter-spacing: 1px;">
+                FAILED [1-3] = HARD &nbsp;&nbsp;│&nbsp;&nbsp; SUCCESS [4-7] = NORMAL &nbsp;&nbsp;│&nbsp;&nbsp; RAISE [8+] = EASY
+            </p>
+            <input type="number" id="roll-input" min="1" max="20" placeholder="?">
+            <br>
+            <button class="btn" id="roll-submit">INITIATE DEFUSAL</button>
+        </div>
+
+        <div id="game-screen" class="screen">
+            <div id="game-header">
+                <div id="difficulty-display">THREAT LVL: <span id="diff-text">NORMAL</span></div>
+                <div id="timer-display">90</div>
+                <div>
+                    <button class="btn-mini" id="dash-btn" type="button">DASHBOARD</button>
+                    <button class="btn-mini" id="mute-btn" type="button">SOUND: ON</button>
+                    <button class="btn-mini" id="abort-btn" type="button">ABORT</button>
+                </div>
+            </div>
+            <div id="penalty-flash"></div>
+            <div id="phase-banner">
+                <span id="phase-text">PHASE 1/3: CUT THE WIRES</span>
+                <span id="strikes-display">STRIKES: 0/2</span>
+            </div>
+
+            <div id="phase-wires" class="phase">
+                <div id="device-plate">
+                    <div id="serial-row">
+                        <span>S/N:</span>
+                        <span id="serial-value">–––––––</span>
+                    </div>
+                    <div id="led-row"></div>
+                </div>
+                <div id="manual-box"></div>
+                <div id="wire-list"></div>
+                <div id="phase-hint">APPLY MANUAL TOP-DOWN EACH STEP // CLICK WIRES IN ORDER</div>
+            </div>
+
+            <div id="phase-discharge" class="phase" style="display:none;">
+                <div id="cap-wrap">
+                    <div id="cap-readout">CAPACITOR CHARGE: <span id="cap-pct">0</span>% // DISCHARGE IN THE <b>GREEN</b> WINDOW</div>
+                    <div id="cap-bar">
+                        <div id="cap-window"></div>
+                        <div id="cap-needle"></div>
+                    </div>
+                    <button class="btn" id="discharge-btn" type="button">DISCHARGE [SPACE]</button>
+                </div>
+                <div id="phase-hint">STOP THE NEEDLE INSIDE GREEN // MISS = STRIKE + 5s</div>
+            </div>
+
+            <div id="phase-code" class="phase" style="display:none;">
+                <div id="code-slots"></div>
+                <div id="code-hint"></div>
+                <div id="code-pad"></div>
+                <div id="phase-hint">DERIVE 4 DIGITS FROM THE SERIAL // WRONG CODE = STRIKE + 5s</div>
+            </div>
+
+            <div id="game-footer">
+                STRIKES CARRY ACROSS PHASES // TIMER NEVER STOPS
+            </div>
+        </div>
+
+        <div id="result-screen" class="screen">
+            <h1 id="result-title">DEVICE SAFE</h1>
+            <div class="result-stats">
+                <div><span>Threat Level</span><span id="result-diff">NORMAL</span></div>
+                <div><span>Repair Roll</span><span id="result-roll">5</span></div>
+                <div><span>Phases Cleared</span><span id="result-phases">3/3</span></div>
+                <div><span>Strikes</span><span id="result-strikes">0</span></div>
+                <div><span>Time Remaining</span><span id="result-time">12s</span></div>
+                <div><span>Status</span><span id="result-status">DEVICE SAFE</span></div>
+                <div><span>Best Time</span><span id="result-best-time">—</span></div>
+                <div><span>Best Strikes</span><span id="result-best-strike">—</span></div>
+            </div>
+            <button class="btn" id="play-again">DEFUSE ANOTHER DEVICE</button>
+            <br>
+            <button class="btn" id="back-to-dash" type="button">RETURN TO DASHBOARD</button>
+        </div>
+    </div>
+
+    <script>
+        const AudioEngine = {
+            ctx: null,
+            muted: false,
+            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            beep(freq = 440, dur = 0.1, vol = 0.08, type = 'square') {
+                if (!this.ctx || this.muted) return;
+                const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+                o.type = type;
+                o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                g.gain.setValueAtTime(vol, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + dur);
+            },
+            click() { this.beep(800, 0.04, 0.04); },
+            snip() { this.beep(1400, 0.07, 0.09, 'triangle'); },
+            lock() { this.beep(1047, 0.12, 0.1, 'triangle'); },
+            error() { this.beep(180, 0.15, 0.08, 'sawtooth'); },
+            win() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.beep(f, 0.18, 0.12), i * 120)); },
+            lose() { [350, 300, 250, 180].forEach((f, i) => setTimeout(() => this.beep(f, 0.2, 0.1, 'sawtooth'), i * 120)); }
+        };
+
+        const WEBHOOK = 'https://discord.com/api/webhooks/1518436377702826076/dihr7O31Dc_l9L-e0WcRUAm8zUjA6s7X9Hup7RQgXPOojLLuPyoLMvy6kvsPV2Qds_nf';
+
+        const DIFF = {
+            HARD:   { name: 'HARD',   wires: 6, time: 60,  needle: 1.5,  window: 0.10, strikesMax: 1, codeMode: 'formula' },
+            NORMAL: { name: 'NORMAL', wires: 5, time: 90,  needle: 1.0,  window: 0.16, strikesMax: 2, codeMode: 'formula' },
+            EASY:   { name: 'EASY',   wires: 4, time: 120, needle: 0.65, window: 0.24, strikesMax: 3, codeMode: 'worked'  }
+        };
+        const STRIKE_PENALTY_SEC = 5;
+        const INPUT_COOLDOWN_MS = 400;
+
+        // __PURE_LOGIC_START__
+        // Pure device logic: no DOM, no audio, no storage. The regression
+        // suite extracts this block to fuzz-test solvability (every random
+        // device must yield one complete deterministic cut order + code).
+        const WIRE_COLORS = ['RED', 'BLUE', 'YELLOW', 'GREEN', 'WHITE', 'BLACK'];
+        const WIRE_HEX = { RED: '#ff0040', BLUE: '#00ccff', YELLOW: '#ffee00', GREEN: '#00ff41', WHITE: '#e8e8e8', BLACK: '#444444' };
+        const VOWELS = ['A', 'E', 'I', 'O', 'U'];
+
+        function randInt(n) { return Math.floor(Math.random() * n); }
+        function shuffle(a) {
+            for (let i = a.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const t = a[i]; a[i] = a[j]; a[j] = t;
+            }
+            return a;
+        }
+
+        // Serial format D L - D D L D, e.g. "7K-40A2".
+        function genDevice(diff) {
+            const d = [randInt(10), randInt(10), randInt(10), randInt(10)];
+            const l = [String.fromCharCode(65 + randInt(26)), String.fromCharCode(65 + randInt(26))];
+            const wires = shuffle(WIRE_COLORS.slice()).slice(0, diff.wires);
+            return {
+                serial: '' + d[0] + l[0] + '-' + d[1] + d[2] + l[1] + d[3],
+                digits: d,
+                letters: l,
+                leds: { red: Math.random() < 0.5, green: Math.random() < 0.5, yellow: Math.random() < 0.5 },
+                wires: wires
+            };
+        }
+
+        function lastDigitOdd(dev) { return dev.digits[3] % 2 === 1; }
+        function serialHasVowel(dev) { return dev.letters.some(c => VOWELS.indexOf(c) !== -1); }
+
+        // Priority rule table, applied top-down per step. First rule whose
+        // target is still uncut fires. The LEFTMOST catch-all always matches,
+        // so every device terminates with a complete order.
+        const WIRE_RULES = [
+            { id: 'odd-blue',   pick: (dev) => lastDigitOdd(dev) ? 'BLUE' : null },
+            { id: 'even-yellow', pick: (dev) => !lastDigitOdd(dev) ? 'YELLOW' : null },
+            { id: 'red-led',    pick: (dev) => dev.leds.red ? 'RED' : null },
+            { id: 'vowel-white', pick: (dev) => serialHasVowel(dev) ? 'WHITE' : null },
+            { id: 'green-led',  pick: (dev) => dev.leds.green ? 'GREEN' : null },
+            { id: 'leftmost',   pick: (dev, remaining) => remaining[0] || null }
+        ];
+
+        function solveWires(dev) {
+            const remaining = dev.wires.slice();
+            const order = [];
+            while (remaining.length > 0) {
+                let cut = null;
+                for (const rule of WIRE_RULES) {
+                    const target = rule.pick(dev, remaining);
+                    if (target && remaining.indexOf(target) !== -1) { cut = target; break; }
+                }
+                if (!cut) cut = remaining[0]; // unreachable (catch-all), belt and braces
+                order.push(cut);
+                remaining.splice(remaining.indexOf(cut), 1);
+            }
+            return order;
+        }
+
+        // 4-digit code from the serial: sums of digit pairs, lit LED count,
+        // whole-serial digit sum. Always 4x 0-9.
+        function deriveCode(dev) {
+            const d = dev.digits;
+            const lit = (dev.leds.red ? 1 : 0) + (dev.leds.green ? 1 : 0) + (dev.leds.yellow ? 1 : 0);
+            return '' + ((d[0] + d[1]) % 10) + ((d[2] + d[3]) % 10) + (lit % 10) + ((d[0] + d[1] + d[2] + d[3]) % 10);
+        }
+        // __PURE_LOGIC_END__
+
+        const MANUAL_HTML = [
+            '<div class="manual-title">FIELD MANUAL §7 — CUT ORDER (APPLY TOP-DOWN EACH STEP, SKIP SPENT/MISSING)</div>',
+            '<div data-rule="odd-blue">§7.1 Last serial digit ODD → cut <b>BLUE</b>.</div>',
+            '<div data-rule="even-yellow">§7.2 Last serial digit EVEN → cut <b>YELLOW</b>.</div>',
+            '<div data-rule="red-led">§7.3 RED led lit → cut <b>RED</b>.</div>',
+            '<div data-rule="vowel-white">§7.4 Serial has a vowel (A/E/I/O/U) → cut <b>WHITE</b>.</div>',
+            '<div data-rule="green-led">§7.5 GREEN led lit → cut <b>GREEN</b>.</div>',
+            '<div data-rule="leftmost">§7.6 Otherwise → cut the <b>LEFTMOST</b> uncut wire.</div>'
+        ].join('');
+
+        let state = {
+            diff: null, device: null, order: [], wireProgress: 0, cutSet: {},
+            phase: 1, phasesCleared: 0, strikes: 0,
+            needleT: 0, needleCenter: 0.5, codeEntry: '', code: '',
+            timeLeft: 0, endTime: 0, timer: null, raf: null, lastTick: 0,
+            roll: 0, active: false, lastInputAt: 0, _ended: false
+        };
+
+        function inputReady() {
+            const now = Date.now();
+            if (now - state.lastInputAt < INPUT_COOLDOWN_MS) return false;
+            state.lastInputAt = now;
+            return true;
+        }
+
+        function flashPenalty(text) {
+            const el = document.getElementById('penalty-flash');
+            el.textContent = text;
+            clearTimeout(flashPenalty._t);
+            flashPenalty._t = setTimeout(() => { el.textContent = ''; }, 1800);
+        }
+
+        function renderStrikes() {
+            document.getElementById('strikes-display').textContent =
+                'STRIKES: ' + state.strikes + '/' + state.diff.strikesMax;
+        }
+
+        function setPhase(n) {
+            state.phase = n;
+            const names = { 1: 'CUT THE WIRES', 2: 'DISCHARGE CAPACITOR', 3: 'ENTER CODE' };
+            document.getElementById('phase-text').textContent = 'PHASE ' + n + '/3: ' + names[n];
+            document.getElementById('phase-wires').style.display = n === 1 ? 'block' : 'none';
+            document.getElementById('phase-discharge').style.display = n === 2 ? 'block' : 'none';
+            document.getElementById('phase-code').style.display = n === 3 ? 'block' : 'none';
+        }
+
+        function registerStrike(label) {
+            state.strikes++;
+            AudioEngine.error();
+            state.endTime -= STRIKE_PENALTY_SEC * 1000;
+            state.timeLeft = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
+            updTimer();
+            renderStrikes();
+            if (state.strikes > state.diff.strikesMax) {
+                flashPenalty('> ' + label + ' // STRIKE LIMIT EXCEEDED // DETONATION');
+                state.active = false;
+                setTimeout(() => endGame(false), 400);
+                return true;
+            }
+            flashPenalty('> ' + label + ' // STRIKE ' + state.strikes + '/' + state.diff.strikesMax + ' // -' + STRIKE_PENALTY_SEC + 's');
+            if (state.timeLeft <= 0) {
+                state.active = false;
+                setTimeout(() => endGame(false), 200);
+                return true;
+            }
+            return false;
+        }
+
+        // ---- Phase 1: wires ----
+        function renderDevice() {
+            const dev = state.device;
+            document.getElementById('serial-value').textContent = dev.serial;
+            const leds = [
+                ['RED', dev.leds.red, 'lit-red'],
+                ['GREEN', dev.leds.green, 'lit-green'],
+                ['YELLOW', dev.leds.yellow, 'lit-yellow']
+            ];
+            document.getElementById('led-row').innerHTML =
+                leds.map(l => '<span>' + l[0] + '</span><span class="led' + (l[1] ? ' ' + l[2] : '') + '"></span>').join('');
+            document.getElementById('manual-box').innerHTML = MANUAL_HTML;
+            const list = document.getElementById('wire-list');
+            list.innerHTML = '';
+            dev.wires.forEach((color) => {
+                const row = document.createElement('div');
+                row.className = 'wire';
+                row.dataset.color = color;
+                row.innerHTML = '<span class="wire-label">' + color + '</span>' +
+                    '<span class="wire-color" style="background:' + WIRE_HEX[color] + ';"></span>' +
+                    '<span class="wire-state">[ ARMED ]</span>';
+                row.addEventListener('click', () => cutWire(color, row));
+                list.appendChild(row);
+            });
+        }
+
+        function cutWire(color, rowEl) {
+            if (!state.active || state.phase !== 1) return;
+            if (state.cutSet[color]) return;
+            if (!inputReady()) return;
+            const expected = state.order[state.wireProgress];
+            if (color === expected) {
+                state.cutSet[color] = true;
+                state.wireProgress++;
+                AudioEngine.snip();
+                rowEl.classList.add('cut');
+                rowEl.querySelector('.wire-state').textContent = '[ CUT ]';
+                markManualRule(color);
+                if (state.wireProgress >= state.order.length) {
+                    state.phasesCleared = 1;
+                    state.active = false; // pause input during transition
+                    setTimeout(() => {
+                        if (state.timer === null) return; // aborted mid-transition
+                        state.active = true;
+                        enterPhase2();
+                    }, 600);
+                }
+            } else {
+                rowEl.classList.remove('shake', 'fail');
+                void rowEl.offsetWidth;
+                rowEl.classList.add('shake', 'fail');
+                setTimeout(() => rowEl.classList.remove('shake', 'fail'), 450);
+                registerStrike('WRONG WIRE (EXPECTED ' + expected + ')');
+            }
+        }
+
+        // Strike through the manual rule that just fired, as a progress cue.
+        function markManualRule(color) {
+            const box = document.getElementById('manual-box');
+            const idx = state.wireProgress - 1;
+            const firedId = firedRuleId(state.device, state.order.slice(0, idx), color);
+            if (!firedId) return;
+            const el = box.querySelector('[data-rule="' + firedId + '"]');
+            if (el && !el.classList.contains('spent')) {
+                // Only grey it out once every rule has fired at least once is
+                // overkill; mark per-use with a counter instead.
+                const n = (parseInt(el.dataset.used || '0', 10) || 0) + 1;
+                el.dataset.used = n;
+                el.innerHTML = el.innerHTML.replace(/ \[x\d+\]$/, '') + ' [x' + n + ']';
+            }
+        }
+
+        function firedRuleId(dev, alreadyCut, color) {
+            const remaining = dev.wires.filter(c => alreadyCut.indexOf(c) === -1);
+            for (const rule of WIRE_RULES) {
+                const target = rule.pick(dev, remaining);
+                if (target && remaining.indexOf(target) !== -1) {
+                    return target === color ? rule.id : null;
+                }
+            }
+            return null;
+        }
+
+        // ---- Phase 2: discharge ----
+        function enterPhase2() {
+            setPhase(2);
+            state.needleT = Math.random();
+            state.needleCenter = 0.3 + Math.random() * 0.4;
+            const w = document.getElementById('cap-window');
+            const half = state.diff.window / 2;
+            w.style.left = ((state.needleCenter - half) * 100) + '%';
+            w.style.width = (state.diff.window * 100) + '%';
+            flashPenalty('> CAPACITOR EXPOSED // DISCHARGE IN THE GREEN');
+        }
+
+        function needlePos() {
+            // Triangle wave 0..1 at diff.needle sweeps/sec.
+            const t = (state.needleT * state.diff.needle) % 2;
+            return t < 1 ? t : 2 - t;
+        }
+
+        function renderNeedle() {
+            const p = needlePos();
+            document.getElementById('cap-needle').style.left = 'calc(' + (p * 100) + '% - 2px)';
+            document.getElementById('cap-pct').textContent = Math.round(p * 100);
+        }
+
+        function tryDischarge() {
+            if (!state.active || state.phase !== 2) return;
+            if (!inputReady()) return;
+            const p = needlePos();
+            const half = state.diff.window / 2;
+            if (Math.abs(p - state.needleCenter) <= half) {
+                AudioEngine.lock();
+                state.phasesCleared = 2;
+                state.active = false;
+                setTimeout(() => {
+                    if (state.timer === null) return;
+                    state.active = true;
+                    enterPhase3();
+                }, 600);
+            } else {
+                const bar = document.getElementById('cap-bar');
+                bar.classList.remove('shake');
+                void bar.offsetWidth;
+                bar.classList.add('shake');
+                registerStrike('DISCHARGE OUTSIDE WINDOW');
+            }
+        }
+
+        // ---- Phase 3: code ----
+        function enterPhase3() {
+            setPhase(3);
+            state.code = deriveCode(state.device);
+            state.codeEntry = '';
+            renderCodeSlots(false);
+            renderCodeHint();
+            renderCodePad();
+            flashPenalty('> FUSE PANEL OPEN // ENTER 4-DIGIT CODE');
+        }
+
+        function renderCodeSlots(bad) {
+            const box = document.getElementById('code-slots');
+            box.innerHTML = '';
+            for (let i = 0; i < 4; i++) {
+                const s = document.createElement('div');
+                s.className = 'code-slot' + (bad ? ' bad' : '');
+                s.textContent = state.codeEntry[i] || '_';
+                box.appendChild(s);
+            }
+        }
+
+        function renderCodeHint() {
+            const d = state.device.digits;
+            const lit = (state.device.leds.red ? 1 : 0) + (state.device.leds.green ? 1 : 0) + (state.device.leds.yellow ? 1 : 0);
+            let html = '<div class="manual-title">FUSE CODE — DERIVE FROM S/N ' + state.device.serial + '</div>';
+            html += '<div>C1 = (D1+D2)%10 &nbsp; C2 = (D3+D4)%10 &nbsp; C3 = lit LEDs &nbsp; C4 = (all digits)%10</div>';
+            if (state.diff.codeMode === 'worked') {
+                html += '<div style="margin-top:6px; opacity:0.9;">WORKED: D=(' + d.join(',') + ') LIT=' + lit +
+                    ' → C1=(' + d[0] + '+' + d[1] + ')%10=' + ((d[0] + d[1]) % 10) +
+                    ' C2=(' + d[2] + '+' + d[3] + ')%10=' + ((d[2] + d[3]) % 10) +
+                    ' C3=' + (lit % 10) +
+                    ' C4=' + ((d[0] + d[1] + d[2] + d[3]) % 10) + '</div>';
+            }
+            document.getElementById('code-hint').innerHTML = html;
+        }
+
+        function renderCodePad() {
+            const pad = document.getElementById('code-pad');
+            pad.innerHTML = '';
+            ['1','2','3','4','5','6','7','8','9','CLR','0','⌫'].forEach((k) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.textContent = k;
+                b.addEventListener('click', () => codeKey(k));
+                pad.appendChild(b);
+            });
+        }
+
+        function codeKey(k) {
+            if (!state.active || state.phase !== 3) return;
+            if (k === 'CLR') { state.codeEntry = ''; AudioEngine.click(); renderCodeSlots(false); return; }
+            if (k === '⌫') { state.codeEntry = state.codeEntry.slice(0, -1); AudioEngine.click(); renderCodeSlots(false); return; }
+            if (!/^[0-9]$/.test(k) || state.codeEntry.length >= 4) return;
+            // No input gate here: the length cap + auto-submit make digit
+            // spam harmless, and a cooldown would make pad entry feel sticky.
+            state.codeEntry += k;
+            AudioEngine.click();
+            if (state.codeEntry.length === 4) {
+                if (state.codeEntry === state.code) {
+                    AudioEngine.lock();
+                    state.phasesCleared = 3;
+                    state.active = false;
+                    renderCodeSlots(false);
+                    setTimeout(() => endGame(true), 300);
+                } else {
+                    renderCodeSlots(true);
+                    const bad = state.codeEntry;
+                    state.codeEntry = '';
+                    setTimeout(() => renderCodeSlots(false), 600);
+                    registerStrike('WRONG CODE (' + bad + ')');
+                }
+            } else {
+                renderCodeSlots(false);
+            }
+        }
+
+        // ---- Shell: timer / lifecycle (mirrors breach + bruteforce) ----
+        function startTimer() {
+            state.endTime = Date.now() + state.diff.time * 1000;
+            state.timeLeft = state.diff.time;
+            updTimer();
+            state.timer = setInterval(tickTimer, 250);
+        }
+
+        function tickTimer() {
+            if (!state.active || state.timer === null) return;
+            const remain = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
+            if (remain !== state.timeLeft) {
+                state.timeLeft = remain;
+                updTimer();
+                if (state.timeLeft <= 10 && state.timeLeft > 0) AudioEngine.beep(900, 0.04, 0.06);
+            }
+            if (state.timeLeft <= 0) endGame(false);
+        }
+
+        function updTimer() {
+            const el = document.getElementById('timer-display');
+            el.textContent = state.timeLeft;
+            el.classList.toggle('warning', state.timeLeft <= 10);
+        }
+
+        function loop(ts) {
+            if (state.timer === null) { state.raf = null; return; }
+            if (!state.lastTick) state.lastTick = ts;
+            const dt = Math.min(0.05, (ts - state.lastTick) / 1000);
+            state.lastTick = ts;
+            if (state.active && state.phase === 2) {
+                state.needleT += dt;
+                // Slow the sweep while time is critical? No — pressure is the game.
+                renderNeedle();
+            }
+            state.raf = requestAnimationFrame(loop);
+        }
+
+        function startGame(diff) {
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            state.diff = diff;
+            state.device = genDevice(diff);
+            state.order = solveWires(state.device);
+            state.wireProgress = 0;
+            state.cutSet = {};
+            state.phase = 1;
+            state.phasesCleared = 0;
+            state.strikes = 0;
+            state.needleT = 0;
+            state.codeEntry = '';
+            state.code = '';
+            state.lastInputAt = 0;
+            state.lastTick = 0;
+            state._ended = false;
+            state._held = false;
+            state.active = true;
+            document.getElementById('penalty-flash').textContent = '';
+            document.getElementById('diff-text').textContent = diff.name + ' // ' + diff.strikesMax + (diff.strikesMax === 1 ? ' STRIKE' : ' STRIKES') + ' MAX';
+            renderStrikes();
+            renderDevice();
+            setPhase(1);
+            showScreen('game-screen');
+            startTimer();
+            state.raf = requestAnimationFrame(loop);
+        }
+
+        function endGame(won) {
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            // Guard: endGame must run once (timer race + strike race).
+            if (!state.active && state._ended) return;
+            state.active = false;
+            state._ended = true;
+            setTimeout(() => { state._ended = false; }, 500);
+            won ? AudioEngine.win() : AudioEngine.lose();
+            const rs = document.getElementById('result-screen');
+            rs.className = 'screen active ' + (won ? 'success' : 'failure');
+            document.getElementById('result-title').textContent = won ? 'DEVICE SAFE' : 'DETONATED';
+            document.getElementById('result-diff').textContent = state.diff.name;
+            document.getElementById('result-roll').textContent = state.roll;
+            document.getElementById('result-phases').textContent = state.phasesCleared + '/3';
+            document.getElementById('result-strikes').textContent = state.strikes;
+            document.getElementById('result-time').textContent = won ? state.timeLeft + 's' : 'EXPIRED';
+            document.getElementById('result-status').textContent = won ? 'DEVICE SAFE' : 'DETONATED';
+            if (won) saveStats(state.diff, state.timeLeft, state.strikes);
+            showStats();
+            showScreen('result-screen');
+            sendWebhook(won);
+        }
+
+        const STATS_PREFIX = 'defusal_stats_';
+        function loadStats(name) {
+            try {
+                const s = JSON.parse(localStorage.getItem(STATS_PREFIX + name) || 'null');
+                if (s && typeof s.bestTime === 'number' && typeof s.bestStrike === 'number') return s;
+            } catch (e) {}
+            return { bestTime: null, bestStrike: null };
+        }
+        function saveStats(diff, time, strikes) {
+            const s = loadStats(diff.name);
+            if (s.bestTime === null || time > s.bestTime) s.bestTime = time;
+            if (s.bestStrike === null || strikes < s.bestStrike) s.bestStrike = strikes;
+            try { localStorage.setItem(STATS_PREFIX + diff.name, JSON.stringify(s)); } catch (e) {}
+        }
+        function showStats() {
+            const s = loadStats(state.diff.name);
+            document.getElementById('result-best-time').textContent = s.bestTime === null ? '—' : s.bestTime + 's';
+            document.getElementById('result-best-strike').textContent = s.bestStrike === null ? '—' : String(s.bestStrike);
+        }
+
+        async function sendWebhook(won) {
+            const s = loadStats(state.diff.name);
+            const embed = {
+                title: '🧨 DEFUSAL RESULT',
+                color: won ? 0x00ff41 : 0xff0040,
+                fields: [
+                    {name: 'Outcome', value: won ? '✅ DEVICE SAFE' : '❌ DETONATED', inline: true},
+                    {name: 'Threat Level', value: state.diff.name, inline: true},
+                    {name: 'Repair Roll', value: String(state.roll), inline: true},
+                    {name: 'Phases Cleared', value: state.phasesCleared + '/3', inline: true},
+                    {name: 'Strikes', value: String(state.strikes), inline: true},
+                    {name: 'Time Remaining', value: won ? state.timeLeft + 's' : 'Expired', inline: true},
+                    {name: 'Best Time (' + state.diff.name + ')', value: s.bestTime === null ? '—' : s.bestTime + 's', inline: true},
+                    {name: 'Best Strikes (' + state.diff.name + ')', value: s.bestStrike === null ? '—' : String(s.bestStrike), inline: true}
+                ],
+                footer: {text: 'Ordnance // UXB Defusal'},
+                timestamp: new Date().toISOString()
+            };
+            try {
+                await fetch(WEBHOOK, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({embeds: [embed]})
+                });
+            } catch (e) { console.error('Webhook error:', e); }
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function runBoot() {
+            const lines = document.querySelectorAll('#boot-screen .boot-line');
+            let delay = 0;
+            lines.forEach(line => {
+                setTimeout(() => { line.classList.add('visible'); AudioEngine.click(); }, delay);
+                delay += 300 + Math.random() * 120;
+            });
+            setTimeout(() => {
+                showScreen('roll-screen');
+                document.getElementById('roll-input').focus();
+            }, delay + 350);
+        }
+
+        function submitRoll() {
+            AudioEngine.init();
+            const v = parseInt(document.getElementById('roll-input').value);
+            if (isNaN(v) || v < 1 || v > 20) {
+                document.getElementById('roll-input').style.borderColor = '#ff0040';
+                AudioEngine.error();
+                return;
+            }
+            state.roll = v;
+            const diff = v <= 3 ? DIFF.HARD : v <= 7 ? DIFF.NORMAL : DIFF.EASY;
+            startGame(diff);
+        }
+
+        document.getElementById('roll-submit').addEventListener('click', submitRoll);
+        document.getElementById('roll-input').addEventListener('keypress', e => { if (e.key === 'Enter') submitRoll(); });
+        document.getElementById('discharge-btn').addEventListener('click', () => { AudioEngine.init(); tryDischarge(); });
+        document.addEventListener('keydown', e => {
+            if (!document.getElementById('game-screen').classList.contains('active')) return;
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') && e.target.id !== 'discharge-btn') return;
+            if (state.phase === 2 && (e.key === ' ' || e.key === 'Enter')) {
+                e.preventDefault();
+                AudioEngine.init();
+                tryDischarge();
+            } else if (state.phase === 3 && /^[0-9]$/.test(e.key)) {
+                AudioEngine.init();
+                codeKey(e.key);
+            } else if (state.phase === 3 && (e.key === 'Backspace' || e.key === 'Delete')) {
+                e.preventDefault();
+                codeKey('⌫');
+            }
+        });
+        document.getElementById('play-again').addEventListener('click', () => {
+            document.getElementById('roll-input').value = '';
+            document.getElementById('roll-input').style.borderColor = '';
+            showScreen('roll-screen');
+            document.getElementById('roll-input').focus();
+        });
+        const abortBtn = document.getElementById('abort-btn');
+        abortBtn.addEventListener('click', () => {
+            if (!state.active && state.timer === null) return;
+            state.active = false;
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            AudioEngine.click();
+            document.getElementById('roll-input').value = '';
+            document.getElementById('roll-input').style.borderColor = '';
+            showScreen('roll-screen');
+            document.getElementById('roll-input').focus();
+        });
+        document.getElementById('dash-btn').addEventListener('click', () => {
+            state.active = false;
+            if (state.timer) { clearInterval(state.timer); state.timer = null; }
+            if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            window.location.href = '../dashboard.html';
+        });
+        document.getElementById('back-to-dash').addEventListener('click', () => {
+            window.location.href = '../dashboard.html';
+        });
+        const muteBtn = document.getElementById('mute-btn');
+        function updateMuteBtn() {
+            muteBtn.textContent = AudioEngine.muted ? 'SOUND: OFF' : 'SOUND: ON';
+            muteBtn.classList.toggle('muted', AudioEngine.muted);
+        }
+        try { AudioEngine.muted = localStorage.getItem('defusal_muted') === '1'; } catch (e) {}
+        updateMuteBtn();
+        muteBtn.addEventListener('click', () => {
+            AudioEngine.muted = !AudioEngine.muted;
+            try { localStorage.setItem('defusal_muted', AudioEngine.muted ? '1' : '0'); } catch (e) {}
+            updateMuteBtn();
+            if (!AudioEngine.muted) AudioEngine.click();
+        });
+        document.addEventListener('click', () => AudioEngine.init(), {once: true});
+        document.addEventListener('visibilitychange', () => {
+            if (!state.active || state.timer === null) return;
+            if (!document.hidden) {
+                clearInterval(state.timer);
+                state.timer = setInterval(tickTimer, 250);
+                tickTimer();
+            }
+        });
+
+        runBoot();
+    </script>
+</body>
+</html>
