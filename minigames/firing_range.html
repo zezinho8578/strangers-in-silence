@@ -317,6 +317,7 @@
         #shooter-display { border: 1px solid var(--primary); padding: 10px 12px; font-size: 15px; letter-spacing: 1px; text-align: left; background: rgba(0,20,0,0.5); overflow-wrap: anywhere; word-break: break-word; white-space: normal; line-height: 1.4; }
         #shooter-select { width: 100%; background: #000; border: 1px solid var(--primary); color: var(--primary); font-family: inherit; font-size: 13px; padding: 10px; outline: none; margin-top: 6px; }
         #toast { font-size: 11px; color: var(--warning); min-height: 16px; margin-top: 6px; letter-spacing: 1px; }
+        #armory-status { font-size: 10px; color: var(--primary-dim); min-height: 14px; margin-top: 5px; letter-spacing: 1px; }
         #roll-error { font-size: 11px; color: var(--target); min-height: 16px; margin-top: 6px; }
         .target:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
         .target:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
@@ -366,8 +367,9 @@
                     <select id="shooter-select" style="display:none;" aria-label="Linked operative"></select>
                 </div>
                 <div class="full">
-                    <div class="field-label">Weapon (all — presets + owned merged)</div>
+                    <div class="field-label">Weapon — ranged only (GM presets included)</div>
                     <select id="weapon-select"></select>
+                    <div id="armory-status" aria-live="polite"></div>
                 </div>
                 <div class="full"><div id="weapon-card">Loading armory…</div></div>
                 <div class="full">
@@ -875,6 +877,62 @@
 
         let ARMORY = [];
         let simMode = false;
+        // Live Firebase armory (GM-created presets like AK-47 / sniper rifles live
+        // in campaignState/presets + characters, NOT in stale localStorage).
+        let liveArmory = { presets: null, characters: null, fetched: false, fetching: false };
+
+        // Firing range = guns only. Melee/contact weapons (crowbar, stunstick,
+        // SLAM mines, fists) can't be used on a shooting lane.
+        function isRangedWeapon(w) {
+            if (!w) return false;
+            try {
+                if (typeof isMeleeRange === 'function' && isMeleeRange(w.range)) return false;
+            } catch (e) {}
+            if (/^\s*melee\s*$/i.test(String((w.damageType || '')))) return false;
+            if (/contact/i.test(String(w.range || ''))) return false;
+            return true;
+        }
+
+        async function fetchLiveArmory() {
+            if (liveArmory.fetching) return;
+            if (liveArmory.fetched) return;
+            liveArmory.fetching = true;
+            const status = document.getElementById('armory-status');
+            const setStatus = (t) => { if (status) status.textContent = t; };
+            try {
+                const ctrl = new AbortController();
+                const to = setTimeout(() => ctrl.abort(), 4500);
+                const normList = (d) => {
+                    if (!d) return null;
+                    if (Array.isArray(d)) return d;
+                    if (typeof d === 'object') return Object.values(d);
+                    return null;
+                };
+                const [pRes, cRes] = await Promise.all([
+                    fetch(FIREBASE_DB_URL + '/campaignState/presets.json', { signal: ctrl.signal }).catch(() => null),
+                    fetch(FIREBASE_DB_URL + '/campaignState/characters.json', { signal: ctrl.signal }).catch(() => null)
+                ]);
+                let pData = null, cData = null;
+                if (pRes && pRes.ok) { try { pData = normList(await pRes.json()); } catch (e) {} }
+                if (cRes && cRes.ok) { try { cData = await cRes.json(); } catch (e) {} }
+                clearTimeout(to);
+                let changed = false;
+                if (pData) { liveArmory.presets = pData; changed = true; }
+                if (cData && typeof cData === 'object') { liveArmory.characters = cData; changed = true; }
+                liveArmory.fetched = true;
+                liveArmory.fetching = false;
+                if (changed) {
+                    renderArmoryOptions(true);
+                    setStatus('LIVE SYNCED — ' + ARMORY.length + ' RANGED WEAPONS (INCL. GM PRESETS)');
+                } else {
+                    setStatus('OFFLINE — LOCAL ARMORY ONLY (' + ARMORY.length + ')');
+                }
+            } catch (e) {
+                liveArmory.fetching = false;
+                liveArmory.fetched = true;
+                setStatus('OFFLINE — LOCAL ARMORY ONLY (' + ARMORY.length + ')');
+            }
+        }
 
         function loadArmory() {
             const map = new Map();
@@ -895,31 +953,28 @@
                 if (!charId) return '?';
                 return String(charId).split('-').map(p => p ? p[0].toUpperCase() + p.slice(1) : '').join(' ');
             };
-            try {
-                const db = getFallbackDB();
-                if (db) {
-                    // Live campaign presets override the baked-in fallbacks.
-                    if (Array.isArray(db.presets)) {
-                        db.presets.forEach(p => {
-                            if (!p) return;
-                            const k = p.id || ('preset-' + p.name);
-                            if (k) {
-                                if (p.id && map.has(p.id)) {
-                                    const cur = map.get(p.id);
-                                    map.set(p.id, Object.assign({}, cur, p, { id: p.id, _owned: cur._owned, _ownedBy: cur._ownedBy || [] }));
-                                } else {
-                                    map.set(k, Object.assign({}, p, { _owned: false, _ownedBy: [] }));
-                                }
-                            }
-                        });
-                        indexNames();
+            const mergePresetList = (list) => {
+                if (!Array.isArray(list)) return;
+                list.forEach(p => {
+                    if (!p) return;
+                    const k = p.id || ('preset-' + p.name);
+                    if (!k) return;
+                    if (p.id && map.has(p.id)) {
+                        const cur = map.get(p.id);
+                        map.set(p.id, Object.assign({}, cur, p, { id: p.id, _owned: cur._owned, _ownedBy: cur._ownedBy || [] }));
+                    } else if (!map.has(k)) {
+                        map.set(k, Object.assign({}, p, { _owned: false, _ownedBy: [] }));
+                    } else {
+                        // Same name, no id (e.g. GM "AK-47" twice): live/Firebase wins.
+                        const cur = map.get(k);
+                        map.set(k, Object.assign({}, cur, p, { _owned: cur._owned, _ownedBy: cur._ownedBy || [] }));
                     }
-                    // Owned character weapons: MERGE into the matching preset
-                    // when id or name matches (owned weapons ARE presets —
-                    // character sheets store copies of preset objects). Only
-                    // create a separate entry for truly custom weapons.
-                    if (db.characters) {
-                        Object.entries(db.characters).forEach(([charId, c]) => {
+                });
+                indexNames();
+            };
+            const mergeOwnedChars = (characters) => {
+                if (!characters || typeof characters !== 'object') return;
+                Object.entries(characters).forEach(([charId, c]) => {
                             if (c && Array.isArray(c.weapons)) {
                                 c.weapons.forEach((w) => {
                                     if (!w || (!w.id && !w.name)) return;
@@ -957,10 +1012,21 @@
                                 });
                             }
                         });
-                    }
-                }
-            } catch (e) {}
-            return Array.from(map.values());
+                    };
+                    try {
+                        const db = getFallbackDB();
+                        if (db) {
+                            // Local campaign presets, then live Firebase presets (live wins,
+                            // so GM-created AK-47 / sniper rifles appear even when this
+                            // browser's localStorage is stale).
+                            mergePresetList(db.presets);
+                            mergeOwnedChars(db.characters);
+                        }
+                        mergePresetList(liveArmory.presets);
+                        mergeOwnedChars(liveArmory.characters);
+                    } catch (e) {}
+                    // Guns only — melee/contact never goes on the lane.
+                    return Array.from(map.values()).filter(isRangedWeapon);
         }
 
         function weaponNote(p) {
@@ -975,7 +1041,7 @@
             return notes.join(' · ') || 'Standard sidearm profile';
         }
 
-        function renderArmoryOptions() {
+        function renderArmoryOptions(fromLive) {
             ARMORY = loadArmory();
             const sel = document.getElementById('weapon-select');
             const prev = sel.value;
@@ -992,11 +1058,18 @@
             // Keep ARMORY order in sync with the sorted dropdown.
             ARMORY = sorted;
             const bootLine = document.querySelector('#boot-screen .boot-line:nth-child(4) span');
-            if (bootLine) bootLine.textContent = ARMORY.length + ' WEAPONS (UNIFIED)';
+            if (bootLine) bootLine.textContent = ARMORY.length + ' RANGED WEAPONS (UNIFIED)';
+            const status = document.getElementById('armory-status');
+            if (status && !fromLive) {
+                status.textContent = liveArmory.fetched
+                    ? 'LIVE SYNCED — ' + ARMORY.length + ' RANGED WEAPONS (INCL. GM PRESETS)'
+                    : 'LOCAL ARMORY (' + ARMORY.length + ') — SYNCING LIVE PRESETS…';
+            }
             if (prev && ARMORY.some(w => w.id === prev)) sel.value = prev;
             else if (ARMORY.some(w => w.id === 'usp-match')) sel.value = 'usp-match';
             else if (ARMORY.length) sel.value = ARMORY[0].id;
             renderWeaponCard();
+            if (!fromLive) fetchLiveArmory();
         }
 
         function renderWeaponCard() {
@@ -1951,7 +2024,7 @@
         document.getElementById('roll-input').addEventListener('keypress', e => { if (e.key === 'Enter') submitArmory(); });
         document.getElementById('weapon-select').addEventListener('change', () => { AudioEngine.click(); renderWeaponCard(); });
         document.getElementById('shooter-select').addEventListener('change', () => { const d = document.getElementById('shooter-display'); if (d) d.textContent = getShooter(); AudioEngine.click(); });
-        document.getElementById('armory-refresh').addEventListener('click', () => { AudioEngine.click(); try { delete getFallbackDB._cache; } catch (e) {} renderArmoryOptions(); feedMsgSafe('Armory re-synced (' + ARMORY.length + ' weapons).'); });
+        document.getElementById('armory-refresh').addEventListener('click', () => { AudioEngine.click(); try { delete getFallbackDB._cache; } catch (e) {} liveArmory.fetched = false; liveArmory.presets = null; liveArmory.characters = null; renderArmoryOptions(); feedMsgSafe('Armory re-synced (' + ARMORY.length + ' ranged weapons).'); });
         function feedMsgSafe(t) { try { AudioEngine.click(); } catch (e) {} const c = document.getElementById('weapon-card'); const d = document.createElement('div'); d.style.color = 'var(--warning)'; d.textContent = String(t); c.appendChild(d); }
         document.getElementById('mode-arcade').addEventListener('click', () => {
             simMode = false;
