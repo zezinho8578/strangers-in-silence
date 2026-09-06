@@ -523,6 +523,11 @@
                     <span id="save-status"></span>
                 </div>
     </div>
+    <!-- Linked-operative switcher (visible only to players with multiple characters) -->
+    <div id="player-switch-controls" style="display: none; gap: 10px; align-items: center; margin-bottom: 15px;">
+        <span style="opacity: 0.8;">OPERATIVE:</span>
+        <div id="player-switch-buttons" style="display: flex; gap: 10px;"></div>
+    </div>
     <!-- Tab Navigation Bar -->
     <div class="tab-bar">
         <button id="tab-stats" class="tab-btn active-tab" onclick="switchTab('stats')">DIAGNOSTICS & STATUS</button>
@@ -535,6 +540,7 @@
             <option value="vesa-novik">View: Vesa Novik</option>
             <option value="trombley-hicks">View: Trombley Hicks</option>
             <option value="arnold-rutherford">View: Arnold Rutherford</option>
+            <option value="kazimierz-pilsudki">View: Kazimierz Pilsudki</option>
         </select>
         <input type="text" id="discord-webhook" class="admin-input" placeholder="Paste Discord Webhook URL here...">
         <button id="save-webhook" class="die-btn" style="border:none;" onclick="saveWebhook()">SAVE URL
@@ -1167,12 +1173,62 @@
                 derived: { pace: "6", parryOverride: 0, toughnessOverride: 0 },
                 edges: "Hindrances:\n- Secret (Major)\n- Cautious (Minor)\n- Bad Eyes (Minor)",
                 gear: "Special Notes:\n- Parry: 2\n- Toughness: 5"
+            },
+            "kazimierz-pilsudki": {
+                name: "Kazimierz \"Piorun\" Pilsudki", bennies: 3, weapons: [],
+                attributes: { Agility: { die: "6", mod: "+0" }, Smarts: { die: "8", mod: "+0" }, Spirit: { die: "8", mod: "+0" }, Strength: { die: "6", mod: "+0" }, Vigor: { die: "6", mod: "+0" } },
+                skills: { Athletics: { die: "6", mod: "+0" }, Battle: { die: "10", mod: "+0" }, "Common Knowledge": { die: "6", mod: "+0" }, Fighting: { die: "8", mod: "+0" }, Healing: { die: "4", mod: "+0" }, Notice: { die: "8", mod: "+0" }, Persuasion: { die: "8", mod: "+0" }, Shooting: { die: "10", mod: "+0" }, Stealth: { die: "6", mod: "+0" }, Survival: { die: "8", mod: "+0" } },
+                derived: { pace: "6", parryOverride: 0, toughnessOverride: 0 },
+                edges: "Hindrances:\n- Heroic (Major)\n- Wanted (Minor - City 14 Combine)\n- Cautious (Minor)\nEdges:\n- Command\n- Tactician\n- Level Headed\n- Natural Leader\nSpecial Notes:\n- Heroic: Will do his best to keep a fellow comrade or innocent civilian out of danger; as an experienced soldier, primarily focuses on keeping himself alive as long as he can.\n- Wanted: Bad reputation among local Combine command in City 14. Civil Protection and Transhuman forces primarily attempt to target him.\n- Cautious: Experienced officer who commanded an infantry battalion in the Seven Hour War; strategizes and cautiously avoids unnecessary threats.\n- PLF Remnants (by GM permission): Six battle-hardened Polish Land Forces veterans who served alongside his battalion defending Lodz in the Seven Hour War.\nEdge Rules:\n- Command: +1 Spirit to party allies within Command Range 5 (~10 yards) when attempting to recover from Shaken.\n- Tactician: Each success and raise on a Battle roll grants an extra Action Card, which he may give to party members to replace an ally's drawn card.\n- Level Headed: Draws two action cards in combat and acts on the highest. May keep a drawn Joker and discard the other.\n- Natural Leader: May give out Bennies to any character in his command range.",
+                gear: "Rank: Seasoned (6 Advances)\nGear:\n- MP7 Submachine Gun (equip via Armory preset: mp7)\n- USP Match Pistol (equip via Armory preset: usp-match)\n- Crowbar (equip via Armory preset: crowbar)\n- Looted Civil Protection Vest (equip via Armory preset: metrocop)\nDerived: Pace 6, Parry 6, Toughness 6"
             }
         };
         const isAdmin = (currentUser === "Administrator");
         let activeCharId = "katey-commons";
         if (currentUser && !isAdmin) {
             activeCharId = currentUser.toLowerCase().replace(' ', '-');
+        }
+        // Linked operatives: login IDs that may quickly alternate between sheets
+        // without logging out (same player runs both characters).
+        const linkedCharacterMap = {
+            "trombley-hicks": ["trombley-hicks", "kazimierz-pilsudki"],
+            "kazimierz-pilsudki": ["trombley-hicks", "kazimierz-pilsudki"]
+        };
+        function getLoginCharId() {
+            if (!currentUser || isAdmin) return null;
+            return currentUser.toLowerCase().replace(' ', '-');
+        }
+        function getSwitchableIds() {
+            return linkedCharacterMap[getLoginCharId()] || [];
+        }
+        function getCharacterLabel(id) {
+            if (globalState.characters && globalState.characters[id] && globalState.characters[id].name) {
+                return globalState.characters[id].name;
+            }
+            if (defaultData[id] && defaultData[id].name) return defaultData[id].name;
+            return id;
+        }
+        function renderPlayerSwitch() {
+            const wrap = document.getElementById('player-switch-controls');
+            const btns = document.getElementById('player-switch-buttons');
+            if (!wrap || !btns) return;
+            const ids = getSwitchableIds();
+            if (ids.length < 2) { wrap.style.display = 'none'; btns.innerHTML = ''; return; }
+            wrap.style.display = 'flex';
+            btns.innerHTML = '';
+            ids.forEach(id => {
+                const b = document.createElement('button');
+                b.className = 'tab-btn' + (id === activeCharId ? ' active-tab' : '');
+                b.textContent = getCharacterLabel(id).toUpperCase();
+                b.onclick = () => switchPlayerCharacter(id);
+                btns.appendChild(b);
+            });
+        }
+        function switchPlayerCharacter(newId) {
+            if (!newId || newId === activeCharId) return;
+            if (!getSwitchableIds().includes(newId)) return;
+            activeCharId = newId;
+            loadCharacter();
         }
         let charData = {};
         let globalState = { characters: {}, webhook: "", presets: defaultPresets, armorPresets: defaultArmorPresets };
@@ -3064,6 +3120,7 @@ async function applyDamageToTracker(storageKey, weaponObj, damageTotal) {
             startDiagnosticsTicker();
             // Incapacitation overlay + bleeding-out banner check.
             checkIncapacitationOverlay();
+            renderPlayerSwitch();
         }
         async function saveCharacter() {
             let showSync = localStorage.getItem('lambdaSyncNotif') === 'on';
@@ -6639,6 +6696,7 @@ ${charData.equippedArmorPenalty > 0 ? `<br><span style="color:#ff9900;">Min Str 
         window.onTargetChange = onTargetChange;
         window.onTargetDodgeChange = onTargetDodgeChange;
         window.switchTab = switchTab;
+        window.switchPlayerCharacter = switchPlayerCharacter;
         window.openEquipModal = openEquipModal;
         window.removeWeaponFromCharacter = removeWeaponFromCharacter;
         window.deletePreset = deletePreset;
