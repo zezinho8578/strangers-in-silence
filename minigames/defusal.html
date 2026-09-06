@@ -533,7 +533,7 @@
                 <div id="code-slots"></div>
                 <div id="code-hint"></div>
                 <div id="code-pad"></div>
-                <div class="phase-hint">DERIVE 4 DIGITS FROM THE SERIAL // WRONG CODE = STRIKE + 5s</div>
+                <div class="phase-hint">READ 4 DIGITS OFF THE SERIAL // WRONG CODE = STRIKE + 5s</div>
             </div>
 
             <div id="game-footer">
@@ -655,12 +655,11 @@
             return order;
         }
 
-        // 4-digit code from the serial: sums of digit pairs, lit LED count,
-        // whole-serial digit sum. Always 4x 0-9.
+        // 4-digit code: the serial's four digits in reading order.
+        // No arithmetic — read D1..D4 straight off the S/N plate.
         function deriveCode(dev) {
             const d = dev.digits;
-            const lit = (dev.leds.red ? 1 : 0) + (dev.leds.green ? 1 : 0) + (dev.leds.yellow ? 1 : 0);
-            return '' + ((d[0] + d[1]) % 10) + ((d[2] + d[3]) % 10) + (lit % 10) + ((d[0] + d[1] + d[2] + d[3]) % 10);
+            return '' + d[0] + d[1] + d[2] + d[3];
         }
         // __PURE_LOGIC_END__
 
@@ -895,15 +894,11 @@
 
         function renderCodeHint() {
             const d = state.device.digits;
-            const lit = (state.device.leds.red ? 1 : 0) + (state.device.leds.green ? 1 : 0) + (state.device.leds.yellow ? 1 : 0);
-            let html = '<div class="manual-title">FUSE CODE — DERIVE FROM S/N ' + state.device.serial + '</div>';
-            html += '<div>C1 = (D1+D2)%10 &nbsp; C2 = (D3+D4)%10 &nbsp; C3 = lit LEDs &nbsp; C4 = (all digits)%10</div>';
+            let html = '<div class="manual-title">FUSE CODE — READ THE 4 DIGITS OFF S/N ' + state.device.serial + '</div>';
+            html += '<div>C1 = 1ST DIGIT &nbsp; C2 = 2ND DIGIT &nbsp; C3 = 3RD DIGIT &nbsp; C4 = 4TH DIGIT</div>';
             if (state.diff.codeMode === 'worked') {
-                html += '<div style="margin-top:6px; opacity:0.9;">WORKED: D=(' + d.join(',') + ') LIT=' + lit +
-                    ' → C1=(' + d[0] + '+' + d[1] + ')%10=' + ((d[0] + d[1]) % 10) +
-                    ' C2=(' + d[2] + '+' + d[3] + ')%10=' + ((d[2] + d[3]) % 10) +
-                    ' C3=' + (lit % 10) +
-                    ' C4=' + ((d[0] + d[1] + d[2] + d[3]) % 10) + '</div>';
+                html += '<div style="margin-top:6px; opacity:0.9;">WORKED: S/N ' + state.device.serial +
+                    ' → DIGITS (' + d.join(',') + ') → CODE ' + state.code + '</div>';
             }
             document.getElementById('code-hint').innerHTML = html;
         }

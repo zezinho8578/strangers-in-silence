@@ -465,7 +465,6 @@
             EASY:   { name: 'EASY',   time: 90, uptime: 2.1,  speed: 0.7,  spreadMult: 0.8,  par: 1200, maxAlive: 5 }
         };
         const TRIGGER_COOLDOWN_MS = 180;
-        const INPUT_COOLDOWN_MS = 400;
 
         const DEFAULT_ARMORY = [
             { id: "crowbar", name: "Crowbar", range: "Melee", damage: "Str+d4", ap: "1", rof: "1", shots: "—", minStr: "d4", damageType: "Melee", icon: "https://i.imgur.com/niLzrfW.png" },
@@ -545,12 +544,23 @@
             if (isNaN(n)) return 1;
             return Math.min(4, Math.max(1, n));
         }
-        function parseMag(shots) {
-            const s = String(shots === undefined || shots === null ? '—' : shots);
-            if (/unlimited|—|varies/i.test(s)) return Infinity;
+        function parseMag(shots, w) {
+            const s = String(shots === undefined || shots === null ? '' : shots);
+            if (/unlimited/i.test(s)) return Infinity;
             const m = s.match(/\d+/);
-            if (!m) return Infinity;
-            return Math.max(1, parseInt(m[0], 10));
+            if (m) return Math.max(1, parseInt(m[0], 10));
+            if (w && typeof w === 'object') {
+                // Fall back to the sheet's live-ammo fields (owned weapons).
+                for (const k of ['maxMag', 'magAmmo', 'projectileCount']) {
+                    const v = parseInt(w[k], 10);
+                    if (!isNaN(v) && v > 0) return v;
+                }
+                // No mag data: melee/contact/ammo-less gear needs no reload;
+                // anything with a ranged bracket is a gun with unknown mag.
+                if (!isMeleeRange(w.range) && /\/\s*\d/.test(String(w.range || ''))) return 10;
+                return Infinity;
+            }
+            return (/—|contact/i.test(s) || s === '') ? Infinity : 10;
         }
         function parseMinStr(minStr) {
             const m = String(minStr || 'd4').match(/d(\d+)/i);
@@ -568,14 +578,14 @@
             const brackets = parseRangeBrackets(w.range);
             const ap = parseAp(w.ap);
             const rof = parseRof(w.rof);
-            const mag = parseMag(w.shots);
+            const mag = parseMag(w.shots, w);
             const minDie = parseMinStr(w.minStr);
             const avg = damageAvg(w.damage);
             const id = w.id || 'custom';
             const spread = SPREAD_BASE[id] || [12, 20, 32];
             const isEnergy = String(w.damageType || '') === 'Energy';
             const heavy = !!w.heavyWeapon;
-            const splash = (id === 'rpg' || id === 'grenade' || id === 'mine');
+            const splash = (id === 'rpg' || id === 'grenade' || id === 'mine') || /grenade|rocket|rpg|splash/i.test(String(w.name || ''));
             let reloadMs = 1500;
             if (mag === 1) reloadMs = (id === 'rpg') ? 3000 : 2000;
             else if (mag <= 2) reloadMs = 2200;
@@ -642,8 +652,10 @@
         function arcadeHitProb(params, kind, lane, recoil, diffName) {
             const def = TARGET_DEFS[kind] || TARGET_DEFS.paper;
             if (def.noShoot) return 0.97; // civs are easy to (wrongly) hit
+            const spreadMult = diffName === 'HARD' ? 1.25 : diffName === 'EASY' ? 0.8 : 1.0;
             let base = lane === 'close' ? 0.95 : lane === 'mid' ? 0.86 : 0.72;
-            const spread = lane === 'close' ? params.spreadClose : lane === 'mid' ? params.spreadMid : params.spreadFar;
+            const rawSpread = lane === 'close' ? params.spreadClose : lane === 'mid' ? params.spreadMid : params.spreadFar;
+            const spread = rawSpread * spreadMult;
             base -= (spread - 10) * 0.006;
             if (kind === 'bullseye') base -= 0.12;
             if (kind === 'drone') base -= 0.18;
@@ -738,6 +750,55 @@
             if ((streak || 0) >= 5) pts *= 1 + Math.min(0.5, Math.floor(streak / 5) * 0.1);
             return Math.round(pts);
         }
+        // Attainable-maximum score for one wave (base x lane, before streaks).
+        // Medal thresholds are fractions of this, so waves with different
+        // ceilings (W1 papers vs W5 drones at x2) grade fairly.
+        function waveParPure(waveIdx) {
+            const kinds = WAVE_KINDS[waveIdx] || [];
+            const lanes = WAVE_LANES[waveIdx] || [];
+            let sum = 0;
+            for (let i = 0; i < kinds.length; i++) {
+                const def = TARGET_DEFS[kinds[i]] || TARGET_DEFS.paper;
+                if (def.noShoot) continue;
+                sum += def.base * laneMult(lanes[i % lanes.length] || 'close');
+            }
+            return Math.round(sum);
+        }
+        // Single trigger resolution: rolls each pellet for hit stats, but yields
+        // exactly ONE target outcome per trigger (kill/chip/absorbed/miss/civ).
+        // Extra hitting pellets add a capped bonus on kills only. This keeps RoF
+        // valuable (more pellets = likelier hit + small bonus) without letting
+        // burst weapons multi-score one target or multi-penalize one CIV.
+        // Returns {hits, fired, outcome, raise, bonus, breakdown, sim, dmg}.
+        function resolveTriggerPure(params, kind, lane, diffName, opts) {
+            opts = opts || {};
+            const rand = opts.rand || Math.random;
+            const def = TARGET_DEFS[kind] || TARGET_DEFS.paper;
+            const n = Math.max(1, params.pellets || 1);
+            if (def.noShoot) {
+                return { hits: n, fired: n, outcome: 'civ', raise: false, bonus: 0, breakdown: 'CIVILIAN HIT (hold fire)' };
+            }
+            let hits = 0, raise = false, first = null;
+            for (let i = 0; i < n; i++) {
+                const r = resolveShotPure(params, kind, lane, diffName, { sim: opts.sim, recoil: opts.recoil, rand });
+                if (r.hit) {
+                    hits++;
+                    if (!first) first = r;
+                    if (r.raise) raise = true;
+                }
+            }
+            if (!hits) {
+                return { hits: 0, fired: n, outcome: 'miss', raise: false, bonus: 0, breakdown: opts.sim ? 'all pellets miss vs TN4' : 'miss (arcade spread)' };
+            }
+            const bonus = Math.min(2, hits - 1) * 10;
+            if (first.absorbed) {
+                return { hits, fired: n, outcome: 'absorbed', raise, bonus: 0, breakdown: first.breakdown, sim: first.sim, dmg: first.dmg };
+            }
+            if (first.chip && !first.killed) {
+                return { hits, fired: n, outcome: 'chip', raise, bonus: 0, breakdown: first.breakdown, sim: first.sim, dmg: first.dmg };
+            }
+            return { hits, fired: n, outcome: 'kill', raise, bonus, breakdown: first.breakdown, sim: first.sim, dmg: first.dmg };
+        }
         // __PURE_LOGIC_END__
 
         let ARMORY = [];
@@ -749,20 +810,23 @@
             try {
                 const db = JSON.parse(localStorage.getItem('localFallbackDB') || 'null');
                 if (db) {
+                    // Live campaign presets override the baked-in fallbacks.
                     if (Array.isArray(db.presets)) {
                         db.presets.forEach(p => {
                             if (!p) return;
                             const k = p.id || ('preset-' + p.name);
-                            if (k && !map.has(k)) map.set(k, Object.assign({}, p, { _owned: false }));
+                            if (k) map.set(k, Object.assign({}, p, { _owned: false }));
                         });
                     }
+                    // Owned character weapons override same-id presets so
+                    // customized stats actually reach the range.
                     if (db.characters) {
                         Object.values(db.characters).forEach(c => {
                             if (c && Array.isArray(c.weapons)) {
                                 c.weapons.forEach(w => {
                                     if (!w || (!w.id && !w.name)) return;
                                     const k = w.id || ('owned-' + String(w.name).toLowerCase().replace(/[^a-z0-9]+/g, '-'));
-                                    if (!map.has(k)) map.set(k, Object.assign({}, w, { id: k, _owned: true }));
+                                    map.set(k, Object.assign({}, w, { id: k, _owned: true }));
                                 });
                             }
                         });
@@ -824,11 +888,11 @@
             diff: null, weapon: null, params: null,
             score: 0, shotsFired: 0, pelletsFired: 0, pelletsHit: 0,
             streak: 0, bestStreak: 0, ammo: 0, reloading: false,
-            waveIdx: 0, waveScores: [0, 0, 0, 0, 0],
+            waveIdx: 0, waveScores: [0, 0, 0, 0, 0], civHits: [0, 0, 0, 0, 0],
             targets: [], nextTid: 1, events: [],
             timeLeft: 0, endTime: 0, timer: null, raf: null, lastTick: 0,
             roll: 0, shooter: 'OPERATOR', active: false,
-            lastTriggerAt: 0, lastInputAt: 0, recoil: 0, swayT: 0,
+            lastTriggerAt: 0, recoil: 0, swayT: 0, reloadTimeout: null,
             elapsed: 0, feed: [], _ended: false, boardTab: 'local', sharedCache: null
         };
 
@@ -899,7 +963,23 @@
                 t += (w === 4) ? 0 : waveDur;
             }
             events.sort((a, b) => a.at - b.at);
+            // Stretch/compress the timeline so the last target lands shortly
+            // before the clock runs out on every difficulty (no dead air on
+            // EASY, no impossible crunch on HARD).
+            const lastAt = events.length ? events[events.length - 1].at : 0;
+            const wantLast = Math.max(10, diff.time - 6);
+            if (lastAt > 0) {
+                const k = wantLast / lastAt;
+                events.forEach(ev => { ev.at = Math.round(ev.at * k * 10) / 10; });
+                events.sort((a, b) => a.at - b.at);
+            }
             return events;
+        }
+
+        function insertEventSorted(ev) {
+            let i = state.events.length;
+            while (i > 0 && state.events[i - 1].at > ev.at) i--;
+            state.events.splice(i, 0, ev);
         }
 
         function laneSize(kind, lane) {
@@ -1015,13 +1095,6 @@
             return { x: cx - r.left, y: cy - r.top, rect: r };
         }
 
-        function inputReady() {
-            const now = Date.now();
-            if (now - state.lastInputAt < INPUT_COOLDOWN_MS) return false;
-            state.lastInputAt = now;
-            return true;
-        }
-
         function fireAt(tid, e) {
             if (!state.active) return;
             const now = Date.now();
@@ -1052,84 +1125,89 @@
                 setTimeout(() => { gc.style.transform = ''; }, 60);
             }
 
+            // Points always credit the active clock wave (matches the HUD banner),
+            // not the wave a straggler target spawned in.
+            const wave = state.waveIdx;
             const target = tid === null || tid === undefined ? null : state.targets.find(t => t.id === tid) || null;
-            const aimKind = target ? target.kind : 'paper';
-            const aimLane = target ? target.lane : 'mid';
-            let anyKill = false;
-
-            for (let i = 0; i < p.pellets; i++) {
-                state.pelletsFired++;
-                const res = resolveShotPure(p, aimKind, aimLane, state.diff.name, { sim: simMode, recoil: state.recoil });
-                if (!target) {
-                    registerMiss(pt, 'MISS — no target');
-                    continue;
-                }
-                if (res.civFault) {
-                    state.pelletsHit++;
-                    state.score -= 100;
-                    state.waveScores[target.wave] -= 100;
-                    state.streak = 0;
-                    AudioEngine.error();
-                    target.el.classList.add('hitflash');
-                    floatText(pt.x, pt.y, '-100 CIV!', '#e8e8e8');
-                    feedMsg('CIVILIAN HIT (−100, streak reset) — HOLD FIRE on white', 'bad');
-                    removeTarget(target.id);
-                    updateHud();
-                    continue;
-                }
-                if (!res.hit) {
-                    registerMiss(pt, simMode && res.breakdown ? res.breakdown : null);
-                    continue;
-                }
-                // Hit landed on the aimed target
-                state.pelletsHit++;
-                if (res.absorbed) {
-                    state.streak = 0;
-                    AudioEngine.ping();
-                    target.el.classList.add('damaged');
-                    setTimeout(() => { try { target.el.classList.remove('damaged'); } catch (err) {} }, 300);
-                    const pts = 10;
-                    state.score += pts;
-                    state.waveScores[target.wave] += pts;
-                    floatText(pt.x, pt.y, 'PING +' + pts, '#ffaa00');
-                    feedMsg(escapeHtml(res.breakdown) + ' (+' + pts + ')', 'warn');
-                    if (simMode) feedMsg('SIM: ' + escapeHtml(res.breakdown), 'sim');
-                    updateHud();
-                    continue;
-                }
-                if (res.chip && !res.killed) {
-                    // Arcade armor chip: first tap damages, second kills
-                    target.hp -= 1;
-                    target.el.classList.add('damaged');
-                    AudioEngine.ping();
-                    if (target.hp <= 0) {
-                        killTarget(target, pt, res);
-                        anyKill = true;
-                    } else {
-                        const pts = 25;
-                        state.score += pts;
-                        state.waveScores[target.wave] += pts;
-                        state.streak++;
-                        state.bestStreak = Math.max(state.bestStreak, state.streak);
-                        floatText(pt.x, pt.y, 'CHIP +' + pts, '#ffaa00');
-                        feedMsg('Armor chip (+' + pts + ') — one more on target', 'warn');
-                        updateHud();
-                    }
-                    continue;
-                }
-                killTarget(target, pt, res);
-                anyKill = true;
-                break; // remaining pellets of this trigger don't double-kill same target
+            if (!target) {
+                // Empty range: one miss per trigger, no feed spam.
+                state.pelletsFired += p.pellets;
+                state.streak = 0;
+                floatText(pt.x, pt.y, 'MISS', '#ff0040');
+                updateHud();
+                return;
             }
 
+            // Exactly one outcome per trigger (see resolveTriggerPure): burst
+            // pellets feed hit stats, but scoring/streaks apply once.
+            const res = resolveTriggerPure(p, target.kind, target.lane, state.diff.name, { sim: simMode, recoil: state.recoil });
+            state.pelletsFired += res.fired;
+            state.pelletsHit += res.hits;
+
+            if (res.outcome === 'miss') {
+                state.streak = 0;
+                floatText(pt.x, pt.y, 'MISS', '#ff0040');
+                if (simMode) feedMsg('SIM: ' + escapeHtml(res.breakdown) + ' — ' + target.kind + ' (' + target.lane + ')', 'sim');
+                else feedMsg('Miss — ' + target.kind + ' (' + target.lane + ')', '');
+                updateHud();
+                return;
+            }
+            if (res.outcome === 'civ') {
+                state.score -= 100;
+                state.waveScores[wave] -= 100;
+                state.civHits[wave]++;
+                state.streak = 0;
+                AudioEngine.error();
+                target.el.classList.add('hitflash');
+                floatText(pt.x, pt.y, '-100 CIV!', '#e8e8e8');
+                feedMsg('CIVILIAN HIT (−100, streak reset) — HOLD FIRE on white', 'bad');
+                removeTarget(target.id);
+                updateHud();
+                return;
+            }
+            if (res.outcome === 'absorbed') {
+                state.streak = 0;
+                AudioEngine.ping();
+                target.el.classList.add('damaged');
+                setTimeout(() => { try { target.el.classList.remove('damaged'); } catch (err) {} }, 300);
+                const pts = 10;
+                state.score += pts;
+                state.waveScores[wave] += pts;
+                floatText(pt.x, pt.y, 'PING +' + pts, '#ffaa00');
+                feedMsg((simMode ? 'SIM: ' : '') + escapeHtml(res.breakdown) + ' (+' + pts + ')', simMode ? 'sim' : 'warn');
+                updateHud();
+                return;
+            }
+            if (res.outcome === 'chip') {
+                // Arcade armor chip: one HP per trigger, never more.
+                target.hp -= 1;
+                target.el.classList.add('damaged');
+                AudioEngine.ping();
+                if (target.hp <= 0) {
+                    killTarget(target, pt, { raise: res.raise, breakdown: res.breakdown, bonus: res.bonus });
+                } else {
+                    const pts = 25;
+                    state.score += pts;
+                    state.waveScores[wave] += pts;
+                    state.streak++;
+                    state.bestStreak = Math.max(state.bestStreak, state.streak);
+                    floatText(pt.x, pt.y, 'CHIP +' + pts, '#ffaa00');
+                    feedMsg('Armor chip (+' + pts + ') — one more on target', 'warn');
+                    updateHud();
+                }
+                return;
+            }
+            // Kill.
+            killTarget(target, pt, { raise: res.raise, breakdown: res.breakdown, bonus: res.bonus });
+
             // Splash (RPG/grenade/mine): damage neighbors in same lane
-            if (target && p.splash && anyKill) {
+            if (p.splash) {
                 const splashables = state.targets.filter(t => t.id !== target.id && t.lane === target.lane && t.kind !== 'civ');
                 let splashed = 0;
                 splashables.slice(0, 2).forEach(t => {
                     const pts = Math.max(10, Math.round(scoreShotPure(t.kind, t.lane, false, state.streak) / 2));
                     state.score += pts;
-                    state.waveScores[t.wave] += pts;
+                    state.waveScores[wave] += pts;
                     try {
                         const r = t.el.getBoundingClientRect();
                         const wr = document.getElementById('range-wrap').getBoundingClientRect();
@@ -1146,21 +1224,14 @@
             updateHud();
         }
 
-        function registerMiss(pt, note) {
-            state.streak = 0;
-            if (note && String(note).indexOf('SIM:') !== 0 && simMode) feedMsg('SIM: ' + escapeHtml(note || 'miss'), 'sim');
-            else if (note && simMode) feedMsg(escapeHtml(note), 'sim');
-            floatText(pt.x, pt.y, 'MISS', '#ff0040');
-            updateHud();
-        }
-
         function killTarget(target, pt, res) {
             res = res || {};
             state.streak++;
             state.bestStreak = Math.max(state.bestStreak, state.streak);
-            const pts = scoreShotPure(target.kind, target.lane, !!res.raise, state.streak);
+            let pts = scoreShotPure(target.kind, target.lane, !!res.raise, state.streak);
+            if (res.bonus) pts += res.bonus; // extra burst pellets, capped in resolveTriggerPure
             state.score += pts;
-            state.waveScores[target.wave] += pts;
+            state.waveScores[state.waveIdx] += pts;
             AudioEngine.lock();
             target.el.classList.add('hitflash');
             const tid = target.id;
@@ -1178,7 +1249,9 @@
             AudioEngine.reload();
             feedMsg('Reloading ' + state.params.name + '…', '');
             updateHud();
-            setTimeout(() => {
+            if (state.reloadTimeout) clearTimeout(state.reloadTimeout);
+            state.reloadTimeout = setTimeout(() => {
+                state.reloadTimeout = null;
                 if (!state.active && state.timer === null) { state.reloading = false; return; }
                 state.ammo = state.params.magSize;
                 state.reloading = false;
@@ -1186,6 +1259,10 @@
                 feedMsg('Reloaded (' + state.ammo + ' rds)', 'good');
                 updateHud();
             }, state.params.reloadMs);
+        }
+
+        function clearReloadTimeout() {
+            if (state.reloadTimeout) { clearTimeout(state.reloadTimeout); state.reloadTimeout = null; }
         }
 
         function startTimer() {
@@ -1223,17 +1300,29 @@
 
             // Wave advance by elapsed
             let acc = 0;
+            let newWave = 4;
             for (let w = 0; w < 5; w++) {
                 acc += WAVE_DUR[w];
-                if (state.elapsed < acc) { state.waveIdx = w; break; }
-                state.waveIdx = Math.min(4, w + 1);
+                if (state.elapsed < acc) { newWave = w; break; }
+            }
+            if (newWave !== state.waveIdx) {
+                // Leaving a discipline wave with zero CIV hits earns a bonus,
+                // so waiting the CIVs out is no longer free.
+                const prev = state.waveIdx;
+                if (WAVE_KINDS[prev] && WAVE_KINDS[prev].indexOf('civ') !== -1 && state.civHits[prev] === 0) {
+                    const bonus = 150;
+                    state.score += bonus;
+                    state.waveScores[prev] += bonus;
+                    feedMsg('DISCIPLINE BONUS +' + bonus + ' (W' + (prev + 1) + ' clean)', 'good');
+                }
+                state.waveIdx = newWave;
             }
 
             // Spawn due events
             while (state.events.length && state.events[0].at <= state.elapsed) {
                 const ev = state.events.shift();
                 if (state.targets.length < state.diff.maxAlive + 2) spawnTarget(ev);
-                else state.events.push({ at: ev.at + 0.8, wave: ev.wave, kind: ev.kind, lane: ev.lane, x: ev.x });
+                else insertEventSorted({ at: ev.at + 0.8, wave: ev.wave, kind: ev.kind, lane: ev.lane, x: ev.x });
             }
 
             // Move drones + expire old targets
@@ -1256,10 +1345,22 @@
                 }
             }
 
+            // Course clear: nothing left to spawn and nothing alive → bank a
+            // time bonus and finish early instead of idling to the clock.
+            if (state.active && !state.events.length && !state.targets.length && state.elapsed > 8) {
+                const bonus = state.timeLeft * 5;
+                state.score += bonus;
+                state.waveScores[state.waveIdx] += bonus;
+                feedMsg('COURSE CLEAR — time bonus +' + bonus, 'good');
+                updateHud();
+                endGame(true);
+                return;
+            }
+
             // Crosshair spread ring follows recoil + lane base
             const ch = document.getElementById('crosshair');
             if (ch.style.display === 'block' && state.params) {
-                const base = (state.params.spreadClose + state.params.spreadMid + state.params.spreadFar) / 3;
+                const base = ((state.params.spreadClose + state.params.spreadMid + state.params.spreadFar) / 3) * state.diff.spreadMult;
                 const d = Math.round(base + state.recoil * 34);
                 document.getElementById('ch-ring').style.width = d + 'px';
                 document.getElementById('ch-ring').style.height = d + 'px';
@@ -1271,6 +1372,7 @@
         function startGame(diff) {
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            clearReloadTimeout();
             clearTargets();
             state.diff = diff;
             state.score = 0;
@@ -1283,6 +1385,7 @@
             state.reloading = false;
             state.waveIdx = 0;
             state.waveScores = [0, 0, 0, 0, 0];
+            state.civHits = [0, 0, 0, 0, 0];
             state.nextTid = 1;
             state.events = buildSpawnPlan(diff, (Math.random() * 1e9) | 0);
             state.lastTick = 0;
@@ -1292,7 +1395,6 @@
             state.feed = [];
             state._ended = false;
             state.lastTriggerAt = 0;
-            state.lastInputAt = 0;
             state.sharedCache = null;
             state.active = true;
             document.getElementById('feed').innerHTML = '';
@@ -1374,11 +1476,13 @@
             }
         }
 
-        function medalFor(score, diffName) {
-            const par = DIFF[diffName].par / 5;
-            if (score >= par * 0.9) return 'GOLD';
-            if (score >= par * 0.6) return 'SILVER';
-            if (score >= par * 0.35) return 'BRONZE';
+        function medalFor(score, diffName, waveIdx) {
+            // Grade against the wave's own attainable ceiling (base x lane),
+            // not an equal slice of overall par — waves have different mixes.
+            const ceiling = waveParPure(waveIdx === undefined ? 0 : waveIdx) || (DIFF[diffName].par / 5);
+            if (score >= ceiling * 0.9) return 'GOLD';
+            if (score >= ceiling * 0.6) return 'SILVER';
+            if (score >= ceiling * 0.35) return 'BRONZE';
             return 'NONE';
         }
 
@@ -1423,6 +1527,7 @@
         function endGame(completed) {
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            clearReloadTimeout();
             if (!state.active && state._ended) return;
             state.active = false;
             state._ended = true;
@@ -1460,7 +1565,7 @@
             const medals = document.getElementById('wave-medals');
             medals.innerHTML = '<div style="letter-spacing:2px;color:var(--warning);margin-bottom:4px;">CHALLENGES (SINGLE COURSE — 5 WAVES):</div>' +
                 WAVE_NAMES.map((n, i) => {
-                    const m = medalFor(state.waveScores[i], state.diff.name);
+                    const m = medalFor(state.waveScores[i], state.diff.name, i);
                     return '<div>W' + (i + 1) + ' ' + n + ': ' + state.waveScores[i] + ' pts — <span class="medal-' + m + '">' + m + '</span></div>';
                 }).join('');
 
@@ -1556,6 +1661,7 @@
             state.active = false;
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            clearReloadTimeout();
             clearTargets();
             AudioEngine.click();
             document.getElementById('roll-input').value = '';
@@ -1568,6 +1674,7 @@
             state.active = false;
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+            clearReloadTimeout();
             window.location.href = '../dashboard.html';
         });
         document.getElementById('back-to-dash').addEventListener('click', () => {
