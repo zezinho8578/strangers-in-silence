@@ -4792,7 +4792,9 @@ ${reloadBtn}
         // 10. GLOBAL NAV TABS & HOOK TRIGGERS
         // ==========================================
         function switchTab(tabId) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active-tab'));
+            // Scoped to the tab bar only: the operative switcher reuses .tab-btn
+            // styling and must keep its active highlight across tab switches.
+            document.querySelectorAll('.tab-bar .tab-btn').forEach(btn => btn.classList.remove('active-tab'));
             document.querySelectorAll('.tab-content').forEach(content => content.style.display = 'none');
             document.getElementById(`tab-${tabId}`).classList.add('active-tab');
             document.getElementById(`section-${tabId}`).style.display = 'block';
