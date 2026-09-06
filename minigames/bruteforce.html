@@ -23,6 +23,8 @@
             --warning: #ffaa00;
         }
 
+        html, body { height: 100%; }
+
         body {
             background: var(--bg);
             background-image:
@@ -31,12 +33,17 @@
             color: var(--primary);
             font-family: 'Courier New', 'Lucida Console', monospace;
             min-height: 100vh;
+            min-height: 100dvh;
+            max-height: 100vh;
+            max-height: 100dvh;
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow-y: auto;
-            overflow-x: hidden;
+            /* Page itself never scrolls (either axis): #game-container is the
+               single sanctioned scroller via max-height + overflow-y below. */
+            overflow: hidden;
             user-select: none;
+            padding: 12px 0;
         }
 
         :focus-visible {
@@ -93,15 +100,27 @@
             background: var(--bg-panel);
             width: 95%;
             max-width: 850px;
-            max-height: 95vh;
+            max-height: calc(100vh - 24px);
+            max-height: calc(100dvh - 24px);
             overflow-y: auto;
             overflow-x: hidden;
+            /* Menu/game must never show a scrollbar chrome: keep scroll
+               function (wheel/touch/keyboard) for tiny viewports, but the
+               bar itself stays hidden. Layout below is compacted so normal
+               screens never need to scroll at all. */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
             position: relative;
+            /* margin:auto = safe centering: centered when space allows,
+               top-aligned (never clipped) when content overflows. */
+            margin-top: auto;
+            margin-bottom: auto;
             box-shadow:
                 0 0 40px rgba(0, 255, 65, 0.15),
                 inset 0 0 40px rgba(0, 255, 65, 0.03),
                 inset 0 1px 0 rgba(0, 255, 65, 0.2);
         }
+        #game-container::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
         #game-container::before,
         #game-container::after {
@@ -1008,7 +1027,6 @@
             startTimer();
             state.raf = requestAnimationFrame(loop);
             if (document.activeElement) document.activeElement.blur();
-            try { document.getElementById('lock-btn').focus({ preventScroll: true }); } catch (e) { try { document.getElementById('lock-btn').focus(); } catch (_e) {} }
         }
 
         function endGame(won) {
@@ -1167,7 +1185,7 @@
         document.getElementById('roll-submit').addEventListener('click', submitRoll);
         document.getElementById('roll-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitRoll(); });
         document.getElementById('roll-input').addEventListener('wheel', e => { e.target.blur(); });
-        document.getElementById('lock-btn').addEventListener('click', () => { AudioEngine.init(); tryLock(state.activeIdx); });
+        document.getElementById('lock-btn').addEventListener('click', (e) => { AudioEngine.init(); if (e && e.currentTarget) e.currentTarget.blur(); tryLock(state.activeIdx); });
         document.addEventListener('keydown', e => {
             if (!document.getElementById('game-screen').classList.contains('active')) return;
             const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
@@ -1176,8 +1194,11 @@
                 if (e.repeat) return;
                 // Let the focused LOCK button's native click handle it (avoid double-fire).
                 if (e.target && e.target.id === 'lock-btn') return;
-                // Ignore hidden/disabled targets (focus trap).
-                if (e.target && (e.target.offsetParent === null || e.target.disabled)) return;
+                // Ignore presses from a disabled control (e.g. during lock
+                // recharge). Do NOT check offsetParent===null here:
+                // document.body.offsetParent is always null, so that check
+                // swallowed Space whenever focus was on the body.
+                if (e.target && e.target.disabled) return;
                 // Don't double-fire when focus is in roll input / other buttons.
                 if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') && e.target.id !== 'lock-btn') return;
                 e.preventDefault();

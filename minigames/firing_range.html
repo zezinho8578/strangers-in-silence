@@ -371,14 +371,14 @@
             <div class="boot-line">> RANGE: 3 LANES // CLOSE / MID / FAR</div>
             <div class="boot-line">> ARMORY SYNC: <span class="good">UNIFIED WEAPON LIST</span></div>
             <div class="boot-line">> TARGETS: PAPER / POP-UP / HOSTILE / <span class="highlight">CIV (HOLD FIRE)</span> / ARMORED / BULLSEYE / DRONE</div>
-            <div class="boot-line">> SCORING: DISTANCE x1/x1.5/x2 // RAISE +50% // STREAK BONUS // ESCAPED −15 // EXPERT 1.5xPAR+60%ACC</div>
+            <div class="boot-line">> SCORING: DISTANCE x1/x1.5/x2 // RAISE +50% // STREAK 7+ // MISS −10 // ESCAPED −30 // WIN NEEDS PAR+ACC // EXPERT 1.5xPAR+60%ACC</div>
             <div class="boot-line">> <span class="good">STATUS: AWAITING OPERATOR INPUT</span><span class="cursor"></span></div>
         </div>
 
         <div id="roll-screen" class="screen">
             <h1>FIRING RANGE</h1>
             <p>INPUT SHOOTING SKILL CHECK (1–20)</p>
-            <p class="tiny">FAILED [1-3] = HARD &nbsp;│&nbsp; SUCCESS [4-7] = NORMAL &nbsp;│&nbsp; RAISE [8+] = EASY</p>
+            <p class="tiny">FAILED [1-4] = HARD &nbsp;│&nbsp; SUCCESS [5-12] = NORMAL &nbsp;│&nbsp; RAISE [13+] = EASY</p>
             <div class="armory-grid">
                 <div>
                     <div class="field-label">Shooting roll</div>
@@ -437,7 +437,7 @@
             <div id="range-controls">
                 <button class="btn" id="reload-btn" type="button">RELOAD [R]</button>
             </div>
-            <div id="game-footer">CLICK / TAP TARGETS TO FIRE // R = RELOAD // CIV = HOLD FIRE (WALKS FREE) // ESCAPED −15 + STREAK LOST // EXPERT = 1.5xPAR + 60% ACC // TIMER NEVER STOPS</div>
+            <div id="game-footer">CLICK / TAP TARGETS TO FIRE // R = RELOAD // CIV = HOLD FIRE (WALKS FREE) // MISS −10 // ESCAPED −30 + STREAK LOST // WIN NEEDS PAR + ACC (E30/N40/H50) // EXPERT = 1.5xPAR + 60% ACC // TIMER NEVER STOPS</div>
         </div>
 
         <div id="result-screen" class="screen">
@@ -458,7 +458,7 @@
                 <div><span>Best Acc</span><span id="result-best-acc">—</span></div>
             </div>
             <div id="wave-medals"></div>
-            <div id="result-rules" style="max-width:520px;margin:8px auto 0;font-size:10px;letter-spacing:1px;color:var(--primary-dim);line-height:1.7;">ESCAPED TARGET −15 + STREAK LOST (CIVS WALK FREE) // DISCIPLINE BONUS CUT TO +50 IF ANY ESCAPED // TIME BONUS HALVED IF ANY ESCAPED // EXPERT = 1.5x PAR + 60% ACC</div>
+            <div id="result-rules" style="max-width:520px;margin:8px auto 0;font-size:10px;letter-spacing:1px;color:var(--primary-dim);line-height:1.7;">MISS −10 // ESCAPED −30 + STREAK LOST (CIVS WALK FREE) // DISCIPLINE +100 VOID IF ANY ESCAPED // TIME BONUS VOID IF ANY ESCAPED // WIN NEEDS PAR + ACC (E30/N40/H50) // EXPERT = 1.5x PAR + 60% ACC</div>
             <div id="board-tabs">
                 <span class="field-label">SHARED TOP-10</span>
             </div>
@@ -621,17 +621,19 @@
             if (msg) setTimeout(() => { try { if (t.textContent === String(msg)) t.textContent = ''; } catch (e) {} }, 4000);
         }
 
-        // Difficulty pressure tuning (Issue 3): short uptimes force fast target
-        // acquisition; HARD drones are faster (speed 1.5). EXPERT also gates on
-        // accuracy (see endGame). EASY stays completable with longer windows.
+        // Hardcore tuning: short uptimes force fast target acquisition; HARD
+        // drones are much faster (speed 2.0). Wins also gate on accuracy
+        // (see WIN_MIN_ACC / endGame). EASY is leaner now, not a free pass.
         const EXPERT_MIN_ACC = 60;
-        const ESCAPED_PENALTY = 15;
+        const ESCAPED_PENALTY = 30;
+        const MISS_PENALTY = 10;
+        const WIN_MIN_ACC = { HARD: 50, NORMAL: 40, EASY: 30 };
         const DIFF = {
-            HARD:   { name: 'HARD',   time: 60, uptime: 0.7,  speed: 1.5, spreadMult: 1.25, par: 1800, maxAlive: 4 },
-            NORMAL: { name: 'NORMAL', time: 75, uptime: 1.0,  speed: 1.0,  spreadMult: 1.0,  par: 1500, maxAlive: 4 },
-            EASY:   { name: 'EASY',   time: 90, uptime: 1.4,  speed: 0.7,  spreadMult: 0.8,  par: 1200, maxAlive: 5 }
+            HARD:   { name: 'HARD',   time: 55, uptime: 0.6,  speed: 2.0, spreadMult: 1.4,  par: 3200, maxAlive: 4 },
+            NORMAL: { name: 'NORMAL', time: 65, uptime: 0.85, speed: 1.4, spreadMult: 1.15, par: 2800, maxAlive: 4 },
+            EASY:   { name: 'EASY',   time: 80, uptime: 1.05, speed: 1.0, spreadMult: 1.0,  par: 2200, maxAlive: 4 }
         };
-        const TRIGGER_COOLDOWN_MS = 180;
+        const TRIGGER_COOLDOWN_MS = 280;
 
         const DEFAULT_ARMORY = [
             { id: "crowbar", name: "Crowbar", range: "Melee", damage: "Str+d4", ap: "1", rof: "1", shots: "—", minStr: "d4", damageType: "Melee", icon: "https://i.imgur.com/niLzrfW.png" },
@@ -648,7 +650,7 @@
             { id: "grenade", name: "Frag Grenade", range: "Throw 6/12/18", damage: "4d6", ap: "2", rof: "1", shots: "1", minStr: "d6", damageType: "Ballistic", icon: "https://i.imgur.com/9a4Uprg.png" },
             { id: "mine", name: "SLAM Mine", range: "Contact", damage: "5d6", ap: "3", rof: "1", shots: "1", minStr: "d4", damageType: "Ballistic", icon: "https://i.imgur.com/38WpCXz.png" },
             { id: "grav-punt", name: "Gravity Gun (Punt)", range: "6/12/24", damage: "Varies", ap: "Varies", rof: "1", shots: "—", minStr: "d6", damageType: "Ballistic", icon: "https://i.imgur.com/fAMbiF1.png" },
-            { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "2", shots: "Unlimited", minStr: "d6", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/vhkAPmf.png" },
+            { id: "grav-charged", name: "Gravity Gun (Supercharged)", range: "12/24/48", damage: "4d10", ap: "Ignore Armor", rof: "1", shots: "12", minStr: "d6", heavyWeapon: true, damageType: "Energy", icon: "https://i.imgur.com/vhkAPmf.png" },
             { id: "bugbait", name: "Bugbait", range: "12/24/48", damage: "Special", ap: "—", rof: "1", shots: "1", minStr: "d4", damageType: "Ballistic", icon: "https://i.imgur.com/gwitRFd.png" }
         ];
 
@@ -738,22 +740,29 @@
             return m ? parseInt(m[1], 10) : 4;
         }
         const SPREAD_BASE = {
-            'usp-match': [10, 17, 28], 'magnum-357': [8, 13, 21], 'mp7': [13, 21, 33],
-            'ar2': [12, 18, 27], 'spas12': [15, 32, 58], 'spas12-double': [17, 36, 64],
-            'crossbow': [6, 8, 11], 'rpg': [11, 13, 15], 'grenade': [14, 18, 24],
-            'ar2-orb': [7, 9, 12], 'grav-charged': [9, 13, 19], 'grav-punt': [16, 30, 52],
+            'usp-match': [12, 20, 32], 'magnum-357': [10, 16, 25], 'mp7': [15, 25, 39],
+            'ar2': [14, 22, 33], 'spas12': [15, 32, 58], 'spas12-double': [17, 36, 64],
+            'crossbow': [9, 14, 20], 'rpg': [11, 13, 15], 'grenade': [14, 18, 24],
+            'ar2-orb': [10, 15, 22], 'grav-charged': [12, 20, 32], 'grav-punt': [16, 30, 52],
             'bugbait': [18, 30, 46], 'crowbar': [30, 80, 110], 'stunstick': [28, 76, 104], 'mine': [26, 70, 100]
         };
         function weaponToRangeParams(w) {
             w = w || {};
             const brackets = parseRangeBrackets(w.range);
             const ap = parseAp(w.ap);
-            const rof = parseRof(w.rof);
-            const mag = parseMag(w.shots, w);
+            let rof = parseRof(w.rof);
+            let mag = parseMag(w.shots, w);
             const minDie = parseMinStr(w.minStr);
             const avg = damageAvg(w.damage);
             const id = w.id || 'custom';
-            const spread = SPREAD_BASE[id] || [12, 20, 32];
+            // Hardcore outlier clamp: supercharged grav gun is single-shot with
+            // a finite cell (no infinite spam), even for live/GM-synced copies
+            // that still carry the old Unlimited tag.
+            if (id === 'grav-charged') {
+                rof = Math.min(rof, 1);
+                mag = isFinite(mag) ? Math.min(mag, 12) : 12;
+            }
+            const spread = SPREAD_BASE[id] || [14, 24, 38];
             const isEnergy = String(w.damageType || '') === 'Energy';
             const heavy = !!w.heavyWeapon;
             const splash = (id === 'rpg' || id === 'grenade' || id === 'mine') || /grenade|rocket|rpg|splash/i.test(String(w.name || ''));
@@ -763,7 +772,9 @@
             else if (mag <= 6) reloadMs = 1800;
             else if (mag >= 30) reloadMs = 2000;
             if (id === 'spas12' || id === 'spas12-double') reloadMs = 2500;
-            if (id === 'crossbow') reloadMs = 2200;
+            if (id === 'crossbow') reloadMs = 2600;
+            if (id === 'ar2-orb') reloadMs = 2600;
+            if (id === 'grav-charged') reloadMs = 1800;
             return {
                 id, name: w.name || id, brackets, melee: isMeleeRange(w.range),
                 apValue: ap.value, apIgnore: ap.ignore, pellets: rof, magSize: mag,
@@ -786,17 +797,17 @@
         const WAVE_NAMES = ['QUALIFICATION', 'SPEED DRILL', 'DISCIPLINE', 'ARMOR TRIAL', 'LONG RANGE'];
         const WAVE_KINDS = [
             ['paper', 'paper', 'paper', 'paper', 'paper', 'paper', 'paper', 'paper'],
-            ['popup', 'popup', 'popup', 'popup', 'popup', 'popup'],
+            ['popup', 'popup', 'popup', 'popup', 'popup', 'popup', 'popup'],
             ['hostile', 'civ', 'hostile', 'hostile', 'civ', 'hostile', 'civ', 'hostile'],
-            ['armored', 'armored', 'shield', 'armored', 'armored'],
-            ['bullseye', 'bullseye', 'drone', 'bullseye', 'drone', 'shield']
+            ['armored', 'armored', 'shield', 'armored', 'shield', 'armored'],
+            ['bullseye', 'bullseye', 'drone', 'bullseye', 'drone', 'shield', 'drone']
         ];
         const WAVE_LANES = [
-            ['close', 'close', 'mid', 'mid', 'close', 'mid', 'far', 'close'],
-            ['close', 'mid', 'close', 'far', 'mid', 'close'],
-            ['close', 'mid', 'mid', 'far', 'close', 'mid', 'far', 'close'],
-            ['mid', 'close', 'mid', 'far', 'close'],
-            ['far', 'far', 'mid', 'far', 'mid', 'close']
+            ['close', 'mid', 'mid', 'far', 'close', 'mid', 'far', 'mid'],
+            ['close', 'mid', 'far', 'mid', 'far', 'close', 'mid'],
+            ['close', 'mid', 'far', 'far', 'close', 'mid', 'far', 'mid'],
+            ['mid', 'far', 'mid', 'far', 'close', 'mid'],
+            ['far', 'far', 'mid', 'far', 'mid', 'far', 'mid']
         ];
         function genCourse(seed, diffName) {
             const rnd = mulberry32(seed >>> 0);
@@ -825,18 +836,17 @@
             // Reachable via direct prob queries; resolveShotPure short-circuits
             // CIVs before calling here, but the branch is kept for completeness.
             if (def.noShoot) return 0.97; // civs are easy to (wrongly) hit
-            const spreadMult = diffName === 'HARD' ? 1.25 : diffName === 'EASY' ? 0.8 : 1.0;
-            let base = lane === 'close' ? 0.95 : lane === 'mid' ? 0.86 : 0.72;
+            const spreadMult = diffName === 'HARD' ? 1.4 : diffName === 'EASY' ? 1.0 : 1.15;
+            let base = lane === 'close' ? 0.88 : lane === 'mid' ? 0.74 : 0.58;
             const rawSpread = lane === 'close' ? params.spreadClose : lane === 'mid' ? params.spreadMid : params.spreadFar;
             const spread = rawSpread * spreadMult;
-            base -= (spread - 10) * 0.006;
-            if (kind === 'bullseye') base -= 0.12;
-            if (kind === 'drone') base -= 0.18;
+            base -= (spread - 10) * 0.010;
+            if (kind === 'bullseye') base -= 0.15;
+            if (kind === 'drone') base -= 0.22;
             if (params.melee && lane !== 'close') base -= 0.55;
-            base -= (recoil || 0) * 0.18;
-            if (diffName === 'HARD') base -= 0.06;
-            if (diffName === 'EASY') base += 0.06;
-            return Math.min(0.98, Math.max(0.05, base));
+            base -= (recoil || 0) * 0.25;
+            if (diffName === 'HARD') base -= 0.10;
+            return Math.min(0.92, Math.max(0.05, base));
         }
         function rollAce(sides, rand) {
             rand = rand || Math.random;
@@ -920,7 +930,7 @@
             if (def.noShoot) return -100;
             let pts = def.base * laneMult(lane);
             if (raise) pts *= 1.5;
-            if ((streak || 0) >= 5) pts *= 1 + Math.min(0.5, Math.floor(streak / 5) * 0.1);
+            if ((streak || 0) >= 7) pts *= 1 + Math.min(0.3, Math.floor(streak / 7) * 0.1);
             return Math.round(pts);
         }
         // Attainable-maximum score for one wave (base x lane, before streaks).
@@ -969,7 +979,7 @@
             if (!hits) {
                 return { hits: 0, fired: n, outcome: 'miss', raise: false, bonus: 0, breakdown: opts.sim ? 'all pellets miss vs TN4' : 'miss (arcade spread)' };
             }
-            const bonus = Math.min(2, hits - 1) * 10;
+            const bonus = Math.min(1, hits - 1) * 10;
             if (firstKill) {
                 return { hits, fired: n, outcome: 'kill', raise, bonus, breakdown: firstKill.breakdown, sim: firstKill.sim, dmg: firstKill.dmg };
             }
@@ -1326,7 +1336,7 @@
             state.weapon = w;
             state.params = weaponToRangeParams(w);
             state.shooter = getShooter();
-            const diff = v <= 3 ? DIFF.HARD : v <= 7 ? DIFF.NORMAL : DIFF.EASY;
+            const diff = v <= 4 ? DIFF.HARD : v <= 12 ? DIFF.NORMAL : DIFF.EASY;
             startGame(diff);
         }
 
@@ -1364,15 +1374,14 @@
         }
 
         function laneSize(kind, lane) {
-            let base = 46;
-            if (kind === 'bullseye') base = 40;
-            if (kind === 'drone') base = 42;
-            if (kind === 'popup' || kind === 'hostile' || kind === 'civ') base = 48;
-            if (kind === 'armored' || kind === 'shield') base = 52;
-            if (lane === 'mid') base *= 0.82;
-            if (lane === 'far') base *= 0.62;
-            if (state.diff.name === 'HARD') base *= 0.88;
-            if (state.diff.name === 'EASY') base *= 1.12;
+            let base = 42;
+            if (kind === 'bullseye') base = 36;
+            if (kind === 'drone') base = 38;
+            if (kind === 'popup' || kind === 'hostile' || kind === 'civ') base = 44;
+            if (kind === 'armored' || kind === 'shield') base = 48;
+            if (lane === 'mid') base *= 0.78;
+            if (lane === 'far') base *= 0.55;
+            if (state.diff.name === 'HARD') base *= 0.82;
             return Math.round(base);
         }
 
@@ -1413,18 +1422,20 @@
             wrap.appendChild(el);
             const persistent = (ev.kind === 'paper' || ev.kind === 'armored' || ev.kind === 'shield' || ev.kind === 'bullseye');
             const wrapH = wrap.clientHeight || 380;
-            // Late-wave pressure: targets vanish faster on W4/W5 (0.85/0.75).
-            // Persistent plates get 3x uptime (not 10s+); drones 4x (they move);
-            // popups/hostiles get 1x; grace cut to 0.5s so nothing sits waiting.
-            const waveMult = (ev.wave >= 4) ? 0.75 : (ev.wave === 3) ? 0.85 : 1;
+            // Hardcore pressure: targets vanish faster on W4/W5 (0.75/0.65).
+            // Persistent plates get 2.2x uptime; drones 2.5x (they move fast);
+            // popups/hostiles get 1x; grace cut to 0.3s so nothing sits waiting.
+            const waveMult = (ev.wave >= 4) ? 0.65 : (ev.wave === 3) ? 0.75 : 1;
             const lifeBase = state.diff.uptime * waveMult;
-            const life = persistent ? lifeBase * 3 + 0.5 : lifeBase * (ev.kind === 'drone' ? 4 : 1) + 0.5;
+            const life = persistent ? lifeBase * 2.2 + 0.3 : lifeBase * (ev.kind === 'drone' ? 2.5 : 1) + 0.3;
+            const dir = Math.random() < 0.5 ? -1 : 1;
             const t = {
                 id, kind: ev.kind, lane: ev.lane, wave: ev.wave, el,
                 hp: (TARGET_DEFS[ev.kind] || {}).hp || 1,
                 born: state.elapsed,
                 expires: state.elapsed + life,
-                vx: ev.kind === 'drone' ? (Math.random() < 0.5 ? -1 : 1) * (26 + Math.random() * 22) * state.diff.speed : 0,
+                vx: ev.kind === 'drone' ? dir * (45 + Math.random() * 35) * state.diff.speed
+                    : (ev.kind === 'popup' || ev.kind === 'hostile') ? dir * (12 + Math.random() * 10) * state.diff.speed : 0,
                 x: ev.x, xPct: ev.x, yPct: wrapH ? (y / wrapH) : 0, dead: false
             };
             state.targets.push(t);
@@ -1564,11 +1575,14 @@
             // clock waveIdx (see updateHud).
             const target = tid === null || tid === undefined ? null : state.targets.find(t => t.id === tid && !t.dead) || null;
             if (!target) {
-                // Empty range: one miss per trigger, no feed spam.
+                // Empty range: one miss per trigger, no feed spam. Hardcore:
+                // wild shots cost score, not just streak.
                 // Empty burst miss counts pellets for accuracy (documents behavior).
                 state.pelletsFired += p.pellets;
                 state.streak = 0;
-                floatText(pt.x, pt.y, 'MISS', '#ff0040');
+                state.score = Math.max(0, state.score - MISS_PENALTY);
+                if (state.waveScores && typeof state.waveScores[state.waveIdx] === 'number') state.waveScores[state.waveIdx] -= MISS_PENALTY;
+                floatText(pt.x, pt.y, 'MISS −' + MISS_PENALTY, '#ff0040');
                 afterTrigger();
                 return;
             }
@@ -1578,14 +1592,16 @@
             // pellets feed hit stats, but scoring/streaks apply once.
             // Resolve with old recoil, then add recoil for next trigger.
             const res = resolveTriggerPure(p, target.kind, target.lane, state.diff.name, { sim: simMode, recoil: oldRecoil });
-            state.recoil = Math.min(1, oldRecoil + 0.22 + p.pellets * 0.03);
+            state.recoil = Math.min(1, oldRecoil + 0.30 + p.pellets * 0.05);
 
             if (res.outcome === 'miss') {
                 state.pelletsFired += res.fired;
                 state.streak = 0;
-                floatText(pt.x, pt.y, 'MISS', '#ff0040');
-                if (simMode) feedMsg('SIM: ' + res.breakdown + ' — ' + target.kind + ' (' + target.lane + ')', 'sim');
-                else feedMsg('Miss — ' + target.kind + ' (' + target.lane + ')', '');
+                state.score = Math.max(0, state.score - MISS_PENALTY);
+                state.waveScores[wave] -= MISS_PENALTY;
+                floatText(pt.x, pt.y, 'MISS −' + MISS_PENALTY, '#ff0040');
+                if (simMode) feedMsg('SIM: ' + res.breakdown + ' — ' + target.kind + ' (' + target.lane + ') (−' + MISS_PENALTY + ')', 'sim');
+                else feedMsg('Miss — ' + target.kind + ' (' + target.lane + ') (−' + MISS_PENALTY + ')', '');
                 afterTrigger();
                 return;
             }
@@ -1611,11 +1627,9 @@
                 AudioEngine.ping();
                 target.el.classList.add('damaged');
                 setTimeout(() => { try { target.el.classList.remove('damaged'); } catch (err) {} }, 300);
-                const pts = Math.max(1, Math.round(10 * laneMult(target.lane)));
-                state.score += pts;
-                state.waveScores[wave] += pts;
-                floatText(pt.x, pt.y, 'PING +' + pts, '#ffaa00');
-                feedMsg((simMode ? 'SIM: ' : '') + res.breakdown + ' (+' + pts + ')', simMode ? 'sim' : 'warn');
+                // Hardcore: absorbed shots score nothing — wrong gun, no points.
+                floatText(pt.x, pt.y, 'ABSORBED', '#ffaa00');
+                feedMsg((simMode ? 'SIM: ' : '') + res.breakdown + ' (no points — wrong gun)', simMode ? 'sim' : 'warn');
                 afterTrigger();
                 return;
             }
@@ -1630,14 +1644,13 @@
                     killTarget(target, pt, { raise: res.raise, breakdown: res.breakdown, bonus: res.bonus });
                     afterTrigger();
                 } else {
-                    const pts = Math.max(1, Math.round(25 * laneMult(target.lane)));
+                    const pts = Math.max(1, Math.round(10 * laneMult(target.lane)));
                     state.score += pts;
                     state.waveScores[wave] += pts;
-                    // Chip keeps streak alive (documented: chips are progress, not resets).
-                    state.streak++;
-                    state.bestStreak = Math.max(state.bestStreak, state.streak);
+                    // Hardcore: chips break streak — only clean kills build it.
+                    state.streak = 0;
                     floatText(pt.x, pt.y, 'CHIP +' + pts, '#ffaa00');
-                    feedMsg('Armor chip (+' + pts + ') — one more on target', 'warn');
+                    feedMsg('Armor chip (+' + pts + ', streak lost) — one more on target', 'warn');
                     afterTrigger();
                 }
                 return;
@@ -1647,20 +1660,20 @@
             // Kill.
             killTarget(target, pt, { raise: res.raise, breakdown: res.breakdown, bonus: res.bonus });
 
-            // Splash (RPG/grenade/mine): damage neighbors in same lane, respecting
-            // armor via resolveShotPure — shield without Heavy/AP and armored
-            // first splash award chip +25 (not kill).
+            // Splash (RPG/grenade/mine): damages ONE neighbor in same lane,
+            // respecting armor via resolveShotPure — shield without Heavy/AP
+            // and armored first splash award chip +10 (not kill), kills pay 1/4.
             if (p.splash) {
                 const splashables = state.targets.filter(t => !t.dead && t.id !== target.id && t.lane === target.lane && t.kind !== 'civ');
                 let splashed = 0;
-                splashables.slice(0, 2).forEach(t => {
+                splashables.slice(0, 1).forEach(t => {
                     const chk = resolveShotPure(p, t.kind, t.lane, state.diff.name, { sim: simMode, recoil: oldRecoil });
                     const tWave = (typeof t.wave === 'number') ? t.wave : wave;
                     if ((chk.absorbed || (chk.chip && !chk.killed)) && !chk.killed) {
                         // Armored/shielded neighbor: chip, not kill.
                         t.hp -= 1;
                         if (t.hp <= 0) {
-                            const pts2 = Math.max(10, Math.round(scoreShotPure(t.kind, t.lane, false, state.streak) / 2));
+                            const pts2 = Math.max(5, Math.round(scoreShotPure(t.kind, t.lane, false, state.streak) / 4));
                             state.score += pts2;
                             state.waveScores[tWave] += pts2;
                             try {
@@ -1672,7 +1685,7 @@
                             t.dead = true;
                             removeTarget(t.id);
                         } else {
-                            const pts2 = Math.max(1, Math.round(25 * laneMult(t.lane)));
+                            const pts2 = Math.max(1, Math.round(10 * laneMult(t.lane)));
                             state.score += pts2;
                             state.waveScores[tWave] += pts2;
                             t.el.classList.add('damaged');
@@ -1686,7 +1699,7 @@
                         splashed++;
                         return;
                     }
-                    const pts = Math.max(10, Math.round(scoreShotPure(t.kind, t.lane, false, state.streak) / 2));
+                    const pts = Math.max(5, Math.round(scoreShotPure(t.kind, t.lane, false, state.streak) / 4));
                     state.score += pts;
                     state.waveScores[tWave] += pts;
                     try {
@@ -1783,7 +1796,7 @@
             const dt = Math.min(0.05, (ts - state.lastTick) / 1000);
             state.lastTick = ts;
             state.elapsed = state.diff.time - state.timeLeft;
-            state.recoil = Math.max(0, state.recoil - dt * 1.4);
+            state.recoil = Math.max(0, state.recoil - dt * 0.9);
 
             // Wave advance by elapsed
             let acc = 0;
@@ -1795,20 +1808,17 @@
             if (newWave !== state.waveIdx) {
                 // Leaving a discipline wave with zero CIV hits earns a bonus.
                 // Bonuses stored separately so medals grade pure waveScores only.
-                // Escapes void/reduce the bonus: slow play doesn't get paid.
+                // Any escape voids the bonus: slow play doesn't get paid.
                 const prev = state.waveIdx;
                 if (WAVE_KINDS[prev] && WAVE_KINDS[prev].indexOf('civ') !== -1 && state.civHits[prev] === 0) {
                     const escapedPrev = (state.expiredByWave && state.expiredByWave[prev]) || 0;
                     if (escapedPrev === 0) {
-                        const bonus = 150;
+                        const bonus = 100;
                         state.score += bonus;
                         state.bonusScores[prev] += bonus;
                         feedMsg('DISCIPLINE BONUS +' + bonus + ' (W' + (prev + 1) + ' clean)', 'good');
                     } else {
-                        const bonus = 50;
-                        state.score += bonus;
-                        state.bonusScores[prev] += bonus;
-                        feedMsg('DISCIPLINE BONUS +' + bonus + ' (W' + (prev + 1) + ' civ-clean but ' + escapedPrev + ' escaped — reduced)', 'warn');
+                        feedMsg('DISCIPLINE LOST (W' + (prev + 1) + ': ' + escapedPrev + ' escaped — no bonus)', 'warn');
                     }
                 }
                 state.waveIdx = newWave;
@@ -1817,17 +1827,17 @@
             // Spawn due events (late waves overlap +1 to force target switching).
             while (state.events.length && state.events[0].at <= state.elapsed) {
                 const ev = state.events.shift();
-                const cap = state.diff.maxAlive + 2 + (state.waveIdx >= 3 ? 1 : 0);
+                const cap = state.diff.maxAlive + 1 + (state.waveIdx >= 3 ? 1 : 0);
                 if (state.targets.length < cap) spawnTarget(ev);
                 else insertEventSorted({ at: ev.at + 0.8, wave: ev.wave, kind: ev.kind, lane: ev.lane, x: ev.x });
             }
 
-            // Move drones + expire old targets
+            // Move drones + drifting popups/hostiles, then expire old targets
             const wrap = document.getElementById('range-wrap');
             const W = wrap.clientWidth || 600;
             for (let i = state.targets.length - 1; i >= 0; i--) {
                 const t = state.targets[i];
-                if (t.kind === 'drone') {
+                if (t.kind === 'drone' || t.kind === 'popup' || t.kind === 'hostile') {
                     t.x += (t.vx * dt / W) * 100;
                     if (t.x < 6) { t.x = 6; t.vx = Math.abs(t.vx); }
                     if (t.x > 94) { t.x = 94; t.vx = -Math.abs(t.vx); }
@@ -1856,15 +1866,18 @@
 
             // Course clear: nothing left to spawn and nothing alive.
             // Requires at least one kill, else RANGE COLD (no time bonus).
-            // Escapes halve the time bonus: slow play doesn't get paid full.
+            // Any escape voids the time bonus: slow play doesn't get paid.
             if (state.active && !state.events.length && !state.targets.length && state.elapsed > 8) {
                 if ((state.kills || 0) > 0) {
-                    const full = state.timeLeft * 5;
                     const escapedTotal = state.expired || 0;
-                    const bonus = escapedTotal === 0 ? full : Math.floor(full / 2);
-                    state.score += bonus;
-                    state.bonusScores[state.waveIdx] += bonus;
-                    feedMsg(escapedTotal === 0 ? 'COURSE CLEAR — time bonus +' + bonus : 'COURSE CLEAR — time bonus +' + bonus + ' (halved: ' + escapedTotal + ' escaped)', escapedTotal === 0 ? 'good' : 'warn');
+                    const bonus = escapedTotal === 0 ? state.timeLeft * 2 : 0;
+                    if (bonus > 0) {
+                        state.score += bonus;
+                        state.bonusScores[state.waveIdx] += bonus;
+                        feedMsg('COURSE CLEAR — time bonus +' + bonus, 'good');
+                    } else {
+                        feedMsg('COURSE CLEAR — no time bonus (' + escapedTotal + ' escaped)', 'warn');
+                    }
                 } else {
                     feedMsg('RANGE COLD — no targets downed', 'warn');
                 }
@@ -2058,7 +2071,7 @@
 
         function endGame(completed) {
             // completed flag kept for call-site compat (always true); win/loss
-            // is derived from score vs par.
+            // is derived from score vs par AND accuracy gate (hardcore).
             if (state.timer) { clearInterval(state.timer); state.timer = null; }
             if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
             clearReloadTimeout();
@@ -2068,12 +2081,14 @@
             clearTargets();
 
             const acc = state.pelletsFired ? Math.round(100 * state.pelletsHit / state.pelletsFired) : 0;
-            const won = state.score >= state.diff.par;
+            const accGate = (typeof WIN_MIN_ACC !== 'undefined' && WIN_MIN_ACC[state.diff.name]) || 0;
+            const parCleared = state.score >= state.diff.par;
+            const won = parCleared && acc >= accGate;
             won ? AudioEngine.win() : AudioEngine.lose();
 
             const rs = document.getElementById('result-screen');
             rs.className = 'screen active ' + (won ? 'success' : 'failure');
-            document.getElementById('result-title').textContent = won ? 'RANGE QUALIFIED' : 'WASHOUT — BELOW PAR';
+            document.getElementById('result-title').textContent = won ? 'RANGE QUALIFIED' : (parCleared ? 'WASHOUT — ACC TOO LOW' : 'WASHOUT — BELOW PAR');
             document.getElementById('result-diff').textContent = state.diff.name;
             document.getElementById('result-shooter').textContent = sanitizeShooter(state.shooter);
             document.getElementById('result-roll').textContent = state.roll;
@@ -2088,7 +2103,7 @@
             document.getElementById('result-streak').textContent = state.bestStreak;
             const escapedTotal = state.expired || 0;
             try { document.getElementById('result-escaped').textContent = String(escapedTotal); } catch (e) {}
-            document.getElementById('result-status').textContent = (expertScore && !expertAcc) ? 'QUALIFIED — ACC TOO LOW FOR EXPERT (need ' + EXPERT_MIN_ACC + '%)' : won ? 'RANGE QUALIFIED' : 'BELOW PAR — RUN IT AGAIN';
+            document.getElementById('result-status').textContent = (expertScore && !expertAcc) ? 'QUALIFIED — ACC TOO LOW FOR EXPERT (need ' + EXPERT_MIN_ACC + '%)' : won ? 'RANGE QUALIFIED' : (parCleared ? 'PAR CLEARED BUT ACC ' + acc + '% < ' + accGate + '% — RUN IT AGAIN' : 'BELOW PAR — RUN IT AGAIN');
 
             saveStats(state.diff, state.score, acc);
             const safeShooter = sanitizeShooter(state.shooter);

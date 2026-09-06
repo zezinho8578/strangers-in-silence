@@ -23,6 +23,8 @@
             --warning: #ffaa00;
         }
 
+        html, body { height: 100%; }
+
         body {
             background: var(--bg);
             background-image:
@@ -31,12 +33,17 @@
             color: var(--primary);
             font-family: 'Courier New', 'Lucida Console', monospace;
             min-height: 100vh;
+            min-height: 100dvh;
+            max-height: 100vh;
+            max-height: 100dvh;
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow-y: auto;
-            overflow-x: hidden;
+            /* Page itself never scrolls (either axis): #game-container is the
+               single sanctioned scroller via max-height + overflow-y below. */
+            overflow: hidden;
             user-select: none;
+            padding: 12px 0;
         }
 
         #crt_overlay {
@@ -88,15 +95,27 @@
             background: var(--bg-panel);
             width: 95%;
             max-width: 850px;
-            max-height: calc(100vh - 20px);
+            max-height: calc(100vh - 24px);
+            max-height: calc(100dvh - 24px);
             overflow-y: auto;
             overflow-x: hidden;
+            /* Menu/game must never show a scrollbar chrome: keep scroll
+               function (wheel/touch/keyboard) for tiny viewports, but the
+               bar itself stays hidden. Layout below is compacted so normal
+               screens never need to scroll at all. */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
             position: relative;
+            /* margin:auto = safe centering: centered when space allows,
+               top-aligned (never clipped) when content overflows. */
+            margin-top: auto;
+            margin-bottom: auto;
             box-shadow:
                 0 0 40px rgba(0, 255, 65, 0.15),
                 inset 0 0 40px rgba(0, 255, 65, 0.03),
                 inset 0 1px 0 rgba(0, 255, 65, 0.2);
         }
+        #game-container::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
         #game-container::before,
         #game-container::after {
