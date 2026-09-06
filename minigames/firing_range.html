@@ -97,6 +97,12 @@
             max-height: calc(100dvh - 24px);
             overflow-y: auto;
             overflow-x: hidden;
+            /* Menu/game must never show a scrollbar chrome: keep scroll
+               function (wheel/touch/keyboard) for tiny viewports, but the
+               bar itself stays hidden. Layout below is compacted so normal
+               screens never need to scroll at all. */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
             position: relative;
             /* margin:auto = safe centering: centered when space allows,
                top-aligned (never clipped) when content overflows. */
@@ -119,6 +125,7 @@
         }
         #game-container::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
         #game-container::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+        #game-container::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
         .screen { display: none; }
         .screen.active { display: block; }
@@ -132,12 +139,13 @@
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
         .cursor { display: inline-block; width: 8px; height: 14px; background: var(--primary); animation: blink 1s infinite; vertical-align: middle; margin-left: 4px; }
 
-        #roll-screen { text-align: center; padding: 20px 14px; }
-        #roll-screen h1 { font-size: 22px; margin-bottom: 12px; text-shadow: 0 0 10px var(--primary-glow); letter-spacing: 3px; font-weight: normal; }
-        #roll-screen p { font-size: 12px; margin-bottom: 12px; color: var(--primary-dim); }
+        #roll-screen { text-align: center; padding: 10px 12px; }
+        #roll-screen h1 { font-size: 20px; margin-bottom: 6px; text-shadow: 0 0 10px var(--primary-glow); letter-spacing: 3px; font-weight: normal; }
+        #roll-screen p { font-size: 12px; margin-bottom: 6px; color: var(--primary-dim); }
         #roll-screen .tiny { font-size: 10px; letter-spacing: 1px; }
 
-        .armory-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; margin: 12px auto; max-width: 720px; }
+        .armory-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: left; margin: 8px auto; max-width: 720px; }
+        #roll-screen .btn { margin-top: 10px; }
         .armory-grid .full { grid-column: 1 / -1; }
         .field-label { font-size: 10px; letter-spacing: 2px; color: var(--primary-dim); text-transform: uppercase; margin-bottom: 4px; }
 
@@ -168,10 +176,10 @@
         }
         #weapon-card {
             border: 1px dashed var(--primary-dim);
-            padding: 10px 12px;
+            padding: 8px 10px;
             font-size: 12px;
-            line-height: 1.7;
-            min-height: 118px;
+            line-height: 1.5;
+            min-height: 0;
             text-align: left;
         }
         #weapon-card .wname { font-size: 14px; letter-spacing: 1px; text-shadow: 0 0 8px var(--primary-glow); }
