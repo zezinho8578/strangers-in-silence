@@ -305,11 +305,16 @@
         .medal-GOLD { color: var(--warning); } .medal-SILVER { color: var(--civ); } .medal-BRONZE { color: #cc8844; } .medal-NONE { color: var(--primary-dim); }
 
         #board-tabs { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
-        #board-table { width: 100%; max-width: 560px; margin: 10px auto 0; border-collapse: collapse; font-size: 12px; }
-        #board-table th, #board-table td { border: 1px solid var(--primary-dim); padding: 5px 7px; text-align: left; }
+        #board-table { width: 100%; max-width: 560px; margin: 10px auto 0; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+        #board-table th, #board-table td { border: 1px solid var(--primary-dim); padding: 5px 7px; text-align: left; overflow-wrap: anywhere; word-break: break-word; }
+        #board-table th:nth-child(1), #board-table td:nth-child(1) { width: 34px; }
+        #board-table th:nth-child(4), #board-table td:nth-child(4),
+        #board-table th:nth-child(5), #board-table td:nth-child(5),
+        #board-table th:nth-child(6), #board-table td:nth-child(6) { width: 64px; }
+        #result-screen .result-stats span:last-child { text-align: right; overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
         #board-table th { color: var(--primary-dim); font-size: 10px; letter-spacing: 1px; }
         #board-status { font-size: 11px; color: var(--primary-dim); margin-top: 6px; min-height: 16px; }
-        #shooter-display { border: 1px solid var(--primary); padding: 10px 12px; font-size: 15px; letter-spacing: 1px; text-align: left; background: rgba(0,20,0,0.5); }
+        #shooter-display { border: 1px solid var(--primary); padding: 10px 12px; font-size: 15px; letter-spacing: 1px; text-align: left; background: rgba(0,20,0,0.5); overflow-wrap: anywhere; word-break: break-word; white-space: normal; line-height: 1.4; }
         #shooter-select { width: 100%; background: #000; border: 1px solid var(--primary); color: var(--primary); font-family: inherit; font-size: 13px; padding: 10px; outline: none; margin-top: 6px; }
         #toast { font-size: 11px; color: var(--warning); min-height: 16px; margin-top: 6px; letter-spacing: 1px; }
         #roll-error { font-size: 11px; color: var(--target); min-height: 16px; margin-top: 6px; }
@@ -339,7 +344,7 @@
             <div class="boot-line">> MARKSMANSHIP v1.0 // LAMBDA FIRING RANGE</div>
             <div class="boot-line">> NEURAL LINK ESTABLISHED</div>
             <div class="boot-line">> RANGE: 3 LANES // CLOSE / MID / FAR</div>
-            <div class="boot-line">> ARMORY SYNC: <span class="good">16 PRESETS + OWNED WEAPONS</span></div>
+            <div class="boot-line">> ARMORY SYNC: <span class="good">UNIFIED WEAPON LIST</span></div>
             <div class="boot-line">> TARGETS: PAPER / POP-UP / HOSTILE / <span class="highlight">CIV (HOLD FIRE)</span> / ARMORED / BULLSEYE / DRONE</div>
             <div class="boot-line">> SCORING: DISTANCE x1/x1.5/x2 // RAISE +50% // STREAK BONUS</div>
             <div class="boot-line">> <span class="good">STATUS: AWAITING OPERATOR INPUT</span><span class="cursor"></span></div>
@@ -361,7 +366,7 @@
                     <select id="shooter-select" style="display:none;" aria-label="Linked operative"></select>
                 </div>
                 <div class="full">
-                    <div class="field-label">Weapon (presets + owned)</div>
+                    <div class="field-label">Weapon (all — presets + owned merged)</div>
                     <select id="weapon-select"></select>
                 </div>
                 <div class="full"><div id="weapon-card">Loading armory…</div></div>
@@ -375,7 +380,7 @@
                 </div>
             </div>
             <button class="btn" id="roll-submit">ENTER RANGE</button>
-            <div><button class="btn-mini" id="armory-refresh" type="button">RE-SYNC OWNED</button></div>
+            <div><button class="btn-mini" id="armory-refresh" type="button">RE-SYNC WEAPONS</button></div>
         </div>
 
         <div id="game-screen" class="screen">
@@ -489,11 +494,11 @@
             return '';
         }
         function sanitizeShooter(s) {
-            let v = String(s === undefined || s === null ? '' : s).toUpperCase().slice(0, 12);
+            let v = String(s === undefined || s === null ? '' : s).toUpperCase().slice(0, 24);
             v = v.replace(/[@`_*~>|]/g, '');
             v = v.replace(/[^A-Z0-9 _-]/g, '');
-            v = v.trim();
-            if (!/^[A-Z0-9 _-]{1,12}$/.test(v)) return 'OPERATOR';
+            v = v.trim().replace(/\s+/g, ' ');
+            if (!/^[A-Z0-9 _-]{1,24}$/.test(v)) return 'OPERATOR';
             return v;
         }
         function getCurrentUser() { try { return sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser') || 'OPERATOR'; } catch (e) { return 'OPERATOR'; } }
@@ -873,7 +878,23 @@
 
         function loadArmory() {
             const map = new Map();
-            DEFAULT_ARMORY.forEach(w => map.set(w.id, Object.assign({}, w, { _owned: false })));
+            DEFAULT_ARMORY.forEach(w => map.set(w.id, Object.assign({}, w, { _owned: false, _ownedBy: [] })));
+            // Index presets by id AND lowercase name so owned refs dedupe.
+            const nameToKey = new Map();
+            const indexNames = () => {
+                nameToKey.clear();
+                for (const [k, v] of map) {
+                    if (v && v.name) {
+                        const nk = String(v.name).trim().toLowerCase();
+                        if (nk && !nameToKey.has(nk)) nameToKey.set(nk, k);
+                    }
+                }
+            };
+            indexNames();
+            const shortOwner = (charId) => {
+                if (!charId) return '?';
+                return String(charId).split('-').map(p => p ? p[0].toUpperCase() + p.slice(1) : '').join(' ');
+            };
             try {
                 const db = getFallbackDB();
                 if (db) {
@@ -882,27 +903,57 @@
                         db.presets.forEach(p => {
                             if (!p) return;
                             const k = p.id || ('preset-' + p.name);
-                            if (k) map.set(k, Object.assign({}, p, { _owned: false }));
+                            if (k) {
+                                if (p.id && map.has(p.id)) {
+                                    const cur = map.get(p.id);
+                                    map.set(p.id, Object.assign({}, cur, p, { id: p.id, _owned: cur._owned, _ownedBy: cur._ownedBy || [] }));
+                                } else {
+                                    map.set(k, Object.assign({}, p, { _owned: false, _ownedBy: [] }));
+                                }
+                            }
                         });
+                        indexNames();
                     }
-                    // Owned character weapons: key includes charId+index to avoid
-                    // collisions across characters. Preserve w.id when present,
-                    // suffix on collision.
+                    // Owned character weapons: MERGE into the matching preset
+                    // when id or name matches (owned weapons ARE presets —
+                    // character sheets store copies of preset objects). Only
+                    // create a separate entry for truly custom weapons.
                     if (db.characters) {
                         Object.entries(db.characters).forEach(([charId, c]) => {
                             if (c && Array.isArray(c.weapons)) {
-                                c.weapons.forEach((w, idx) => {
+                                c.weapons.forEach((w) => {
                                     if (!w || (!w.id && !w.name)) return;
-                                    const slug = w.id ? String(w.id) : String(w.name || 'weapon').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-                                    let k;
-                                    if (w.id) {
-                                        k = String(w.id);
-                                        if (map.has(k)) k = k + '-owned-' + charId + '-' + idx;
+                                    const wid = w.id ? String(w.id) : '';
+                                    const wname = String(w.name || '').trim().toLowerCase();
+                                    let targetKey = null;
+                                    if (wid && map.has(wid)) targetKey = wid;
+                                    else if (wname && nameToKey.has(wname)) targetKey = nameToKey.get(wname);
+                                    if (targetKey) {
+                                        const cur = map.get(targetKey) || {};
+                                        // Owned copy wins for live stats (ammo/damage edits),
+                                        // but keep catalog id/name stable.
+                                        const merged = Object.assign({}, cur, w, { id: cur.id || wid || targetKey, name: cur.name || w.name, _owned: true });
+                                        const by = merged._ownedBy || (cur._ownedBy || []).slice();
+                                        const label = shortOwner(charId);
+                                        if (!by.includes(label)) by.push(label);
+                                        merged._ownedBy = by;
+                                        map.set(targetKey, merged);
                                     } else {
-                                        k = 'owned-' + charId + '-' + idx + '-' + slug;
+                                        const slug = wid ? wid.toLowerCase().replace(/[^a-z0-9]+/g, '-') : String(w.name || 'weapon').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                                        const k = 'custom-' + slug;
+                                        if (!map.has(k)) {
+                                            map.set(k, Object.assign({}, w, { id: k, _owned: true, _ownedBy: [shortOwner(charId)] }));
+                                            if (w.name) nameToKey.set(String(w.name).trim().toLowerCase(), k);
+                                        } else {
+                                            const cur = map.get(k);
+                                            const by = (cur._ownedBy || []).slice();
+                                            const label = shortOwner(charId);
+                                            if (!by.includes(label)) by.push(label);
+                                            cur._ownedBy = by;
+                                            // Prefer the most recently edited owned stats.
+                                            map.set(k, Object.assign({}, cur, w, { id: k, name: cur.name || w.name, _owned: true, _ownedBy: by }));
+                                        }
                                     }
-                                    if (map.has(k)) k = k + '-' + charId + '-' + idx;
-                                    map.set(k, Object.assign({}, w, { id: k, _owned: true }));
                                 });
                             }
                         });
@@ -929,14 +980,22 @@
             const sel = document.getElementById('weapon-select');
             const prev = sel.value;
             sel.innerHTML = '';
-            ARMORY.forEach(w => {
+            // Owned first (they're the live sheet copies), then catalog-only.
+            const sorted = ARMORY.slice().sort((a, b) => ((b._owned ? 1 : 0) - (a._owned ? 1 : 0)) || String(a.name).localeCompare(String(b.name)));
+            sorted.forEach(w => {
                 const o = document.createElement('option');
                 o.value = w.id;
-                o.textContent = (w._owned ? '[OWNED] ' : '') + w.name + ' — ' + (w.range || '?') + ' / ' + (w.damage || '?') + ' / AP ' + (w.ap || '0') + ' / RoF ' + (w.rof || '1');
+                const ownTag = (w._owned && w._ownedBy && w._ownedBy.length) ? ' [OWNED: ' + w._ownedBy.join(', ') + ']' : (w._owned ? ' [OWNED]' : '');
+                o.textContent = w.name + ' — ' + (w.range || '?') + ' / ' + (w.damage || '?') + ' / AP ' + (w.ap || '0') + ' / RoF ' + (w.rof || '1') + ownTag;
                 sel.appendChild(o);
             });
+            // Keep ARMORY order in sync with the sorted dropdown.
+            ARMORY = sorted;
+            const bootLine = document.querySelector('#boot-screen .boot-line:nth-child(4) span');
+            if (bootLine) bootLine.textContent = ARMORY.length + ' WEAPONS (UNIFIED)';
             if (prev && ARMORY.some(w => w.id === prev)) sel.value = prev;
-            else sel.value = 'usp-match';
+            else if (ARMORY.some(w => w.id === 'usp-match')) sel.value = 'usp-match';
+            else if (ARMORY.length) sel.value = ARMORY[0].id;
             renderWeaponCard();
         }
 
@@ -948,7 +1007,7 @@
             const p = weaponToRangeParams(w);
             const magTxt = p.magSize === Infinity ? '∞ (no reload)' : p.magSize + ' (' + (p.reloadMs / 1000).toFixed(1) + 's reload)';
             card.innerHTML =
-                '<div class="wname">' + escapeHtml(p.name) + (w._owned ? ' [OWNED]' : '') + '</div>' +
+                '<div class="wname">' + escapeHtml(p.name) + (w._owned && w._ownedBy && w._ownedBy.length ? ' [OWNED: ' + escapeHtml(w._ownedBy.join(', ')) + ']' : (w._owned ? ' [OWNED]' : '')) + '</div>' +
                 '<div>RANGE ' + escapeHtml(p.rangeStr) + ' &nbsp;│&nbsp; DMG ' + escapeHtml(p.damageStr) + ' (avg ' + p.dmgAvg.toFixed(1) + ') &nbsp;│&nbsp; AP ' + (p.apIgnore ? 'Ignore' : p.apValue) + ' &nbsp;│&nbsp; RoF ' + p.pellets + '</div>' +
                 '<div>MAG ' + magTxt + ' &nbsp;│&nbsp; MIN-STR ' + 'd' + p.minStrDie + ' &nbsp;│&nbsp; TYPE ' + escapeHtml(p.damageType) + (p.heavy ? ' HEAVY' : '') + '</div>' +
                 '<div>SPREAD C/M/F: ' + p.spreadClose + '/' + p.spreadMid + '/' + p.spreadFar + 'px &nbsp;│&nbsp; ' + escapeHtml(weaponNote(p)) + '</div>' +
