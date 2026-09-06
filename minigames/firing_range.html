@@ -20,6 +20,8 @@
             --energy: #00ccff;
         }
 
+        html, body { height: 100%; }
+
         body {
             background: var(--bg);
             background-image:
@@ -28,11 +30,15 @@
             color: var(--primary);
             font-family: 'Courier New', 'Lucida Console', monospace;
             min-height: 100vh;
+            min-height: 100dvh;
+            max-height: 100vh;
+            max-height: 100dvh;
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow-x: hidden;
-            overflow-y: auto;
+            /* Page itself never scrolls (either axis): #game-container is the
+               single sanctioned scroller via max-height + overflow-y below. */
+            overflow: hidden;
             user-select: none;
             padding: 12px 0;
         }
@@ -91,6 +97,10 @@
             overflow-y: auto;
             overflow-x: hidden;
             position: relative;
+            /* margin:auto = safe centering: centered when space allows,
+               top-aligned (never clipped) when content overflows. */
+            margin-top: auto;
+            margin-bottom: auto;
             box-shadow:
                 0 0 40px rgba(0, 255, 65, 0.15),
                 inset 0 0 40px rgba(0, 255, 65, 0.03),
@@ -1395,14 +1405,16 @@
             const persistent = (ev.kind === 'paper' || ev.kind === 'armored' || ev.kind === 'shield' || ev.kind === 'bullseye');
             const wrapH = wrap.clientHeight || 380;
             // Late-wave pressure: targets vanish faster on W4/W5 (0.85/0.75).
-            // Persistent plates no longer linger 25s; grace cut 2s -> 1s so
-            // mouse users can't shoot at leisure.
+            // Persistent plates get 3x uptime (not 10s+); drones 4x (they move);
+            // popups/hostiles get 1x; grace cut to 0.5s so nothing sits waiting.
             const waveMult = (ev.wave >= 4) ? 0.75 : (ev.wave === 3) ? 0.85 : 1;
+            const lifeBase = state.diff.uptime * waveMult;
+            const life = persistent ? lifeBase * 3 + 0.5 : lifeBase * (ev.kind === 'drone' ? 4 : 1) + 0.5;
             const t = {
                 id, kind: ev.kind, lane: ev.lane, wave: ev.wave, el,
                 hp: (TARGET_DEFS[ev.kind] || {}).hp || 1,
                 born: state.elapsed,
-                expires: persistent ? state.elapsed + 10 * waveMult + state.diff.uptime + 1 : state.elapsed + state.diff.uptime * waveMult * (ev.kind === 'drone' ? 7 : 1) + 1,
+                expires: state.elapsed + life,
                 vx: ev.kind === 'drone' ? (Math.random() < 0.5 ? -1 : 1) * (26 + Math.random() * 22) * state.diff.speed : 0,
                 x: ev.x, xPct: ev.x, yPct: wrapH ? (y / wrapH) : 0, dead: false
             };
