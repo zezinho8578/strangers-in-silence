@@ -2631,8 +2631,8 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
                 wepHtml += `
 <div class="weapon-card">
 <div class="weapon-card-header">
-<div class="weapon-icon">
-<img src="${imgUrl}" alt="${w.name}">
+<div class="weapon-icon" title="Intrinsic icon — change via the Icon field below">
+<img id="wep-icon-${index}" src="${imgUrl}" alt="${escHtml(w.name)}" onerror="this.onerror=null;this.src='${defaultWeaponIcon}'">
 </div>
 <div class="weapon-info">
 <div class="weapon-info-top">
@@ -2646,6 +2646,10 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
 <span>RoF:</span><input type="number" class="wep-input" style="width:30px;" value="${w.rof}" onchange="updateWep(${index}, 'rof', this.value)">
 <span>3RB:</span><input type="checkbox" ${w.burst ? "checked" : ""} onchange="updateWep(${index}, 'burst', this.checked)" title="Has Three-Round Burst ability">
 </div>
+<div class="wep-edit-row">
+<span>Icon:</span><input type="text" class="wep-input" style="flex:1; min-width:120px; text-align:left;" value="${escHtml(w.icon || w.image || "")}" placeholder="Icon URL — blank = default" list="wep-icon-choices" oninput="previewWepIcon(${index}, this.value)" onchange="updateWepIcon(${index}, this.value)" title="Paste an image URL or pick a preset icon">
+<button class="die-btn" style="padding:2px 6px;" onclick="resetWepIcon(${index})" title="Reset to default icon">&#8635;</button>
+</div>
 </div>
 </div>
 <div class="weapon-actions">
@@ -2656,6 +2660,13 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
 </div>
 </div>`;
             });
+            // Preset-icon suggestions for the per-weapon Icon field (pasted URL or picker).
+            try {
+                const iconChoices = [...new Set((globalState.presets || []).map(p => p && (p.icon || p.image)).filter(Boolean))];
+                if (iconChoices.length) {
+                    wepHtml += `<datalist id="wep-icon-choices">${iconChoices.map(u => `<option value="${escHtml(u)}">`).join('')}</datalist>`;
+                }
+            } catch (e) {}
             document.getElementById('weapon-list').innerHTML = wepHtml;
             attachEditorListeners();
             renderCsConfigPanel();
@@ -2737,8 +2748,35 @@ ${CS_ONHIT_OPTIONS.map(opt => `<label style="display:flex; align-items:center; g
             updateActive();
         };
         window.updateWep = function (index, field, val) {
+            if (!activeThreat || !activeThreat.weapons[index]) return;
             activeThreat.weapons[index][field] = val;
+            // Keep the legacy `image` alias in sync so attack/roll embeds keep showing the icon.
+            if (field === 'icon' || field === 'image') {
+                activeThreat.weapons[index].icon = val;
+                activeThreat.weapons[index].image = val;
+            }
             saveTemplateToDB(true);
+        };
+        // Live preview while typing an icon URL (no save yet, so focus is never lost).
+        window.previewWepIcon = function (index, val) {
+            const img = document.getElementById('wep-icon-' + index);
+            if (img) img.src = (val || '').trim() || defaultWeaponIcon;
+        };
+        // Commit an intrinsic/preset icon URL (blank = default) and persist to the Codex.
+        window.updateWepIcon = function (index, val) {
+            if (!activeThreat || !activeThreat.weapons[index]) return;
+            const clean = (val || '').trim() || defaultWeaponIcon;
+            activeThreat.weapons[index].icon = clean;
+            activeThreat.weapons[index].image = clean;
+            const img = document.getElementById('wep-icon-' + index);
+            if (img) img.src = clean;
+            saveTemplateToDB(true);
+        };
+        window.resetWepIcon = function (index) {
+            if (!activeThreat || !activeThreat.weapons[index]) return;
+            activeThreat.weapons[index].icon = defaultWeaponIcon;
+            activeThreat.weapons[index].image = defaultWeaponIcon;
+            renderEditor();
         };
         function attachEditorListeners() {
             document.querySelectorAll('.attr-input').forEach(el => { el.addEventListener('change', (e) => { activeThreat.attributes[e.target.dataset.key] = e.target.value; updateActive(); }); });
