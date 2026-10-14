@@ -11,6 +11,10 @@
     {
       "source": "/threats/:path*",
       "destination": "/threats.html"
+    },
+    {
+      "source": "/schedule/:path*",
+      "destination": "/schedule.html"
     }
   ]
 }

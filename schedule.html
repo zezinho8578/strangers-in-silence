@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LambdaOS - Session Schedule</title>
+<link rel="stylesheet" href="/style.css">
+<script>
+let currentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+if (!currentUser) window.location.replace("/");
+</script>
+<style>
+#top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--theme-color);
+    padding-bottom: 10px;
+    margin-right: 180px;
+}
+.nav-link {
+    color: var(--theme-color);
+    text-decoration: none;
+    cursor: pointer;
+}
+.nav-link:hover {
+    background: var(--theme-color);
+    color: var(--bg-color);
+    text-shadow: none;
+}
+.page-title {
+    text-align: center;
+    font-size: 1.2em;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+    border-bottom: 1px dashed var(--theme-color);
+    padding-bottom: 8px;
+}
+.page-subtitle {
+    text-align: center;
+    font-size: 0.85em;
+    opacity: 0.75;
+    margin-bottom: 16px;
+}
+.tab-bar {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--theme-color);
+    padding-bottom: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.tab-btn {
+    background: transparent;
+    color: var(--theme-color);
+    border: 1px solid var(--theme-color);
+    padding: 8px 16px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1.1em;
+    transition: 0.2s;
+}
+.tab-btn:hover { background: rgba(128,128,128,0.2); }
+.tab-btn.active-tab {
+    background: var(--theme-color) !important;
+    color: var(--bg-color) !important;
+    text-shadow: none !important;
+}
+.tab-bar .spacer { flex-grow: 1; }
+.die-btn {
+    background: transparent;
+    color: var(--theme-color);
+    border: 1px solid var(--theme-color);
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9em;
+    transition: 0.2s;
+    outline: none;
+}
+.die-btn:hover {
+    background: var(--theme-color);
+    color: var(--bg-color);
+    text-shadow: none;
+}
+.die-btn::before { content: "[ "; }
+.die-btn::after { content: " ]"; }
+.die-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.die-btn:disabled:hover { background: transparent; color: var(--theme-color); }
+.die-btn.danger { border-color: #ff3333; color: #ff3333; }
+.die-btn.danger:hover { background: #ff3333; color: #fff; text-shadow: none; }
+.die-btn.gm-on { background: #7a0000; border-color: #ff5555; color: #fff; text-shadow: none; }
+.legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 0.82em;
+    margin-bottom: 12px;
+    opacity: 0.95;
+}
+.legend .sw { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px; border: 1px solid var(--theme-color); }
+.sw-mine { background: rgba(0,255,0,0.35); border-color: #00ff00 !important; }
+.sw-forbidden { background: #7a0000 !important; border-color: #ff5555 !important; }
+.sw-dim { background: rgba(128,128,128,0.08); }
+.sw-badge { background: var(--theme-color); color: var(--bg-color); border-radius: 8px; padding: 0 6px; font-size: 0.85em; }
+.count-line { font-size: 0.9em; margin-bottom: 10px; }
+.count-line b { color: #00ff00; }
+/* Schedule grid */
+.sched-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--theme-color);
+    background: rgba(0,0,0,0.35);
+    max-height: 62vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.sched-grid {
+    display: grid;
+    grid-template-columns: 74px repeat(7, minmax(96px, 1fr));
+    min-width: 780px;
+}
+.hdr {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    background: var(--bg-color);
+    border-bottom: 1px solid var(--theme-color);
+    border-right: 1px solid rgba(128,128,128,0.3);
+    text-align: center;
+    padding: 8px 4px;
+    font-size: 0.85em;
+    letter-spacing: 1px;
+}
+.hdr.corner { left: 0; z-index: 8; }
+.gutter {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    background: var(--bg-color);
+    border-right: 1px solid var(--theme-color);
+    border-bottom: 1px dotted rgba(128,128,128,0.3);
+    font-size: 0.72em;
+    text-align: right;
+    padding: 4px 6px;
+    opacity: 0.9;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+}
+.gutter.hour { opacity: 1; font-weight: bold; }
+.slot {
+    min-height: 28px;
+    border-right: 1px solid rgba(128,128,128,0.25);
+    border-bottom: 1px dotted rgba(128,128,128,0.25);
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72em;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    background: rgba(128,128,128,0.05);
+}
+.slot.hour { border-bottom: 1px solid rgba(128,128,128,0.45); }
+.slot.half { font-size: 0.62em; opacity: 0.92; }
+.slot.mine {
+    background: rgba(0,255,0,0.22);
+    border-color: rgba(0,255,0,0.5);
+    box-shadow: inset 0 0 8px rgba(0,255,0,0.35);
+    color: #ccffcc;
+}
+.slot.forbidden {
+    background: #7a0000 !important;
+    border-color: #ff5555 !important;
+    color: #ffd7d7 !important;
+    cursor: not-allowed;
+    flex-direction: column;
+    gap: 1px;
+    padding: 1px 2px;
+    text-align: center;
+}
+.slot.forbidden .fr {
+    font-size: 0.85em;
+    line-height: 1.1;
+    opacity: 0.9;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.slot .badge {
+    position: absolute;
+    top: 1px;
+    right: 2px;
+    background: var(--theme-color);
+    color: var(--bg-color);
+    border-radius: 8px;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    font-size: 11px;
+    text-shadow: none;
+    pointer-events: none;
+}
+.slot.mine .badge { background: #00ff00; }
+/* Summary + terminal */
+.sched-cols { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 20px; }
+@media (min-width: 900px) { .sched-cols { grid-template-columns: 1fr 1fr; } }
+.panel-box { border: 1px solid var(--theme-color); padding: 12px; background: rgba(128,128,128,0.05); }
+.panel-box h3 { margin: 0 0 10px 0; font-size: 1em; letter-spacing: 1px; border-bottom: 1px dashed var(--theme-color); padding-bottom: 6px; }
+.best-row { font-size: 0.85em; padding: 5px 4px; border-bottom: 1px dotted rgba(128,128,128,0.3); }
+.best-row b { color: #00ff00; }
+.perday { font-size: 0.82em; opacity: 0.9; margin-top: 8px; }
+.term-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+}
+#sched-terminal {
+    border: 1px solid var(--theme-color);
+    padding: 10px;
+    height: 160px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.5);
+    color: var(--theme-color);
+    margin-top: 5px;
+    position: relative;
+    z-index: 999998;
+}
+#forbid-modal {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    border: 2px solid var(--theme-color);
+    background: var(--bg-color);
+    padding: 25px;
+    z-index: 999999 !important;
+    text-align: center;
+    box-shadow: 0 0 20px rgba(0,0,0,0.9);
+    width: max-content;
+    min-width: 340px;
+    max-width: 92vw;
+}
+#forbid-modal h3 { margin-top: 0; border-bottom: 1px solid var(--theme-color); padding-bottom: 10px; }
+.admin-input {
+    background: var(--bg-color);
+    color: var(--theme-color);
+    border: 1px solid var(--theme-color);
+    padding: 5px;
+    font-family: inherit;
+    width: 220px;
+}
+.tn-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }
+.hint { font-size: 0.8em; opacity: 0.7; margin-top: 8px; }
+</style>
+</head>
+<body>
+<img id="bg-lambda"
+     src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Orange_lambda.svg/1280px-Orange_lambda.svg.png"
+     alt="Lambda Logo">
+
+<div id="top-nav">
+    <a href="/dashboard.html" class="nav-link">&lt; RETURN TO DASHBOARD</a>
+    <span>SESSION SCHEDULER</span>
+</div>
+
+<div class="page-title">SESSION SCHEDULER</div>
+<div class="page-subtitle" id="tz-line">Resolving timezone…<br>Times shown in your local time — weekly recurring.</div>
+
+<div class="legend">
+    <span><span class="sw sw-mine"></span>your availability</span>
+    <span><span class="sw sw-forbidden"></span>GM forbidden (hover for reason)</span>
+    <span><span class="sw sw-dim"></span>unavailable</span>
+    <span><span class="sw-badge">2</span> = others available in that slot</span>
+</div>
+
+<div class="tab-bar">
+    <button class="die-btn" id="btn-save" onclick="saveAvailability()">SAVE AVAILABILITY</button>
+    <button class="die-btn" onclick="clearSelection()">CLEAR</button>
+    <button class="die-btn" onclick="fillAll()">FILL ALL NON-FORBIDDEN</button>
+    <span class="spacer"></span>
+    <button class="die-btn danger" id="btn-gmmode" onclick="toggleGMMode()" style="display:none;">GM MODE: FORBID TIMES</button>
+</div>
+
+<div class="count-line">Selected slots: <b id="sel-count">0</b> <span id="mode-line" style="opacity:.7;"></span></div>
+
+<div class="sched-scroll" id="sched-scroll">
+    <div class="sched-grid" id="sched-grid"></div>
+</div>
+<div class="hint" id="drag-hint">Click or drag-paint to toggle. Drag across cells to paint many at once (mouse + touch). Forbidden cells cannot be selected.</div>
+
+<div class="sched-cols">
+    <div class="panel-box">
+        <h3>&gt; BEST SLOTS (TOP 10)</h3>
+        <div id="best-list"><div style="opacity:.6;font-style:italic;">Awaiting data…</div></div>
+        <div class="perday" id="perday-list"></div>
+    </div>
+    <div class="panel-box">
+        <div class="term-header" style="margin-top:0;">
+            <span>&gt; SCHEDULE TERMINAL</span>
+            <button class="die-btn" onclick="clearSchedLog()">CLEAR LOG</button>
+        </div>
+        <div id="sched-terminal">
+            <div>&gt; SCHEDULE TERMINAL READY. AWAITING INPUT...</div>
+        </div>
+    </div>
+</div>
+
+<!-- GM forbid reason modal -->
+<div id="forbid-modal">
+    <h3 id="forbid-title">FORBID TIME</h3>
+    <div style="margin-bottom:12px;font-size:.85em;opacity:.8;" id="forbid-slot-label"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:12px;">
+        <span>Reason:</span>
+        <input type="text" id="forbid-reason" class="admin-input" placeholder="e.g. GM unavailable">
+    </div>
+    <div class="tn-buttons">
+        <button class="die-btn" onclick="confirmForbid()">SAVE</button>
+        <button class="die-btn danger" id="forbid-unblock" onclick="unblockForbid()" style="display:none;">UNBLOCK</button>
+        <button class="die-btn" onclick="closeForbidModal()">CANCEL</button>
+    </div>
+</div>
+
+<script src="/settings.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyBt1ymfsEvbO1X9eYDVf2ctotRcbFFOO44",
+    authDomain: "strangers-in-silence.firebaseapp.com",
+    databaseURL: "https://strangers-in-silence-default-rtdb.firebaseio.com",
+    projectId: "strangers-in-silence",
+    storageBucket: "strangers-in-silence.firebasestorage.app",
+    messagingSenderId: "62557473299",
+    appId: "1:62557473299:web:e2ebf2ee2520a9189e8de6"
+};
+
+let db = null;
+const isGM = (currentUser === "Administrator");
+const safeUser = String(currentUser || 'anon').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const localMode = (localStorage.getItem('lambdaLocalMode') === 'on');
+if (!localMode) {
+  const app = initializeApp(firebaseConfig);
+  db = getDatabase(app);
+}
+
+const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+const SLOTS_PER_DAY = 48;
+
+let mySel = new Set();          // own selected slot keys "d-s"
+let allAvail = {};              // { userKey: { slotKey: true } }
+let forbidden = {};             // { slotKey: { r: reason } }
+let gmMode = false;             // GM forbid-paint mode
+let isDragging = false;
+let dragPaintValue = true;      // availability paint value for current drag
+let gmDragForbid = true;        // forbid paint value for current GM drag
+let gmDragReason = '';
+let saveTimer = null;
+let pendingForbidKeys = [];     // batch from drag before reason confirmed
+let editForbidKey = null;
+
+// ---- Timezone subtitle ----
+try {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  document.getElementById('tz-line').innerHTML =
+    esc(tz) + '<br>Times shown in your local time — weekly recurring.';
+} catch (e) {
+  document.getElementById('tz-line').innerHTML =
+    'Local time<br>Times shown in your local time — weekly recurring.';
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function slotKey(d, s) { return d + '-' + s; }
+function fmtTime(s) {
+  const h = Math.floor(s / 2), m = (s % 2) * 30;
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+function fmtRange(s) {
+  const end = (s + 1) % 48;
+  return fmtTime(s) + '–' + fmtTime(end === 0 ? 0 : s + 1);
+}
+
+// ---- Build grid: 7 columns x 48 rows ----
+function buildGrid() {
+  const g = document.getElementById('sched-grid');
+  g.innerHTML = '';
+  const corner = document.createElement('div');
+  corner.className = 'hdr corner';
+  corner.textContent = 'TIME';
+  g.appendChild(corner);
+  DAYS.forEach(d => {
+    const h = document.createElement('div');
+    h.className = 'hdr';
+    h.textContent = d;
+    g.appendChild(h);
+  });
+  for (let s = 0; s < SLOTS_PER_DAY; s++) {
+    const isHour = (s % 2 === 0);
+    const gut = document.createElement('div');
+    gut.className = 'gutter' + (isHour ? ' hour' : '');
+    gut.textContent = isHour ? fmtTime(s) : '·';
+    g.appendChild(gut);
+    for (let d = 0; d < 7; d++) {
+      const c = document.createElement('div');
+      const key = slotKey(d, s);
+      c.className = 'slot' + (isHour ? ' hour' : ' half');
+      c.dataset.day = d;
+      c.dataset.slot = s;
+      c.dataset.key = key;
+      // mouse + pointer + touch via pointer events
+      c.addEventListener('pointerdown', onCellDown);
+      c.addEventListener('mouseenter', onCellEnter);
+      c.addEventListener('pointerenter', onCellEnter);
+      // touch drag-paint: track finger across cells
+      c.addEventListener('touchstart', onTouchStart, { passive: false });
+      c.addEventListener('touchmove', onTouchMove, { passive: false });
+      c.addEventListener('touchend', onTouchEnd);
+      c.addEventListener('click', onCellClick);
+      g.appendChild(c);
+    }
+  }
+  document.addEventListener('pointerup', () => { isDragging = false; });
+  document.addEventListener('mouseup', () => { isDragging = false; });
+  refreshCells();
+}
+
+function isForbidden(key) { return !!forbidden[key]; }
+function forbidReason(key) {
+  const f = forbidden[key];
+  if (!f) return '';
+  return typeof f === 'string' ? f : (f.r || f.reason || '');
+}
+
+function onCellDown(e) {
+  const key = e.currentTarget.dataset.key;
+  if (gmMode && isGM) {
+    if (isForbidden(key)) { openForbidModal(key, true); return; }
+    // start GM drag-forbid: decide paint by inverse of start cell
+    isDragging = true;
+    gmDragForbid = !isForbidden(key);
+    if (gmDragForbid) {
+      // need a reason first — collect batch, prompt once
+      isDragging = false;
+      pendingForbidKeys = [key];
+      openForbidModal(key, false);
+    } else {
+      // drag-unblock
+      unblockKey(key);
+      const move = (ev) => {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        if (el && el.classList && el.classList.contains('slot') && isForbidden(el.dataset.key)) unblockKey(el.dataset.key);
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        persistForbidden();
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    }
+    e.preventDefault();
+    return;
+  }
+  // player availability paint
+  if (isForbidden(key)) { logTerm('&gt; Slot blocked by GM — cannot select.'); return; }
+  isDragging = true;
+  dragPaintValue = !mySel.has(key);
+  applyAvail(key, dragPaintValue);
+  e.preventDefault();
+}
+
+function onCellEnter(e) {
+  if (!isDragging) return;
+  const key = e.currentTarget.dataset.key;
+  if (gmMode && isGM) return; // GM drag handled via pointermove batch
+  if (isForbidden(key)) return;
+  // mousedown starts drag-paint, mouseenter paints same value
+  applyAvail(key, dragPaintValue);
+}
+
+function onCellClick(e) {
+  // click toggles availability (skip if this was part of a drag — still idempotent)
+  if (isDragging && e.detail === 0) return;
+  const key = e.currentTarget.dataset.key;
+  if (gmMode && isGM) return; // handled in pointerdown
+  if (isForbidden(key)) return;
+  // single click without drag: toggle (pointerdown already toggled, so ignore to avoid double-toggle)
+}
+
+// touch support: prevent scroll while painting, resolve cell under finger
+let touchPainting = false;
+let touchPaintVal = true;
+function onTouchStart(e) {
+  const key = e.currentTarget.dataset.key;
+  if (gmMode && isGM) return; // GM on touch: use tap flow
+  if (isForbidden(key)) return;
+  touchPainting = true;
+  touchPaintVal = !mySel.has(key);
+  applyAvail(key, touchPaintVal);
+  e.preventDefault();
+}
+function onTouchMove(e) {
+  if (!touchPainting) return;
+  if (gmMode && isGM) return;
+  const t = e.touches[0];
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  if (el && el.classList && el.classList.contains('slot')) {
+    const key = el.dataset.key;
+    if (!isForbidden(key)) applyAvail(key, touchPaintVal);
+  }
+  e.preventDefault();
+}
+function onTouchEnd() { touchPainting = false; }
+
+function applyAvail(key, val) {
+  if (val) mySel.add(key);
+  else mySel.delete(key);
+  refreshCells();
+  updateCount();
+  queueAutoSave();
+}
+
+function refreshCells() {
+  const counts = slotCounts();
+  document.querySelectorAll('#sched-grid .slot').forEach(cell => {
+    const key = cell.dataset.key;
+    const f = isForbidden(key);
+    cell.classList.toggle('forbidden', f);
+    cell.classList.toggle('mine', !f && mySel.has(key));
+    if (f) {
+      const r = forbidReason(key);
+      cell.title = r || 'Blocked by GM';
+      cell.innerHTML = '<span>✕</span>' + (r ? '<span class="fr">' + esc(r) + '</span>' : '');
+    } else {
+      cell.title = '';
+      const others = Math.max(0, (counts[key] ? counts[key].count : 0) - (mySel.has(key) ? 1 : 0));
+      // number badge = count of others available
+      cell.innerHTML = others > 0 ? '<span class="badge">' + others + '</span>' : '';
+    }
+  });
+}
+
+function updateCount() {
+  document.getElementById('sel-count').textContent = mySel.size;
+  document.getElementById('mode-line').textContent = (gmMode && isGM)
+    ? '— GM FORBID MODE: drag to block times'
+    : '';
+}
+
+function slotCounts() {
+  const map = {};
+  for (const [u, slots] of Object.entries(allAvail || {})) {
+    if (!slots) continue;
+    for (const k of Object.keys(slots)) {
+      if (forbidden[k]) continue; // excluding forbidden
+      if (!map[k]) map[k] = { count: 0, names: [] };
+      map[k].count += 1;
+      map[k].names.push(u);
+    }
+  }
+  return map;
+}
+
+function renderSummary() {
+  const counts = slotCounts();
+  const entries = Object.entries(counts).map(([k, v]) => {
+    const [d, s] = k.split('-').map(Number);
+    return { key: k, day: d, slot: s, count: v.count, names: v.names };
+  }).sort((a, b) => b.count - a.count || a.day - b.day || a.slot - b.slot);
+  const top = entries.slice(0, 10);
+  const box = document.getElementById('best-list');
+  if (!top.length) {
+    box.innerHTML = '<div style="opacity:.6;font-style:italic;">No availability yet.</div>';
+  } else {
+    box.innerHTML = top.map(t =>
+      '<div class="best-row"><b>' + DAYS[t.day] + ' ' + esc(fmtRange(t.slot)) + '</b> — ' +
+      t.count + ' available — ' + esc(t.names.join(', ')) + '</div>'
+    ).join('');
+  }
+  // per-day counts
+  const perDay = [0,0,0,0,0,0,0].map(() => 0);
+  const perDayBest = [0,0,0,0,0,0,0].map(() => 0);
+  entries.forEach(t => { perDay[t.day] += t.count; perDayBest[t.day] = Math.max(perDayBest[t.day], t.count); });
+  document.getElementById('perday-list').innerHTML =
+    DAYS.map((d, i) => d + ': ' + perDay[i] + ' picks (best ' + perDayBest[i] + ')').join(' · ');
+}
+
+// ---- Persistence: Firebase with offline local fallback ----
+function setToObj(s) { const o = {}; s.forEach(k => o[k] = true); return o; }
+function objToSet(o) { return new Set(Object.keys(o || {})); }
+
+function loadLocal() {
+  try {
+    const mine = JSON.parse(localStorage.getItem('lambdaSchedule_' + safeUser) || '{}');
+    mySel = objToSet(mine);
+    const forb = JSON.parse(localStorage.getItem('lambdaSchedule_forbidden') || '{}');
+    forbidden = forb || {};
+    allAvail = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('lambdaSchedule_') === 0 && k !== 'lambdaSchedule_forbidden') {
+        const u = k.slice('lambdaSchedule_'.length);
+        try { allAvail[u] = JSON.parse(localStorage.getItem(k) || '{}'); } catch (e) {}
+      }
+    }
+    allAvail[safeUser] = setToObj(mySel);
+    refreshCells(); updateCount(); renderSummary();
+    logTerm('&gt; Loaded local schedule (' + mySel.size + ' slots, local mode).');
+  } catch (e) { logTerm('&gt; Local load failed.'); }
+}
+
+function persistLocalMine() {
+  try {
+    localStorage.setItem('lambdaSchedule_' + safeUser, JSON.stringify(setToObj(mySel)));
+    allAvail[safeUser] = setToObj(mySel);
+  } catch (e) {}
+}
+function persistLocalForbidden() {
+  try { localStorage.setItem('lambdaSchedule_forbidden', JSON.stringify(forbidden)); } catch (e) {}
+}
+
+function queueAutoSave() {
+  // Debounce saves.
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { saveAvailability(true); }, 1200);
+}
+
+window.saveAvailability = async function(silent) {
+  if (localMode) {
+    persistLocalMine();
+    refreshCells(); renderSummary();
+    if (!silent) logTerm('&gt; Saved locally: <b>' + mySel.size + '</b> slots.');
+    return;
+  }
+  try {
+    await set(ref(db, 'campaignState/schedule/availability/' + safeUser), setToObj(mySel));
+    if (!silent) logTerm('&gt; Availability saved: <b>' + mySel.size + '</b> slots.');
+  } catch (e) {
+    logTerm('&gt; Save failed: ' + esc(e.message));
+  }
+};
+
+window.clearSelection = function() {
+  // keep forbidden excluded implicitly
+  mySel.clear();
+  refreshCells(); updateCount(); queueAutoSave();
+  logTerm('&gt; Selection cleared.');
+};
+
+window.fillAll = function() {
+  for (let d = 0; d < 7; d++)
+    for (let s = 0; s < SLOTS_PER_DAY; s++) {
+      const k = slotKey(d, s);
+      if (!isForbidden(k)) mySel.add(k);
+    }
+  refreshCells(); updateCount(); queueAutoSave();
+  logTerm('&gt; Filled all non-forbidden: <b>' + mySel.size + '</b> slots.');
+};
+
+async function persistForbidden() {
+  if (localMode) { persistLocalForbidden(); refreshCells(); renderSummary(); return; }
+  try { await set(ref(db, 'campaignState/schedule/forbidden'), forbidden); }
+  catch (e) { logTerm('&gt; Forbid save failed: ' + esc(e.message)); }
+}
+function unblockKey(key) {
+  delete forbidden[key];
+  refreshCells(); renderSummary();
+}
+
+// ---- GM mode ----
+window.toggleGMMode = function() {
+  if (!isGM) return;
+  gmMode = !gmMode;
+  const b = document.getElementById('btn-gmmode');
+  b.classList.toggle('gm-on', gmMode);
+  b.textContent = gmMode ? 'GM MODE: ON (EXIT)' : 'GM MODE: FORBID TIMES';
+  document.getElementById('drag-hint').textContent = gmMode
+    ? 'GM FORBID MODE: click/drag to block times. Click a red cell to edit reason or unblock.'
+    : 'Click or drag-paint to toggle. Drag across cells to paint many at once (mouse + touch). Forbidden cells cannot be selected.';
+  updateCount();
+  logTerm(gmMode ? '&gt; GM forbid mode <b>ON</b>.' : '&gt; GM forbid mode off.');
+};
+
+function openForbidModal(key, existing) {
+  editForbidKey = existing ? key : null;
+  if (!existing) pendingForbidKeys = pendingForbidKeys.length ? pendingForbidKeys : [key];
+  const [d, s] = key.split('-').map(Number);
+  document.getElementById('forbid-slot-label').textContent = DAYS[d] + ' ' + fmtRange(s);
+  document.getElementById('forbid-title').textContent = existing ? 'EDIT FORBIDDEN SLOT' : 'FORBID TIME';
+  document.getElementById('forbid-reason').value = existing ? forbidReason(key) : '';
+  document.getElementById('forbid-unblock').style.display = existing ? '' : 'none';
+  document.getElementById('forbid-modal').style.display = 'block';
+  setTimeout(() => document.getElementById('forbid-reason').focus(), 50);
+}
+window.closeForbidModal = function() {
+  document.getElementById('forbid-modal').style.display = 'none';
+  pendingForbidKeys = [];
+  editForbidKey = null;
+};
+window.confirmForbid = async function() {
+  let reason = document.getElementById('forbid-reason').value.trim();
+  if (!reason) { reason = 'Blocked by GM'; }
+  if (editForbidKey) {
+    forbidden[editForbidKey] = { r: reason };
+    logTerm('&gt; Forbid reason updated: <b>' + esc(editForbidKey) + '</b> — ' + esc(reason));
+  } else {
+    pendingForbidKeys.forEach(k => {
+      forbidden[k] = { r: reason };
+      mySel.delete(k);
+    });
+    // also remove blocked keys from everyone's counts implicitly via slotCounts filter
+    logTerm('&gt; Forbidden <b>' + pendingForbidKeys.length + '</b> slot(s): ' + esc(reason));
+  }
+  document.getElementById('forbid-modal').style.display = 'none';
+  pendingForbidKeys = [];
+  editForbidKey = null;
+  refreshCells(); updateCount(); renderSummary();
+  await persistForbidden();
+};
+window.unblockForbid = async function() {
+  if (editForbidKey) {
+    delete forbidden[editForbidKey];
+    logTerm('&gt; Unblocked <b>' + esc(editForbidKey) + '</b>.');
+  }
+  document.getElementById('forbid-modal').style.display = 'none';
+  editForbidKey = null;
+  pendingForbidKeys = [];
+  refreshCells(); renderSummary();
+  await persistForbidden();
+};
+
+// ---- Live data: single listener on campaignState/schedule ----
+function applySnapshot(val) {
+  val = val || {};
+  allAvail = val.availability || {};
+  forbidden = val.forbidden || {};
+  const mine = allAvail[safeUser];
+  if (mine) mySel = objToSet(mine);
+  refreshCells(); updateCount(); renderSummary();
+}
+
+if (localMode) {
+  loadLocal();
+  window.addEventListener('storage', (e) => {
+    if (e.key && e.key.indexOf('lambdaSchedule_') === 0) loadLocal();
+  });
+} else {
+  onValue(ref(db, 'campaignState/schedule'), (snap) => {
+    const first = (mySel.size === 0 && Object.keys(allAvail).length === 0);
+    applySnapshot(snap.val());
+    if (first) logTerm('&gt; Schedule loaded (' + mySel.size + ' of your slots).');
+    else renderSummary(), refreshCells(), updateCount();
+  });
+}
+
+// ---- Terminal ----
+function logTerm(html) {
+  const term = document.getElementById('sched-terminal');
+  const div = document.createElement('div');
+  div.style.marginBottom = '6px';
+  div.innerHTML = html;
+  term.appendChild(div);
+  term.scrollTop = term.scrollHeight;
+}
+window.clearSchedLog = function() {
+  document.getElementById('sched-terminal').innerHTML = '<div>&gt; SCHEDULE TERMINAL READY. AWAITING INPUT...</div>';
+};
+
+// ---- Init ----
+if (isGM) document.getElementById('btn-gmmode').style.display = '';
+buildGrid();
+updateCount();
+</script>
+</body>
+</html>
