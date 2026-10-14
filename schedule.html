@@ -173,7 +173,7 @@ if (!currentUser) window.location.replace("/");
     box-shadow: inset 0 0 8px rgba(0,255,0,0.35);
     color: #ccffcc;
 }
-.slot.forbidden {
+.slot.forbidden, .slot.pending {
     background: #7a0000 !important;
     border-color: #ff5555 !important;
     color: #ffd7d7 !important;
@@ -183,7 +183,9 @@ if (!currentUser) window.location.replace("/");
     padding: 1px 2px;
     text-align: center;
 }
-.slot.forbidden .fr {
+.slot.pending { opacity: 0.85; outline: 1px dashed #ff8888; }
+.slot.pending-unblock { outline: 2px dashed #ff5555 !important; opacity: 0.55; }
+.slot.forbidden .fr, .slot.pending .fr {
     font-size: 0.85em;
     line-height: 1.1;
     opacity: 0.9;
@@ -322,8 +324,10 @@ if (!currentUser) window.location.replace("/");
         <input type="text" id="forbid-reason" class="admin-input" placeholder="e.g. GM unavailable">
     </div>
     <div class="tn-buttons">
-        <button class="die-btn" onclick="confirmForbid()">SAVE</button>
+        <button class="die-btn" id="forbid-save" onclick="confirmForbid()">SAVE</button>
+        <button class="die-btn" id="forbid-apply-all" onclick="applyReasonToAll()" style="display:none;">APPLY TO ALL</button>
         <button class="die-btn danger" id="forbid-unblock" onclick="unblockForbid()" style="display:none;">UNBLOCK</button>
+        <button class="die-btn danger" id="forbid-unblock-all" onclick="unblockBatchConfirm()" style="display:none;">UNBLOCK ALL</button>
         <button class="die-btn" onclick="closeForbidModal()">CANCEL</button>
     </div>
 </div>
@@ -361,11 +365,13 @@ let forbidden = {};             // { slotKey: { r: reason } }
 let gmMode = false;             // GM forbid-paint mode
 let isDragging = false;
 let dragPaintValue = true;      // availability paint value for current drag
-let gmDragForbid = true;        // forbid paint value for current GM drag
-let gmDragReason = '';
 let saveTimer = null;
-let pendingForbidKeys = [];     // batch from drag before reason confirmed
+let pendingForbidKeys = [];     // new cells from current forbid-drag, reason applied once on SAVE
 let editForbidKey = null;
+let editApplyAllKeys = [];      // other cells sharing editForbidKey's old reason
+let gmDragging = false;         // GM forbid-drag in progress
+let gmPending = new Set();      // every cell touched during current forbid-drag
+let gmUnblockBatch = [];        // already-forbidden cells from a multi-cell unblock-drag
 
 // ---- Timezone subtitle ----
 try {
@@ -429,8 +435,9 @@ function buildGrid() {
       g.appendChild(c);
     }
   }
-  document.addEventListener('pointerup', () => { isDragging = false; });
-  document.addEventListener('mouseup', () => { isDragging = false; });
+  document.addEventListener('pointerup', () => { isDragging = false; finishGmDrag(); });
+  document.addEventListener('mouseup', () => { isDragging = false; finishGmDrag(); });
+  window.addEventListener('pointerup', finishGmDrag);
   refreshCells();
 }
 
@@ -444,30 +451,10 @@ function forbidReason(key) {
 function onCellDown(e) {
   const key = e.currentTarget.dataset.key;
   if (gmMode && isGM) {
-    if (isForbidden(key)) { openForbidModal(key, true); return; }
-    // start GM drag-forbid: decide paint by inverse of start cell
-    isDragging = true;
-    gmDragForbid = !isForbidden(key);
-    if (gmDragForbid) {
-      // need a reason first — collect batch, prompt once
-      isDragging = false;
-      pendingForbidKeys = [key];
-      openForbidModal(key, false);
-    } else {
-      // drag-unblock
-      unblockKey(key);
-      const move = (ev) => {
-        const el = document.elementFromPoint(ev.clientX, ev.clientY);
-        if (el && el.classList && el.classList.contains('slot') && isForbidden(el.dataset.key)) unblockKey(el.dataset.key);
-      };
-      const up = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', up);
-        persistForbidden();
-      };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
-    }
+    // Start a forbid-drag: collect cells, preview in deep red, decide on pointerup.
+    gmDragging = true;
+    gmPending = new Set([key]);
+    paintGmPreview();
     e.preventDefault();
     return;
   }
@@ -480,9 +467,16 @@ function onCellDown(e) {
 }
 
 function onCellEnter(e) {
-  if (!isDragging) return;
   const key = e.currentTarget.dataset.key;
-  if (gmMode && isGM) return; // GM drag handled via pointermove batch
+  if (gmMode && isGM) {
+    // pointerdown starts a forbid-drag, pointerenter adds cells to the pending set
+    if (!gmDragging) return;
+    if (gmPending.has(key)) return;
+    gmPending.add(key);
+    paintGmPreview();
+    return;
+  }
+  if (!isDragging) return;
   if (isForbidden(key)) return;
   // mousedown starts drag-paint, mouseenter paints same value
   applyAvail(key, dragPaintValue);
@@ -502,7 +496,13 @@ let touchPainting = false;
 let touchPaintVal = true;
 function onTouchStart(e) {
   const key = e.currentTarget.dataset.key;
-  if (gmMode && isGM) return; // GM on touch: use tap flow
+  if (gmMode && isGM) {
+    gmDragging = true;
+    gmPending = new Set([key]);
+    paintGmPreview();
+    e.preventDefault();
+    return;
+  }
   if (isForbidden(key)) return;
   touchPainting = true;
   touchPaintVal = !mySel.has(key);
@@ -510,17 +510,23 @@ function onTouchStart(e) {
   e.preventDefault();
 }
 function onTouchMove(e) {
-  if (!touchPainting) return;
-  if (gmMode && isGM) return;
   const t = e.touches[0];
   const el = document.elementFromPoint(t.clientX, t.clientY);
+  if (gmMode && isGM) {
+    if (gmDragging && el && el.classList && el.classList.contains('slot')) {
+      if (!gmPending.has(el.dataset.key)) { gmPending.add(el.dataset.key); paintGmPreview(); }
+    }
+    e.preventDefault();
+    return;
+  }
+  if (!touchPainting) return;
   if (el && el.classList && el.classList.contains('slot')) {
     const key = el.dataset.key;
     if (!isForbidden(key)) applyAvail(key, touchPaintVal);
   }
   e.preventDefault();
 }
-function onTouchEnd() { touchPainting = false; }
+function onTouchEnd() { touchPainting = false; finishGmDrag(); }
 
 function applyAvail(key, val) {
   if (val) mySel.add(key);
@@ -677,6 +683,91 @@ function unblockKey(key) {
   refreshCells(); renderSummary();
 }
 
+function paintGmPreview() {
+  document.querySelectorAll('#sched-grid .slot').forEach(cell => {
+    const key = cell.dataset.key;
+    if (gmPending && gmPending.has(key)) {
+      if (isForbidden(key)) cell.classList.add('pending-unblock');
+      else cell.classList.add('pending');
+    } else {
+      cell.classList.remove('pending');
+      cell.classList.remove('pending-unblock');
+    }
+  });
+}
+
+function summarizeKeys(keys) {
+  if (!keys || !keys.length) return '';
+  const sorted = [...keys].sort((a, b) => {
+    const [da, sa] = a.split('-').map(Number);
+    const [db, sb] = b.split('-').map(Number);
+    return da - db || sa - sb;
+  });
+  const [fd, fs] = sorted[0].split('-').map(Number);
+  const first = DAYS[fd] + ' ' + fmtRange(fs);
+  if (sorted.length === 1) return first + ' (1 slot)';
+  return first + ' + ' + (sorted.length - 1) + ' more (' + sorted.length + ' slots)';
+}
+
+function finishGmDrag() {
+  if (!gmDragging) return;
+  gmDragging = false;
+  if (!gmPending || gmPending.size === 0) return;
+  const keys = [...gmPending];
+  gmPending.clear();
+  // clear drag preview before opening modal
+  document.querySelectorAll('#sched-grid .slot.pending, #sched-grid .slot.pending-unblock').forEach(c => {
+    c.classList.remove('pending'); c.classList.remove('pending-unblock');
+  });
+  refreshCells();
+  const newKeys = keys.filter(k => !isForbidden(k));
+  const forbKeys = keys.filter(k => isForbidden(k));
+  if (newKeys.length === 0 && forbKeys.length > 0) {
+    if (forbKeys.length === 1) {
+      openForbidModal(forbKeys[0], true);
+    } else {
+      gmUnblockBatch = forbKeys;
+      pendingForbidKeys = [];
+      editForbidKey = null;
+      document.getElementById('forbid-title').textContent = 'UNBLOCK ' + forbKeys.length + ' SLOTS';
+      document.getElementById('forbid-slot-label').textContent = summarizeKeys(forbKeys);
+      document.getElementById('forbid-reason').value = forbidReason(forbKeys[0]);
+      document.getElementById('forbid-unblock').style.display = 'none';
+      document.getElementById('forbid-apply-all').style.display = 'none';
+      document.getElementById('forbid-unblock-all').style.display = '';
+      document.getElementById('forbid-save').style.display = 'none';
+      document.getElementById('forbid-modal').style.display = 'block';
+    }
+    return;
+  }
+  // forbid new cells with ONE reason (drag batch)
+  pendingForbidKeys = newKeys;
+  gmUnblockBatch = [];
+  editForbidKey = null;
+  openForbidModal(newKeys[0], false);
+}
+
+window.applyReasonToAll = async function() {
+  const reason = (document.getElementById('forbid-reason').value.trim() || 'Blocked by GM');
+  const targets = [editForbidKey, ...editApplyAllKeys].filter(Boolean);
+  targets.forEach(k => { forbidden[k] = { r: reason }; });
+  logTerm('&gt; Reason applied to <b>' + targets.length + '</b> slot(s): ' + esc(reason));
+  document.getElementById('forbid-modal').style.display = 'none';
+  editForbidKey = null; editApplyAllKeys = []; pendingForbidKeys = []; gmUnblockBatch = [];
+  refreshCells(); updateCount(); renderSummary();
+  await persistForbidden();
+};
+
+window.unblockBatchConfirm = async function() {
+  const n = gmUnblockBatch.length;
+  gmUnblockBatch.forEach(k => { delete forbidden[k]; });
+  logTerm('&gt; Unblocked <b>' + n + '</b> slot(s).');
+  document.getElementById('forbid-modal').style.display = 'none';
+  gmUnblockBatch = []; editForbidKey = null; pendingForbidKeys = [];
+  refreshCells(); renderSummary();
+  await persistForbidden();
+};
+
 // ---- GM mode ----
 window.toggleGMMode = function() {
   if (!isGM) return;
@@ -685,7 +776,7 @@ window.toggleGMMode = function() {
   b.classList.toggle('gm-on', gmMode);
   b.textContent = gmMode ? 'GM MODE: ON (EXIT)' : 'GM MODE: FORBID TIMES';
   document.getElementById('drag-hint').textContent = gmMode
-    ? 'GM FORBID MODE: click/drag to block times. Click a red cell to edit reason or unblock.'
+    ? 'GM FORBID MODE: drag across many cells to block them with ONE reason. Click a red cell to edit reason or unblock; drag red cells to unblock many.'
     : 'Click or drag-paint to toggle. Drag across cells to paint many at once (mouse + touch). Forbidden cells cannot be selected.';
   updateCount();
   logTerm(gmMode ? '&gt; GM forbid mode <b>ON</b>.' : '&gt; GM forbid mode off.');
@@ -693,12 +784,29 @@ window.toggleGMMode = function() {
 
 function openForbidModal(key, existing) {
   editForbidKey = existing ? key : null;
-  if (!existing) pendingForbidKeys = pendingForbidKeys.length ? pendingForbidKeys : [key];
-  const [d, s] = key.split('-').map(Number);
-  document.getElementById('forbid-slot-label').textContent = DAYS[d] + ' ' + fmtRange(s);
-  document.getElementById('forbid-title').textContent = existing ? 'EDIT FORBIDDEN SLOT' : 'FORBID TIME';
-  document.getElementById('forbid-reason').value = existing ? forbidReason(key) : '';
-  document.getElementById('forbid-unblock').style.display = existing ? '' : 'none';
+  editApplyAllKeys = [];
+  document.getElementById('forbid-save').style.display = '';
+  document.getElementById('forbid-unblock-all').style.display = 'none';
+  if (!existing) {
+    pendingForbidKeys = pendingForbidKeys.length ? pendingForbidKeys : [key];
+    const n = pendingForbidKeys.length;
+    document.getElementById('forbid-slot-label').textContent = summarizeKeys(pendingForbidKeys);
+    document.getElementById('forbid-title').textContent = n > 1 ? 'FORBID ' + n + ' SLOTS — ONE REASON' : 'FORBID TIME';
+    document.getElementById('forbid-reason').value = '';
+    document.getElementById('forbid-unblock').style.display = 'none';
+    document.getElementById('forbid-apply-all').style.display = 'none';
+  } else {
+    pendingForbidKeys = [];
+    const oldR = forbidReason(key);
+    editApplyAllKeys = Object.keys(forbidden).filter(k => k !== key && forbidReason(k) === oldR);
+    const [d, s] = key.split('-').map(Number);
+    document.getElementById('forbid-slot-label').textContent = DAYS[d] + ' ' + fmtRange(s)
+      + (editApplyAllKeys.length ? ' (+' + editApplyAllKeys.length + ' sharing same reason)' : '');
+    document.getElementById('forbid-title').textContent = 'EDIT FORBIDDEN SLOT';
+    document.getElementById('forbid-reason').value = oldR;
+    document.getElementById('forbid-unblock').style.display = '';
+    document.getElementById('forbid-apply-all').style.display = editApplyAllKeys.length ? '' : 'none';
+  }
   document.getElementById('forbid-modal').style.display = 'block';
   setTimeout(() => document.getElementById('forbid-reason').focus(), 50);
 }
@@ -706,6 +814,10 @@ window.closeForbidModal = function() {
   document.getElementById('forbid-modal').style.display = 'none';
   pendingForbidKeys = [];
   editForbidKey = null;
+  editApplyAllKeys = [];
+  gmUnblockBatch = [];
+  gmPending = new Set();
+  refreshCells();
 };
 window.confirmForbid = async function() {
   let reason = document.getElementById('forbid-reason').value.trim();
@@ -724,6 +836,9 @@ window.confirmForbid = async function() {
   document.getElementById('forbid-modal').style.display = 'none';
   pendingForbidKeys = [];
   editForbidKey = null;
+  editApplyAllKeys = [];
+  gmUnblockBatch = [];
+  gmPending = new Set();
   refreshCells(); updateCount(); renderSummary();
   await persistForbidden();
 };
@@ -734,7 +849,10 @@ window.unblockForbid = async function() {
   }
   document.getElementById('forbid-modal').style.display = 'none';
   editForbidKey = null;
+  editApplyAllKeys = [];
   pendingForbidKeys = [];
+  gmUnblockBatch = [];
+  gmPending = new Set();
   refreshCells(); renderSummary();
   await persistForbidden();
 };
